@@ -296,6 +296,202 @@ def attention(
 
     return tvm.IRModule({"main": te.create_prim_func([Q, K, V, O])})
 
+def attention_unstable(
+    *,
+    batch: int | None = None,
+    num_heads: int | None = None,
+    seqlen_q: int | None = None,
+    seqlen_k: int | None = None,
+    head_dim: int | None = None,
+    dtype: str = "float16",
+    accum_dtype: str = "float32",
+) -> tvm.IRModule:
+    """Build the same attention as a textbook matmul -> softmax -> matmul chain.
+
+    Identical mathematics and identical layouts to :func:`flash_attention`, but
+    written the way the formula reads: the scores are materialised, the softmax
+    is spelled out as max -> exp -> sum -> divide over the key axis, and the
+    normalised probabilities are then contracted with ``V``.
+
+    That costs seven blocks instead of three, and both ``S`` and ``P`` are full
+    ``(batch, num_heads, seqlen_q, seqlen_k)`` tensors -- which is precisely the
+    traffic the online-softmax formulation exists to avoid. It is here as the
+    unfused baseline: the thing a fusion schedule has to beat, and a second
+    opinion on the numerics of the fused kernel.
+    """
+    if dtype not in SUPPORTED_DTYPES:
+        raise ValueError(f"dtype must be one of {SUPPORTED_DTYPES}, got {dtype!r}")
+
+    def extent(value: int | None, name: str):
+        return te.var(name) if value is None else value
+
+    n_b = extent(batch, "batch")
+    n_h = extent(num_heads, "num_heads")
+    n_q = extent(seqlen_q, "seqlen_q")
+    n_k = extent(seqlen_k, "seqlen_k")
+    dim = extent(head_dim, "head_dim")
+
+    Q = te.placeholder((n_b, n_h, n_q, dim), name="Q", dtype=dtype)
+    K = te.placeholder((n_b, n_h, n_k, dim), name="K", dtype=dtype)
+    V = te.placeholder((n_b, n_h, n_k, dim), name="V", dtype=dtype)
+
+    # ``dim`` is a Python int when specialised and a te.var when symbolic.
+    head_dim_f = (
+        dim.astype(accum_dtype) if hasattr(dim, "astype") else tir.const(float(dim), accum_dtype)
+    )
+    softmax_scale = tir.const(1.0, accum_dtype) / tir.sqrt(head_dim_f)
+
+    # ---- first matmul: S = Q @ Kᵀ, reduced over the head dimension ---------
+    d = te.reduce_axis((0, dim), name="d")
+    S = te.compute(
+        (n_b, n_h, n_q, n_k),
+        lambda b, h, i, j: te.sum(
+            Q[b, h, i, d].astype(accum_dtype) * K[b, h, j, d].astype(accum_dtype), axis=d
+        ),
+        name="S",
+    )
+
+    # ---- softmax over the key axis, in the usual four steps ----------------
+
+    exp_S = te.compute(
+        (n_b, n_h, n_q, n_k),
+        lambda b, h, i, j: tir.exp(S[b, h, i, j] * softmax_scale),
+        name="exp_S",
+    )
+
+    j_sum = te.reduce_axis((0, n_k), name="j")
+    denominator = te.compute(
+        (n_b, n_h, n_q),
+        lambda b, h, i: te.sum(exp_S[b, h, i, j_sum], axis=j_sum),
+        name="denominator",
+    )
+
+    P = te.compute(
+        (n_b, n_h, n_q, n_k),
+        lambda b, h, i, j: exp_S[b, h, i, j] / denominator[b, h, i],
+        name="P",
+    )
+
+    # ---- second matmul: O = P @ V, reduced over the key axis ---------------
+    j_pv = te.reduce_axis((0, n_k), name="j")
+    PV = te.compute(
+        (n_b, n_h, n_q, dim),
+        lambda b, h, i, e: te.sum(
+            P[b, h, i, j_pv] * V[b, h, j_pv, e].astype(accum_dtype), axis=j_pv
+        ),
+        name="PV",
+    )
+    # A reduction owns the whole body of its block, so narrowing back to
+    # ``dtype`` has to be a block of its own.
+    O = te.compute(  # noqa: E741
+        (n_b, n_h, n_q, dim),
+        lambda b, h, i, e: PV[b, h, i, e].astype(dtype),
+        name="O",
+    )
+
+    return tvm.IRModule({"main": te.create_prim_func([Q, K, V, O])})
+
+def flash_attention_unstable(
+    *,
+    batch: int | None = None,
+    num_heads: int | None = None,
+    seqlen_q: int | None = None,
+    seqlen_k: int | None = None,
+    head_dim: int | None = None,
+    dtype: str = "float16",
+    accum_dtype: str = "float32",
+) -> tvm.IRModule:
+    """Build ``O = softmax(Q @ Kᵀ · softmax_scale) @ V`` as a TE PrimFunc.
+
+    Batch and head are plain leading dimensions -- attention is independent
+    along both, so they only widen the spatial iteration space. Layout matches
+    ``torch.nn.functional.scaled_dot_product_attention``::
+
+        Q : (batch, num_heads, seqlen_q, head_dim)
+        K : (batch, num_heads, seqlen_k, head_dim)
+        V : (batch, num_heads, seqlen_k, head_dim)
+        O : (batch, num_heads, seqlen_q, head_dim)
+
+    Any dimension left as ``None`` becomes a ``te.var``, yielding a shape-generic
+    kernel; passing an int specialises the kernel to that extent.
+    """
+    if dtype not in SUPPORTED_DTYPES:
+        raise ValueError(f"dtype must be one of {SUPPORTED_DTYPES}, got {dtype!r}")
+
+    def extent(value: int | None, name: str):
+        return te.var(name) if value is None else value
+
+    n_b = extent(batch, "batch")
+    n_h = extent(num_heads, "num_heads")
+    n_q = extent(seqlen_q, "seqlen_q")
+    n_k = extent(seqlen_k, "seqlen_k")
+    dim = extent(head_dim, "head_dim")
+
+    Q = te.placeholder((n_b, n_h, n_q, dim), name="Q", dtype=dtype)
+    K = te.placeholder((n_b, n_h, n_k, dim), name="K", dtype=dtype)
+    V = te.placeholder((n_b, n_h, n_k, dim), name="V", dtype=dtype)
+
+    # ---- scores S = Q @ Kᵀ, reduced over the head dimension ----------------
+    d = te.reduce_axis((0, dim), name="d")
+    S = te.compute(
+        (n_b, n_h, n_q, n_k),
+        lambda b, h, i, j: te.sum(
+            Q[b, h, i, d].astype(accum_dtype) * K[b, h, j, d].astype(accum_dtype), axis=d
+        ),
+        name="S",
+    )
+
+    # ---- online softmax, as a commutative reducer over the key axis --------
+    def merge(state_a, state_b):
+        """Merge two partial ``(max, denominator, weighted values)`` states."""
+        denom_a,  acc_a = state_a
+        denom_b,  acc_b = state_b
+        return (
+            denom_a + denom_b,
+            acc_a + acc_b,
+        )
+
+    def empty_state(denom_dtype, acc_dtype):
+        return (
+            tir.const(0.0, denom_dtype),
+            tir.const(0.0, acc_dtype),
+        )
+
+    online_softmax = te.comm_reducer(merge, empty_state, name="online_softmax")
+
+    # ``dim`` is a Python int when specialised and a te.var when symbolic.
+    head_dim_f = (
+        dim.astype(accum_dtype) if hasattr(dim, "astype") else tir.const(float(dim), accum_dtype)
+    )
+    softmax_scale = tir.const(1.0, accum_dtype) / tir.sqrt(head_dim_f)
+
+    j = te.reduce_axis((0, n_k), name="j")
+
+    S_new = te.compute(
+        (n_b, n_h, n_q, n_k),
+        lambda b, h, i, j: tir.exp(S[b, h, i, j] * softmax_scale),
+        name="S_new",
+    )
+
+    denominator, weighted_values = te.compute(
+        (n_b, n_h, n_q, dim),
+        lambda b, h, i, e: online_softmax(
+            (
+                S_new[b, h, i, j],
+                S_new[b, h, i, j] * V[b, h, j, e].astype(accum_dtype),
+            ),
+            axis=j,
+        ),
+        name="softmax_state",
+    )
+
+    O = te.compute(  # noqa: E741
+        (n_b, n_h, n_q, dim),
+        lambda b, h, i, e: (weighted_values[b, h, i, e] / denominator[b, h, i, e]).astype(dtype),
+        name="O",
+    )
+
+    return tvm.IRModule({"main": te.create_prim_func([Q, K, V, O])})
 
 # ---------------------------------------------------------------------------
 # Scheduling
