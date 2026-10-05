@@ -23,6 +23,7 @@ from collections.abc import Iterator
 
 from tvm import te
 
+from .accuracy import AccuracyConfig, AccuracyGate, AccuracyReport
 from .config import Bounds
 from .enumerate import Enumerator, Found
 from .equivalence import Verdict
@@ -42,6 +43,7 @@ class Result:
     ctx: SearchCtx
     inputs: list[te.Tensor]
     _tensor: te.Tensor | None = None
+    accuracy: AccuracyReport | None = None  # set unless the gate is off
 
     @property
     def n_ops(self) -> int:
@@ -81,7 +83,12 @@ def make_context(
         lower.tensor_id(t)
     target_sem = lower.lower(output)
     ctx = SearchCtx(
-        lower=lower, bounds=bounds, target=analyze_target(target_sem), dtype=target_sem.dtype
+        lower=lower,
+        bounds=bounds,
+        target=analyze_target(target_sem),
+        dtype=target_sem.dtype,
+        output=output,
+        inputs=tuple(inputs),
     )
     input_sems = [lower.lower(t) for t in inputs]
     return ctx, input_sems
@@ -93,8 +100,15 @@ def iter_superoptimize(
     bounds: Bounds | None = None,
     specs: list[OpSpec] | None = None,
     with_reducers: bool = True,
+    accuracy: str = "filter",
+    accuracy_config: AccuracyConfig | None = None,
 ) -> Iterator[Result]:
+    if accuracy not in ("off", "report", "filter"):
+        raise ValueError(f"accuracy must be 'off', 'report' or 'filter', not {accuracy!r}")
     ctx, input_sems = make_context(output, inputs, bounds)
+    gate = None if accuracy == "off" else AccuracyGate(output, inputs, accuracy_config)
+    if accuracy == "filter":
+        ctx.static_required = tuple(gate.required)
     if specs is None:
         specs = default_specs()
         if with_reducers:
@@ -103,7 +117,13 @@ def iter_superoptimize(
             specs = [*specs, CommReduce()]
     enum = Enumerator(ctx, specs, input_sems)
     for found in enum.run():
-        yield Result(found.snapshot, found.verdict, found.sem, ctx, list(inputs))
+        result = Result(found.snapshot, found.verdict, found.sem, ctx, list(inputs))
+        if gate is not None:
+            result.accuracy = gate.check(result.materialize())
+            if accuracy == "filter" and not result.accuracy.ok:
+                ctx.count("accuracy:rejected")
+                continue
+        yield result
 
 
 def superoptimize(
@@ -114,10 +134,20 @@ def superoptimize(
     specs: list[OpSpec] | None = None,
     with_reducers: bool = True,
     max_results: int | None = None,
+    accuracy: str = "filter",
+    accuracy_config: AccuracyConfig | None = None,
 ) -> list[Result]:
-    """Enumerate TE programs equivalent to ``output`` over the given ``inputs``."""
+    """Enumerate TE programs equivalent to ``output`` over the given ``inputs``.
+
+    ``accuracy`` selects the precision gate (:mod:`.accuracy`): ``"filter"``
+    drops programs that are numerically worse than ``output`` (overflow the
+    original avoids, cancellation it does not have), ``"report"`` keeps them
+    with ``Result.accuracy`` set, ``"off"`` skips the gate.
+    """
     out: list[Result] = []
-    for r in iter_superoptimize(output, inputs, bounds, specs, with_reducers):
+    for r in iter_superoptimize(
+        output, inputs, bounds, specs, with_reducers, accuracy, accuracy_config
+    ):
         out.append(r)
         if max_results is not None and len(out) >= max_results:
             break

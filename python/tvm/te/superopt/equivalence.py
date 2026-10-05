@@ -18,8 +18,10 @@
 
 1. canonical-form identity (``a is b``) -- a proof under the rewrite theory;
 2. numeric fingerprint on tiny random instances -- rejects, never proves;
-3. algebraic proof via the sympy bridge (case-splitting on ``max``);
-4. otherwise the verdict is ``numeric-only`` (dev tier evidence).
+3. the sum-product normal form (:mod:`.symbolic.sum_product`): equality up to
+   the order of contractions, which the canonical form keeps as written;
+4. algebraic proof via the sympy bridge (case-splitting on ``max``);
+5. otherwise the verdict is ``numeric-only`` (dev tier evidence).
 """
 
 from __future__ import annotations
@@ -33,17 +35,18 @@ from .symbolic import ir
 from .symbolic.canonicalize import Unsupported
 from .symbolic.interp import evaluate
 from .symbolic.lower import TensorSem
+from .symbolic.sum_product import sum_product_equal
 from .target import SearchCtx
 
 
 @dataclasses.dataclass(frozen=True)
 class Verdict:
     equivalent: bool
-    method: str  # "hash" | "algebraic" | "numeric-only" | "rejected:<why>"
+    method: str  # "hash" | "sum-product" | "algebraic" | "numeric-only" | "rejected:<why>"
 
     @property
     def proved(self) -> bool:
-        return self.equivalent and self.method in ("hash", "algebraic")
+        return self.equivalent and self.method in ("hash", "sum-product", "algebraic")
 
 
 class NumericOracle:
@@ -105,6 +108,8 @@ def equivalent(
         return Verdict(True, "hash")
     if not oracle.same(cand, target):
         return Verdict(False, "rejected:numeric")
+    if sum_product_equal(cand.body, target.body):
+        return Verdict(True, "sum-product")
     try:
         from .symbolic.sympy_bridge import prove_equal
 

@@ -296,6 +296,7 @@ def attention(
 
     return tvm.IRModule({"main": te.create_prim_func([Q, K, V, O])})
 
+
 def attention_unstable(
     *,
     batch: int | None = None,
@@ -391,6 +392,7 @@ def attention_unstable(
 
     return tvm.IRModule({"main": te.create_prim_func([Q, K, V, O])})
 
+
 def flash_attention_unstable(
     *,
     batch: int | None = None,
@@ -444,8 +446,8 @@ def flash_attention_unstable(
     # ---- online softmax, as a commutative reducer over the key axis --------
     def merge(state_a, state_b):
         """Merge two partial ``(max, denominator, weighted values)`` states."""
-        denom_a,  acc_a = state_a
-        denom_b,  acc_b = state_b
+        denom_a, acc_a = state_a
+        denom_b, acc_b = state_b
         return (
             denom_a + denom_b,
             acc_a + acc_b,
@@ -492,6 +494,7 @@ def flash_attention_unstable(
     )
 
     return tvm.IRModule({"main": te.create_prim_func([Q, K, V, O])})
+
 
 # ---------------------------------------------------------------------------
 # Scheduling

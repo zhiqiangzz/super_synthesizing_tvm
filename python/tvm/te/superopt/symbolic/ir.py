@@ -498,6 +498,34 @@ def raw_monoid(domain, level, leaf, merge, identity, slot) -> MonoidReduce:
     )
 
 
+def raw_subst(e: Node, mapping: dict[Node, Node]) -> Node:
+    """Replace sub-nodes without canonicalising anything (structure is kept as is)."""
+    memo: dict[Node, Node] = {}
+
+    def go(n: Node) -> Node:
+        hit = mapping.get(n)
+        if hit is not None:
+            return hit
+        if n in memo:
+            return memo[n]
+        fields = []
+        changed = False
+        for f in n._fields:
+            if isinstance(f, Node):
+                nf = go(f)
+            elif isinstance(f, tuple):
+                nf = tuple(go(x) if isinstance(x, Node) else x for x in f)
+            else:
+                nf = f
+            changed |= nf is not f and nf != f
+            fields.append(nf)
+        out = _intern(type(n), tuple(fields)) if changed else n
+        memo[n] = out
+        return out
+
+    return go(e)
+
+
 def is_const(e: Node, value=None) -> bool:
     if not isinstance(e, Const):
         return False

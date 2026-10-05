@@ -43,6 +43,17 @@ def _state_vars(e: ir.Node) -> set[ir.StateVar]:
     return out
 
 
+def _shape_syms(e: ir.Node) -> set[ir.ShapeSym]:
+    out = set()
+    stack = [e]
+    while stack:
+        n = stack.pop()
+        if isinstance(n, ir.ShapeSym):
+            out.add(n)
+        stack.extend(n.children())
+    return out
+
+
 def _max_nodes(e: ir.Node) -> list[ir.Max]:
     out = []
     stack = [e]
@@ -87,8 +98,8 @@ def equal_modulo_max(lhs: ir.SymExpr, rhs: ir.SymExpr) -> bool:
     return True
 
 
-def _eval(e: ir.SymExpr, env: dict[ir.StateVar, float]) -> float:
-    if isinstance(e, ir.StateVar):
+def _eval(e: ir.SymExpr, env: dict[ir.Node, float]) -> float:
+    if isinstance(e, ir.StateVar | ir.ShapeSym):
         return env[e]
     if isinstance(e, ir.Const):
         return float(e.value)
@@ -113,9 +124,11 @@ def _eval(e: ir.SymExpr, env: dict[ir.StateVar, float]) -> float:
 def _numeric_equal(lhs: ir.SymExpr, rhs: ir.SymExpr, n: int = 64, seed: int = 0) -> bool:
     rng = np.random.default_rng(seed)
     vs = sorted(_state_vars(lhs) | _state_vars(rhs), key=lambda v: (v.side, v.k))
+    shapes = sorted(_shape_syms(lhs) | _shape_syms(rhs), key=lambda v: v.name)
     try:
         for _ in range(n):
-            env = {v: float(rng.uniform(-2, 2)) for v in vs}
+            env: dict[ir.Node, float] = {v: float(rng.uniform(-2, 2)) for v in vs}
+            env.update({v: float(rng.integers(1, 9)) for v in shapes})
             with np.errstate(all="ignore"):
                 a, b = _eval(lhs, env), _eval(rhs, env)
             if not np.isclose(a, b, rtol=1e-8, atol=1e-10):

@@ -70,6 +70,9 @@ def _contains(sup: ir.SymExpr, sub: ir.SymExpr, depth: int) -> bool:
     if isinstance(sub, ir.Exp) and isinstance(sup, ir.Exp):
         if contains(sup.arg, sub.arg, depth):
             return True
+    if isinstance(sub, ir.Log) and isinstance(sup, ir.Log):
+        if contains(sup.arg, sub.arg, depth):
+            return True
     if isinstance(sub, ir.Pow) and isinstance(sup, ir.Pow) and sup.exponent == sub.exponent:
         if contains(sup.base, sub.base, depth):
             return True
