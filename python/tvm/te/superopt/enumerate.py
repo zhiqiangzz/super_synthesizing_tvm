@@ -30,10 +30,12 @@ import itertools
 from collections.abc import Iterable, Iterator
 
 from .abstract_expr import contains
+from .accuracy import op_issues
 from .equivalence import NumericOracle, Verdict, equivalent
 from .pool import PoolEntry, Program, ProgramSnapshot
 from .symbolic.canonicalize import Unsupported
 from .symbolic.lower import TensorSem
+from .symbolic.sum_product import sum_product_contains
 from .target import SearchCtx
 from .tensor_ops import OpSpec
 
@@ -49,12 +51,22 @@ def accept_entry(sem: TensorSem, ctx: SearchCtx, result_directed: bool = False) 
     """Semantic pruning of a freshly produced tensor.
 
     ``result_directed`` outputs (synthesised reducer states) were derived from
-    the target's goal closure and are exempt from the containment check.
+    the target's goal closure and are exempt from the containment check. So is
+    a tensor with the target's own interface: it is judged by the equivalence
+    check itself, which also covers what the canonical form cannot see, e.g.
+    ``A (B C)`` against ``(A B) C`` (the sums nest the other way round).
     """
     if sem.body.size > ctx.bounds.max_sem_nodes:
         ctx.count("prune:size")
         return False
-    if not result_directed and not contains(ctx.target.body, sem.body):
+    target = ctx.target.sem
+    if sem.axis_keys == target.axis_keys and sem.dtype == target.dtype:
+        return True
+    if (
+        not result_directed
+        and not contains(ctx.target.body, sem.body)
+        and not sum_product_contains(ctx.target.body, sem.body)
+    ):
         ctx.count("prune:abstract")
         return False
     return True
@@ -138,6 +150,11 @@ class Enumerator:
                         continue
                     rd = getattr(spec, "result_directed", False)
                     if not all(accept_entry(o, ctx, rd) for o in outputs):
+                        continue
+                    if ctx.static_required and set(ctx.static_required) & op_issues(
+                        spec.name, entries
+                    ):
+                        ctx.count("prune:accuracy")
                         continue
                     ctx.count("expanded")
                     ctx.count(f"expand:{spec.name}")

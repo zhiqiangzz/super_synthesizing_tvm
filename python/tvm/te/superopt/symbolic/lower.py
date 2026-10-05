@@ -200,6 +200,8 @@ class LowerCtx:
         axes = list(e.axis)
         inner_env = dict(env)
         for n, ax in enumerate(axes):
+            if ax.var.name in inner_env:  # loop variables are resolved by name
+                raise Unsupported(f"reduction axis {ax.var.name!r} shadows another loop variable")
             inner_env[ax.var.name] = ir.bidx(level + n)
         depth = level + len(axes)
         kind = classify_combiner(e.combiner)

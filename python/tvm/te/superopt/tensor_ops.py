@@ -38,6 +38,7 @@ from .symbolic.canonicalize import (
     mk_add,
     mk_div,
     mk_exp,
+    mk_log,
     mk_mul,
     mk_reduce,
     mk_sqrt,
@@ -139,6 +140,13 @@ class Matmul(OpSpec):
                             used_b.add(pb)
                             break
                 yield (p, q, tuple(batch))
+                # Equal extents are shared (a batch axis) by default. When the
+                # target itself holds two independent indices of that extent
+                # (a Gram matrix ``C[i, i']``, a double contraction
+                # ``Σ_k Σ_k'``), the outer product over them is an option too.
+                outer = tuple(bp for bp in batch if a.shape[bp[0]] not in ctx.target.repeated_keys)
+                if outer != tuple(batch):
+                    yield (p, q, outer)
 
     def param_key(self, params):
         p, q, batch = params
@@ -486,6 +494,12 @@ def _tir_sqrt(a):
     return tir.sqrt(a)
 
 
+def _tir_log(a):
+    from tvm import tirx as tir
+
+    return tir.log(a)
+
+
 def default_specs() -> list[OpSpec]:
     return [
         Matmul(),
@@ -496,6 +510,7 @@ def default_specs() -> list[OpSpec]:
         Scale(),
         Unary("exp", 6, mk_exp, _tir_exp),
         Unary("sqrt", 7, mk_sqrt, _tir_sqrt),
+        Unary("log", 8, mk_log, _tir_log),
         ReduceOp("sum", 9),
         ReduceOp("max", 10),
     ]

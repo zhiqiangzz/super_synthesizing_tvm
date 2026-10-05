@@ -24,6 +24,7 @@ import te_programs
 
 import tvm.testing
 from tvm import te
+from tvm.te.superopt.accuracy import static_issues
 from tvm.te.superopt.api import make_context, superoptimize
 from tvm.te.superopt.config import Bounds
 from tvm.te.superopt.reducer import check_laws, synthesize
@@ -69,7 +70,7 @@ def test_laws_online_softmax_reference_merge():
 
 def test_e2e_sum_pair():
     ins, T = te_programs.sum_pair()
-    res = superoptimize(T, ins, Bounds(max_tensor_ops=2, max_states=2))
+    res = superoptimize(T, ins, Bounds(max_tensor_ops=2, max_states=2), accuracy="off")
     reducers = [r for r in res if r.reducers()]
     assert reducers, "expected a 2-state (Σx, Σy) reducer followed by add"
     spec = reducers[0].reducers()[0].spec
@@ -154,27 +155,46 @@ def _spec_signature(spec):
 
 def test_e2e_softmax_value_unstable_and_stable():
     ins, out = te_programs.softmax_value(stable=True)
-    res = superoptimize(out, ins, Bounds(max_tensor_ops=3, max_states=3, leaf_exp=True))
+    res = superoptimize(
+        out, ins, Bounds(max_tensor_ops=3, max_states=3, leaf_exp=True), accuracy="off"
+    )
     specs = [rec.spec for r in res for rec in r.reducers()]
     assert specs
     arities = {s.arity for s in specs}
     assert arities == {2, 3}  # (L, out) with exp leaves and (m, l, o)
     stable = [s for s in specs if s.arity == 3 and ir.NEG_INF_C in s.identity]
     assert stable, [s.pretty() for s in specs]
+
+    # every equivalent program is found; the static precision checks tell them apart
+    def clean(r):
+        return not any(static_issues(r.materialize()).values())
+
+    unshifted = [
+        r
+        for r in res
+        if any(rec.spec.arity == 2 and _has_exp_leaf(rec.spec) for rec in r.reducers())
+    ]
+    assert unshifted and not any(clean(r) for r in unshifted)
+    accepted = [r for r in res if clean(r)]
+    assert accepted
     rng = np.random.default_rng(1)
     S = rng.standard_normal((3, 5)).astype("float32")
     V = rng.standard_normal((5, 2)).astype("float32")
     P = np.exp(S - S.max(1, keepdims=True))
     ref = (P @ V) / P.sum(1, keepdims=True)
-    for r in res:
+    for r in accepted:
         got = te_programs.run_llvm(ins, r.materialize(), [S, V], "float32")
         np.testing.assert_allclose(got, ref, rtol=1e-4, atol=1e-5)
+
+
+def _has_exp_leaf(spec) -> bool:
+    return any(_has_exp(leaf) for leaf in spec.leaves)
 
 
 def test_logspace_normalised_reducer_is_synthesised():
     """The (log-sum-exp, normalised output) reducer is derived and matches the reference."""
     ins, out = te_programs.softmax_value(stable=True)
-    res = superoptimize(out, ins, Bounds(max_tensor_ops=1, max_states=2))
+    res = superoptimize(out, ins, Bounds(max_tensor_ops=1, max_states=2), accuracy="off")
     specs = [rec.spec for r in res for rec in r.reducers()]
     assert specs, "expected one-op reducer programs"
     ref_merge, ref_identity = _reference_merge_of(te_programs.softmax_value_logspace())
@@ -200,7 +220,7 @@ def test_logspace_normalised_reducer_is_synthesised():
 def test_reducer_goal_nested_under_projection():
     """A goal inside a later reduction (``Σ_e O W``) is still synthesised."""
     ins, out = te_programs.attention_projected("naive")
-    res = superoptimize(out, ins, Bounds(max_tensor_ops=3, max_states=2))
+    res = superoptimize(out, ins, Bounds(max_tensor_ops=3, max_states=2), accuracy="off")
     progs = [[o.spec.name for o in r.snapshot.ops] for r in res]
     assert ["matmul", "comm_reduce", "matmul"] in progs, progs
     rng = np.random.default_rng(3)
@@ -217,10 +237,12 @@ def test_reducer_goal_nested_under_projection():
 
 def test_min_states_skips_single_state_reducers():
     ins, out = te_programs.attention("naive")
-    default = superoptimize(out, ins, Bounds(max_tensor_ops=2, max_states=2))
+    default = superoptimize(out, ins, Bounds(max_tensor_ops=2, max_states=2), accuracy="off")
     assert all(rec.spec.arity >= 2 for r in default for rec in r.reducers())
     assert all(r.snapshot.ops[0].spec.name == "matmul" for r in default)
-    with_single = superoptimize(out, ins, Bounds(max_tensor_ops=2, max_states=2, min_states=1))
+    with_single = superoptimize(
+        out, ins, Bounds(max_tensor_ops=2, max_states=2, min_states=1), accuracy="off"
+    )
     firsts = {r.snapshot.ops[0].spec.name for r in with_single}
     assert firsts == {"matmul", "comm_reduce"}  # S as a synthesised sum reducer too
     single = [rec.spec for r in with_single for rec in r.reducers() if rec.spec.arity == 1]
@@ -254,7 +276,7 @@ def _reference_merge_of(program):
 def test_welford_variance_reducer_is_synthesised():
     """Row variance: a (count, mean, M2) reducer is derived from the target alone."""
     ins, out = te_programs.variance_rows()
-    res = superoptimize(out, ins, Bounds(max_tensor_ops=2, max_states=3))
+    res = superoptimize(out, ins, Bounds(max_tensor_ops=2, max_states=3), accuracy="off")
     specs = [rec.spec for r in res for rec in r.reducers()]
     welford = []
     for s in specs:
@@ -330,14 +352,17 @@ def _same_reducer(spec, ref_merge, ref_identity):
 def test_e2e_attention_discovers_flash_attention():
     ins, out = te_programs.attention("naive")
     t0 = time.time()
+    # with the precision gate on (the default): the ungated space also holds
+    # equivalent programs that divide by a running max or sum of either sign
     res = superoptimize(out, ins, Bounds(max_tensor_ops=3))
     elapsed = time.time() - t0
     assert res, "no equivalent program found"
     assert elapsed < 300
-    assert all(r.verdict.method == "hash" for r in res)
+    assert all(r.verdict.proved and r.accuracy.ok for r in res)
     flash = [r for r in res if r.reducers() and _is_online_softmax(r.reducers()[0].spec)]
     assert flash, "no online-softmax reducer among the results"
-    assert [rec.spec.name for rec in flash[0].snapshot.ops] == ["matmul", "comm_reduce", "div"]
+    shapes = {tuple(rec.spec.name for rec in r.snapshot.ops) for r in flash}
+    assert ("matmul", "comm_reduce", "div") in shapes
     # the discovered kernel runs and matches the reference numerically
     rng = np.random.default_rng(0)
     b, h, q, k, d = 2, 2, 3, 5, 4
@@ -357,7 +382,7 @@ def test_te_source_rebuilds_the_same_program():
     import tvm
 
     ins, out = te_programs.attention("naive")
-    res = superoptimize(out, ins, Bounds(max_tensor_ops=3), max_results=2)
+    res = superoptimize(out, ins, Bounds(max_tensor_ops=3), max_results=2, accuracy="off")
     assert res
     for r in res:
         src = r.te_source()

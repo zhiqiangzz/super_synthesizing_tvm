@@ -61,7 +61,7 @@ def test_contains_axioms():
 
 def test_rediscovers_scaled_matmul_both_orders():
     ins, out = te_programs.scaled_matmul()
-    res = superoptimize(out, ins, Bounds(max_tensor_ops=2), with_reducers=False)
+    res = superoptimize(out, ins, Bounds(max_tensor_ops=2), with_reducers=False, accuracy="off")
     programs = {tuple(r.spec.name for r in x.snapshot.ops) for x in res}
     assert ("matmul", "scale") in programs  # alpha (A B)
     assert ("scale", "matmul") in programs  # (alpha A) B
@@ -70,7 +70,7 @@ def test_rediscovers_scaled_matmul_both_orders():
 
 def test_softmax_chain_rediscovered_without_shift():
     ins, P = te_programs.softmax_rows()
-    res = superoptimize(P, ins, Bounds(max_tensor_ops=3), with_reducers=False)
+    res = superoptimize(P, ins, Bounds(max_tensor_ops=3), with_reducers=False, accuracy="off")
     assert res, "expected exp -> sum -> div"
     names = [tuple(r.spec.name for r in x.snapshot.ops) for x in res]
     assert ("exp", "sum", "div") in names
@@ -79,7 +79,7 @@ def test_softmax_chain_rediscovered_without_shift():
 
 def test_canonical_order_yields_each_program_once():
     ins, out = te_programs.scaled_matmul()
-    res = superoptimize(out, ins, Bounds(max_tensor_ops=3), with_reducers=False)
+    res = superoptimize(out, ins, Bounds(max_tensor_ops=3), with_reducers=False, accuracy="off")
     keys = [tuple((r.spec.name, r.operands) for r in x.snapshot.ops) for x in res]
     assert len(keys) == len(set(keys))
 
@@ -87,7 +87,7 @@ def test_canonical_order_yields_each_program_once():
 def test_branching_factor_guard():
     """Regression guard on pruning power for the attention target."""
     ins, out = te_programs.attention("naive")
-    res = superoptimize(out, ins, Bounds(max_tensor_ops=2), with_reducers=False)
+    res = superoptimize(out, ins, Bounds(max_tensor_ops=2), with_reducers=False, accuracy="off")
     stats = res[0].ctx.stats if res else None
     if stats is None:
         ctx, sems = make_context(out, ins, Bounds(max_tensor_ops=2))
@@ -102,7 +102,7 @@ def test_branching_factor_guard():
 
 def test_materialized_program_runs_on_llvm():
     ins, out = te_programs.scaled_matmul()
-    res = superoptimize(out, ins, Bounds(max_tensor_ops=2), with_reducers=False)
+    res = superoptimize(out, ins, Bounds(max_tensor_ops=2), with_reducers=False, accuracy="off")
     rng = np.random.default_rng(0)
     A = rng.standard_normal((3, 4)).astype("float32")
     B = rng.standard_normal((4, 2)).astype("float32")

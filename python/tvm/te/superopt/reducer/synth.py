@@ -73,16 +73,29 @@ class ReducerSpec:
     proof: str
     # Free indices of the closed forms / leaves, in output order, with their extents.
     index_space: tuple[tuple[str, DimKey], ...] = ()
+    # The merge as it is evaluated, when it differs from the canonical ``merge``
+    # it is proven equal to (see ``partial``): each side's context re-based.
+    merge_print: tuple[ir.SymExpr, ...] | None = None
+    origin: str = "grammar"  # "grammar" or "partial" (states taken from the original)
+    # The target written over the state outputs (state k read as the element
+    # ``T-(k+1)[..]`` at its own indices), when it needs nothing else: the
+    # epilogue a reducer op may compute right after the reduction.
+    finalize: ir.SymExpr | None = None
 
     @property
     def arity(self) -> int:
         return len(self.states)
 
+    @property
+    def merge_code(self) -> tuple[ir.SymExpr, ...]:
+        """The merge to generate code from."""
+        return self.merge_print if self.merge_print is not None else self.merge
+
     def pretty(self) -> str:
-        lines = [f"comm_reduce over ax{self.axis} ({self.proof}):"]
+        lines = [f"comm_reduce over ax{self.axis} ({self.origin}, {self.proof}):"]
         for k in range(self.arity):
             lines.append(
-                f"  s{k}: leaf={self.leaves[k]}  merge={self.merge[k]}  e={self.identity[k]}"
+                f"  s{k}: leaf={self.leaves[k]}  merge={self.merge_code[k]}  e={self.identity[k]}"
             )
         return "\n".join(lines)
 
@@ -658,7 +671,33 @@ def _derive(states, problem, full, R, A, B, occurrences, index_axes, stats) -> R
     closed = tuple(subst_domain(s, {R: full}) for s in states)
     _count(stats, "reducer:specs")
     space = _index_space([*closed, *leaves], index_axes)
-    return ReducerSpec(problem.axis, tuple(states), leaves, merge, identity, closed, proof, space)
+    finalize = fin if _epilogue_only(fin) else None
+    return ReducerSpec(
+        problem.axis,
+        tuple(states),
+        leaves,
+        merge,
+        identity,
+        closed,
+        proof,
+        space,
+        finalize=finalize,
+    )
+
+
+def _epilogue_only(fin: ir.SymExpr) -> bool:
+    """``fin`` combines state outputs elementwise (no inputs, no reductions, not a bare state)."""
+    if isinstance(fin, ir.Elem):
+        return False
+    stack = [fin]
+    while stack:
+        n = stack.pop()
+        if isinstance(n, ir.Reduce | ir.MonoidReduce | ir.BIdx):
+            return False
+        if isinstance(n, ir.Elem) and n.tensor >= 0:
+            return False
+        stack.extend(n.children())
+    return True
 
 
 def _state_refs(e: ir.Node) -> set[int]:

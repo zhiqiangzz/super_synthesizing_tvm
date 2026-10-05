@@ -357,6 +357,11 @@ def mk_log(x: SymExpr) -> SymExpr:
         return mk_mul(const(x.exponent), mk_log(x.base))
     if isinstance(x, Mul) and all(positive(a) for a in x.args):
         return mk_add(*[mk_log(a) for a in x.args])
+    if isinstance(x, Mul) and any(isinstance(a, Exp) for a in x.args):
+        # exp(y) > 0, so the rest is positive wherever the log is defined
+        rest = [a for a in x.args if not isinstance(a, Exp)]
+        exps = [a.arg for a in x.args if isinstance(a, Exp)]
+        return mk_add(mk_log(mk_mul(*rest)), *exps)
     return ir.raw_log(x)
 
 
@@ -583,6 +588,18 @@ def rebuild(e: Node, children: dict[Node, Node]) -> Node:
     return e
 
 
+def recanonicalize(e: Node, memo: dict | None = None) -> Node:
+    """Canonical form of an expression built with the raw constructors."""
+    if memo is None:
+        memo = {}
+    hit = memo.get(e)
+    if hit is None:
+        kids = e.children()
+        hit = rebuild(e, {k: recanonicalize(k, memo) for k in kids}) if kids else e
+        memo[e] = hit
+    return hit
+
+
 def transform(e: Node, fn, memo: dict | None = None) -> Node:
     """Bottom-up rewrite: ``fn(node)`` returns a replacement or ``None`` to recurse."""
     if memo is None:
@@ -760,6 +777,7 @@ __all__ = [
     "mk_sub",
     "positive",
     "rebuild",
+    "recanonicalize",
     "reductions",
     "shift",
     "subst",

@@ -20,8 +20,16 @@
 Starts from ``attention()`` in ``flashattn_te.py`` (matmul -> max -> exp -> sum ->
 divide -> matmul, seven blocks, symbolic shapes) and searches the bounded TE
 grammar -- including automatically synthesised tuple ``te.comm_reducer``
-reductions -- for equivalent programs. With the default budget of four tensor
-ops the online-softmax (FlashAttention) formulation is among the results.
+reductions -- for equivalent programs. Two tensor ops already suffice for the
+online-softmax (FlashAttention) formulation: ``S = Q Kᵀ`` and one reducer over
+the keys, either with normalised output states (FA1-style merge, read off
+the original program) or with ``(m, l, o)`` and the division ``o / l`` as
+its fused epilogue (FA2-style).
+
+By default only programs at least as accurate as the original are kept (the
+precision gate of ``tvm.te.superopt.accuracy``): the unshifted ``exp`` of an
+``(L, O)`` reducer is rejected, the max-shifted online softmax passes.
+``--accuracy report`` keeps every equivalent program and prints its verdict.
 
     python super_opt/examples/superopt_attention.py
     python super_opt/examples/superopt_attention.py --budget 6 --leaf-exp --no-ir
@@ -94,7 +102,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     search = parser.add_argument_group("search bounds")
     search.add_argument(
-        "--budget", type=int, default=4, help="max tensor ops (default: %(default)s)"
+        "--budget", type=int, default=2, help="max tensor ops (default: %(default)s)"
     )
     search.add_argument(
         "--states", type=int, default=3, help="max reducer arity (default: %(default)s)"
@@ -116,6 +124,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     numerics = parser.add_argument_group("numerics")
     numerics.add_argument("--dtype", default="float16", help="(default: %(default)s)")
+    numerics.add_argument(
+        "--accuracy",
+        choices=("filter", "report", "off"),
+        default="filter",
+        help="precision gate: drop programs less accurate than the original (filter), "
+        "only annotate them (report), or skip the gate (default: %(default)s)",
+    )
     output = parser.add_argument_group("output")
     output.add_argument("--no-ir", dest="show_ir", action="store_false", help="skip the s_tir dump")
     output.add_argument(
@@ -137,12 +152,16 @@ def main(argv: list[str] | None = None) -> int:
         max_leaf_nodes=args.leaf_nodes,
     )
     t0 = time.time()
-    results = superoptimize(out, inputs, bounds, max_results=args.max_results)
+    results = superoptimize(
+        out, inputs, bounds, max_results=args.max_results, accuracy=args.accuracy
+    )
     elapsed = time.time() - t0
     console.print(f"[bold]{len(results)} equivalent program(s)[/] in {elapsed:.1f}s")
     for n, r in enumerate(results):
         console.rule(f"program {n}: {r.n_ops} ops, verified by {r.verdict.method}")
         console.print(r.snapshot.describe())
+        if r.accuracy is not None:
+            console.print(r.accuracy.summary())
         if args.show_te:
             render_source(
                 console,

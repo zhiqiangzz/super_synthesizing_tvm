@@ -31,6 +31,7 @@ from collections.abc import Iterable
 from tvm import te
 from tvm import tirx as tir
 
+from ..accuracy import spec_issues
 from ..dims import DimKey
 from ..pool import PoolEntry
 from ..symbolic import ir
@@ -39,7 +40,8 @@ from ..symbolic.lower import TensorSem
 from ..symbolic.realize import RealizeEnv, const_expr, to_prim
 from ..target import SearchCtx
 from ..tensor_ops import OpSpec, load, shape_of
-from .synth import ReducerSpec, SynthesisProblem, synthesize
+from .partial import synthesize_partial
+from .synth import ReducerSpec, SynthesisProblem, _spec_key, synthesize
 
 _SPEC_IDS = itertools.count()
 
@@ -57,6 +59,11 @@ class Realized:
     layout: Layout
     leaf_trees: tuple[tuple, ...]
     closed: tuple[ir.SymExpr, ...]  # spec.closed over the layout's output indices
+    # Fused epilogue: the op's only output is ``spec.finalize`` (the target),
+    # computed from the states; ``gather[o]`` is the target index feeding the
+    # reducer's output axis ``o``.
+    fused: bool = False
+    gather: tuple[int, ...] = ()
     uid: int = dataclasses.field(default_factory=lambda: next(_SPEC_IDS))
 
     def __repr__(self) -> str:
@@ -231,6 +238,7 @@ class CommReduce(OpSpec):
             b.max_leaf_nodes,
             b.max_state_expr_nodes,
             b.max_latent_atoms,
+            ctx.static_required,
         )
         specs = self._synth_cache.get(skey)
         if specs is None:
@@ -246,7 +254,17 @@ class CommReduce(OpSpec):
                 max_state_expr_nodes=b.max_state_expr_nodes,
                 max_latent_atoms=b.max_latent_atoms,
             )
-            specs = synthesize(problem, ctx.stats)
+            grammar_specs = synthesize(problem, ctx.stats)
+            # States read off the original program come first: they carry a
+            # merge printed the way the original computes (see ``partial``).
+            partial_specs = synthesize_partial(problem, ctx, ctx.stats)
+            keys = {_spec_key(sp) for sp in partial_specs}
+            specs = [*partial_specs, *(sp for sp in grammar_specs if _spec_key(sp) not in keys)]
+            if ctx.static_required:  # filter mode: the gate would reject these programs
+                required = set(ctx.static_required)
+                kept = [sp for sp in specs if not required & spec_issues(sp)]
+                ctx.count("reducer:prune_accuracy", len(specs) - len(kept))
+                specs = kept
             self._synth_cache[skey] = specs
         return specs
 
@@ -276,6 +294,9 @@ class CommReduce(OpSpec):
                     continue
                 closed = tuple(subst(c, remap) for c in spec.closed)
                 out.append(Realized(spec, layout, tuple(trees), closed))
+                gather = _epilogue_gather(spec, layout, remap, ctx)
+                if gather is not None:
+                    out.append(Realized(spec, layout, tuple(trees), closed, True, gather))
                 continue
             ctx.count("reducer:leaf_unrealizable")
         return out
@@ -283,9 +304,17 @@ class CommReduce(OpSpec):
     def param_key(self, params: Realized):
         return (params.uid,)
 
-    def apply_sem(self, operands, params: Realized, ctx):
+    def _state_sems(self, params: Realized, ctx) -> list[TensorSem]:
         keys = params.layout.out_keys
         return [TensorSem(len(keys), cf, keys, ctx.dtype) for cf in params.closed]
+
+    def apply_sem(self, operands, params: Realized, ctx):
+        if not params.fused:
+            return self._state_sems(params, ctx)
+        spec = params.spec
+        refs = {n: spec.closed[-n.tensor - 1] for n in _state_refs(spec.finalize)}
+        keys = ctx.target.sem.axis_keys
+        return [TensorSem(len(keys), subst(spec.finalize, refs), keys, ctx.dtype)]
 
     def build(self, tensors, params: Realized, ctx):
         spec, layout = params.spec, params.layout
@@ -301,7 +330,7 @@ class CommReduce(OpSpec):
                 env.state[merge_env_a[k]] = a[k]
                 env.state[merge_env_b[k]] = b[k]
             memo: dict = {}
-            return tuple(to_prim(spec.merge[k], env, memo) for k in range(n))
+            return tuple(to_prim(spec.merge_code[k], env, memo) for k in range(n))
 
         def fidentity(*dtypes):
             return tuple(const_expr(spec.identity[k].value, str(dtypes[k])) for k in range(n))
@@ -318,15 +347,28 @@ class CommReduce(OpSpec):
 
         outs = te.compute(shape_of(layout.out_keys, ctx), fcompute, name="cr")
         outs = list(outs) if isinstance(outs, tuple) else [outs]
-        ctx.lower.register(outs[0].op, tuple(self.apply_sem(None, params, ctx)))
-        return outs
+        ctx.lower.register(outs[0].op, tuple(self._state_sems(params, ctx)))
+        if not params.fused:
+            return outs
+
+        def fepilogue(*idx):
+            env = RealizeEnv(dtype=accum, dims=ctx.dims)
+            env.index = {ir.idx(f"i{t}"): idx[t] for t in range(len(idx))}
+            env.elem = lambda tid, _: load(outs[-tid - 1], [idx[t] for t in params.gather])
+            return to_prim(spec.finalize, env, {})
+
+        keys = ctx.target.sem.axis_keys
+        return [te.compute(shape_of(keys, ctx), fepilogue, name="fin")]
 
     def describe(self, params: Realized) -> str:
-        return params.spec.pretty()
+        text = params.spec.pretty()
+        if params.fused:
+            text += f"\n  fused epilogue: {params.spec.finalize}"
+        return text
 
     def emit(self, names, entries, outs, params: Realized, ctx, n):
         from ..emit import compute_source, index_names, load_source, shape_source
-        from ..symbolic.emit import SourceEnv, const_source, hoisted_source
+        from ..symbolic.emit import SourceEnv, const_source, hoisted_source, to_source
 
         spec, layout = params.spec, params.layout
         accum = ctx.dtype
@@ -335,7 +377,7 @@ class CommReduce(OpSpec):
         for s in range(k):
             env.state[ir.state_var("a", s)] = f"a[{s}]"
             env.state[ir.state_var("b", s)] = f"b[{s}]"
-        hoisted, merged = hoisted_source(spec.merge, env, prefix="m")
+        hoisted, merged = hoisted_source(spec.merge_code, env, prefix="m")
         lines = [f"def merge{n}(a, b):"]
         lines.extend(f"    {h}" for h in hoisted)
         lines.append("    return (" + ", ".join(merged) + ("," if k == 1 else "") + ")")
@@ -356,9 +398,53 @@ class CommReduce(OpSpec):
 
         leaves = [_tree_source(t, elem_fn, accum, ctx.dims) for t in params.leaf_trees]
         body = f"reducer{n}(({', '.join(leaves)}{',' if k == 1 else ''}), axis={j})"
-        target = ", ".join(outs) if k > 1 else outs[0]
+        states = [f"{outs[0]}_s{s}" for s in range(k)] if params.fused else outs
+        target = ", ".join(states) if k > 1 else states[0]
         lines.append(compute_source(target, shape_source(layout.out_keys, ctx), idx, body, "cr"))
+        if params.fused:
+            keys = ctx.target.sem.axis_keys
+            fidx = index_names(len(keys))
+            fenv = SourceEnv(dtype=accum, dims=ctx.dims)
+            fenv.index = {ir.idx(f"i{t}"): fidx[t] for t in range(len(keys))}
+            fenv.elem = lambda tid, _: load_source(
+                states[-tid - 1], [fidx[t] for t in params.gather]
+            )
+            fbody = to_source(params.spec.finalize, fenv)
+            lines.append(compute_source(outs[0], shape_source(keys, ctx), fidx, fbody, "fin"))
         return lines
+
+
+def _state_refs(e: ir.Node) -> set[ir.Elem]:
+    """The state outputs ``T-(k+1)[..]`` an epilogue reads."""
+    out, stack = set(), [e]
+    while stack:
+        n = stack.pop()
+        if isinstance(n, ir.Elem) and n.tensor < 0:
+            out.add(n)
+        stack.extend(n.children())
+    return out
+
+
+def _epilogue_gather(spec: ReducerSpec, layout: Layout, remap, ctx) -> tuple[int, ...] | None:
+    """Target index for each reducer output axis, when the epilogue can be fused.
+
+    Every output axis of the reducer must be one of the target's own output
+    indices (a goal nested in another reduction has no such index), so the
+    epilogue can read the states at the target's coordinates.
+    """
+    if spec.finalize is None:
+        return None
+    gather: dict[int, int] = {}
+    for name, pos in remap.items():
+        if not name.name.startswith("i"):
+            return None
+        gather[int(pos.name[1:])] = int(name.name[1:])
+    if sorted(gather) != list(range(len(layout.out_keys))):
+        return None
+    keys = ctx.target.sem.axis_keys
+    if any(layout.out_keys[o] != keys[t] for o, t in gather.items()):
+        return None
+    return tuple(gather[o] for o in range(len(layout.out_keys)))
 
 
 def _tree_source(tree: tuple, elem_fn, dtype: str, dims) -> str:

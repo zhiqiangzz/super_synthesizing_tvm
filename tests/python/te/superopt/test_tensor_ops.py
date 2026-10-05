@@ -107,6 +107,9 @@ def test_comm_reduce_build_matches_reference_structure():
     for r in realized:
         assert r.spec.arity in (2, 3)
         sems, outs = _check(cr, [prog.pool[3], V], [S_t, ins[2]], r, ctx)
+        if r.fused:  # the epilogue (e.g. o / l) reads the reducer's outputs
+            assert len(outs) == 1 and outs[0].op.name == "fin"
+            continue
         assert len(outs) == r.spec.arity
         assert all(o.op.same_as(outs[0].op) for o in outs)
     # one of them is exactly the reference: leaves (c*S, 1, V) with identity (-inf, 0, 0)

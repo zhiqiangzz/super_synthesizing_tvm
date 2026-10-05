@@ -71,6 +71,9 @@ class Target:
     reduce_axes: frozenset[DimKey]
     tensors: frozenset[int]
     consts: tuple[ir.SymExpr, ...]
+    # extents the target uses for two independent indices at once (two output
+    # axes, or two distinct reductions): the only ones worth an outer product
+    repeated_keys: frozenset[DimKey] = frozenset()
 
     @property
     def body(self) -> ir.SymExpr:
@@ -90,11 +93,13 @@ def analyze_target(sem: TensorSem) -> Target:
         if isinstance(n, ir.MonoidReduce):
             monoid_axes.add(n.domain.axis)
         stack.extend(n.children())
+    uses = list(sem.axis_keys) + [r.domain.axis for r in set(reductions(sem.body))]
     return Target(
         sem=sem,
         reduce_axes=axes | frozenset(monoid_axes),
         tensors=frozenset(elems(sem.body)),
         consts=tuple(constant_subterms(sem.body)),
+        repeated_keys=frozenset(k for k in uses if uses.count(k) > 1),
     )
 
 
@@ -107,6 +112,12 @@ class SearchCtx:
     target: Target
     dtype: str  # the single working dtype of the search (that of the target)
     stats: dict = dataclasses.field(default_factory=dict)
+    # The program the search started from (partialisation reads its TE graph).
+    output: object = None
+    inputs: tuple = ()
+    # Static precision properties of the original that every result must keep
+    # ("exp", "domain"; see ``accuracy``): violating ops are pruned at once.
+    static_required: tuple[str, ...] = ()
 
     @property
     def dims(self) -> DimTable:
