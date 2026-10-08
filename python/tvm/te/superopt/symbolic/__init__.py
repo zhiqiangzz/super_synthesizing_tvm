@@ -16,17 +16,8 @@
 # under the License.
 """Symbolic shadow semantics of TE tensors."""
 
-from . import canonicalize, interp, ir, lower
+from . import canonicalize, ir, lower
 from .canonicalize import Unsupported
-from .lower import LowerCtx, TensorSem, lower_tensor
+from .lower import LowerCtx, TensorSem
 
-__all__ = [
-    "LowerCtx",
-    "TensorSem",
-    "Unsupported",
-    "canonicalize",
-    "interp",
-    "ir",
-    "lower",
-    "lower_tensor",
-]
+__all__ = ["LowerCtx", "TensorSem", "Unsupported", "canonicalize", "ir", "lower"]

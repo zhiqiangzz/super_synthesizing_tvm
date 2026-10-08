@@ -191,7 +191,7 @@ class DFull(Domain):
 
 
 class DSym(Domain):
-    """An abstract, non-empty subset of the axis (used by goal analysis and proofs)."""
+    """An abstract, non-empty subset of the axis: a sub-range, or one side of a merge."""
 
     __slots__ = ()
     field_names = ("axis", "name")
@@ -208,14 +208,6 @@ class DUnion(Domain):
 
     def pretty(self) -> str:
         return f"({self.a.pretty()}u{self.b.pretty()})"
-
-
-class DSingleton(Domain):
-    __slots__ = ()
-    field_names = ("axis", "point")
-
-    def pretty(self) -> str:
-        return f"{{{self.point.pretty()}}}@ax{self.axis}"
 
 
 class DEmpty(Domain):
@@ -290,7 +282,7 @@ class StateVar(SymExpr):
 
 
 class Atom(SymExpr):
-    """An opaque real-valued symbol (used by the reducer solver and sympy bridge)."""
+    """An opaque real-valued symbol (the correction of a re-based context)."""
 
     __slots__ = ()
     rank = 15
@@ -420,10 +412,6 @@ def dunion(a: Domain, b: Domain) -> DUnion:
     return _intern(DUnion, (a.axis, a, b))
 
 
-def dsingleton(axis: int, point: IndexExpr) -> DSingleton:
-    return _intern(DSingleton, (axis, point))
-
-
 def dempty(axis: int) -> DEmpty:
     return _intern(DEmpty, (axis,))
 
@@ -524,12 +512,6 @@ def raw_subst(e: Node, mapping: dict[Node, Node]) -> Node:
         return out
 
     return go(e)
-
-
-def is_const(e: Node, value=None) -> bool:
-    if not isinstance(e, Const):
-        return False
-    return value is None or e.value == value
 
 
 def is_inf(e: Node) -> bool:

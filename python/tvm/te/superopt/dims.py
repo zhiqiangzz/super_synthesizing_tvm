@@ -19,7 +19,7 @@
 Two tensor axes are *compatible* (can be contracted, broadcast against each
 other, or share a reduction) iff their extents are the same ``te.var`` object
 or the same integer constant. :class:`DimTable` assigns every distinct extent
-a small integer ``DimKey`` so the rest of the search can compare axes by
+a small integer ``DimKey`` so the rest of the package can compare axes by
 ``==``.
 """
 
@@ -71,9 +71,6 @@ class DimTable:
     def keys(self, shape) -> tuple[DimKey, ...]:
         return tuple(self.key(s) for s in shape)
 
-    def all_keys(self) -> list[DimKey]:
-        return list(self._order)
-
     def extent(self, key: DimKey):
         return self._extents[key]
 
@@ -85,12 +82,6 @@ class DimTable:
             if n == name:
                 return k
         raise KeyError(name)
-
-    def is_symbolic(self, key: DimKey) -> bool:
-        return isinstance(self._extents[key], tir.Var)
-
-    def __len__(self) -> int:
-        return len(self._order)
 
 
 def _same_extent(a, b) -> bool:

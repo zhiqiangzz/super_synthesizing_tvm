@@ -22,18 +22,7 @@ import te_programs
 import tvm.testing
 from tvm import te
 from tvm import tirx as tir
-from tvm.te.superopt.accuracy import (
-    AccuracyGate,
-    op_issues,
-    reference,
-    spec_issues,
-    static_issues,
-)
-from tvm.te.superopt.api import make_context
-from tvm.te.superopt.config import Bounds
-from tvm.te.superopt.reducer import synthesize
-from tvm.te.superopt.reducer.partial import synthesize_partial
-from tvm.te.superopt.reducer.synth import SynthesisProblem
+from tvm.te.superopt.accuracy import AccuracyGate, positive_inputs, references, static_issues
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +105,25 @@ def _xs():
     return te.placeholder((n, m), name="X", dtype="float32")
 
 
+def _logsumexp_inline(X, shifted: bool):
+    """``max`` and ``Σ exp(x - max)`` with the exponential written inside the reduction."""
+    n, m = X.shape
+    j1 = te.reduce_axis((0, m), "j")
+    mx = te.compute((n,), lambda i: te.max(X[i, j1], axis=j1), name="mx")
+    j2 = te.reduce_axis((0, m), "j")
+    arg = (lambda i: X[i, j2] - mx[i]) if shifted else (lambda i: X[i, j2])
+    den = te.compute((n,), lambda i: te.sum(tir.exp(arg(i)), axis=j2), name="den")
+    return mx, den
+
+
+def _weighted_logsumexp(X, W):
+    """``log Σ_j w_j exp(x_ij)`` written as ``Σ exp(x + log w)``: ``w`` must be positive."""
+    n, m = X.shape
+    Z = te.compute((n, m), lambda i, j: X[i, j] + tir.log(W[j]), name="Z")
+    mx, den = _logsumexp_inline(Z, shifted=True)
+    return te.compute((n,), lambda i: tir.log(den[i]) + mx[i], name="lse")
+
+
 # ---------------------------------------------------------------------------
 # static checks
 # ---------------------------------------------------------------------------
@@ -135,6 +143,39 @@ def test_static_exp_arguments():
     assert static_issues(logspace)["exp"] == ["attention"]
 
 
+def test_static_exp_inside_the_reduction():
+    """The shift is judged where the program applies it, not after it has been factored out."""
+    X = _xs()
+    assert static_issues(_logsumexp_inline(X, shifted=True)) == {"exp": [], "domain": []}
+    assert static_issues(_logsumexp_inline(X, shifted=False))["exp"] == ["den"]
+
+
+def test_static_exp_through_a_stored_tensor():
+    """The reducer recomputes the score, the output reads the stored one: the same shift."""
+    n, m = te.var("n"), te.var("m")
+    X = te.placeholder((n, m), name="X", dtype="float32")
+    T = te.placeholder((n,), name="T", dtype="float32")
+    Z = te.compute((n, m), lambda i, j: X[i, j] / T[i], name="Z")
+
+    def merge(a, b):
+        mx = tir.max(a[0], b[0])
+        return (mx, a[1] * tir.exp(a[0] - mx) + b[1] * tir.exp(b[0] - mx))
+
+    def ident(t0, t1):
+        return (tir.min_value(t0), tir.const(0.0, t1))
+
+    red = te.comm_reducer(merge, ident, name="online")
+    j = te.reduce_axis((0, m), "j")
+    one = tir.const(1.0, "float32")
+    mx, den = te.compute((n,), lambda i: red((X[i, j] / T[i], one), axis=j), name="st")
+    P = te.compute((n, m), lambda i, k: tir.exp(Z[i, k] - mx[i]) / den[i], name="P")
+    assert static_issues(P)["exp"] == []
+    # a tensor the maximum was not taken of is still unbounded
+    W = te.placeholder((n, m), name="W", dtype="float32")
+    Q = te.compute((n, m), lambda i, k: tir.exp(W[i, k] - mx[i]) / den[i], name="Q")
+    assert static_issues(Q)["exp"] == ["Q"]
+
+
 def test_static_domains():
     X = _xs()
     assert static_issues(_normalise_by_sum(X, positive=True))["domain"] == []
@@ -151,10 +192,9 @@ def test_static_domains():
 def test_reference_evaluates_the_program_as_written():
     X = _xs()
     data = np.random.default_rng(0).standard_normal((3, 7)).astype("float32")
-    got = reference(_variance_two_pass(X), [X], [data], {"n": 3, "m": 7})
-    np.testing.assert_allclose(got, data.astype("float64").var(axis=1), rtol=1e-12)
-    got = reference(_variance_welford(X), [X], [data], {"n": 3, "m": 7})
-    np.testing.assert_allclose(got, data.astype("float64").var(axis=1), rtol=1e-12)
+    for program in (_variance_two_pass, _variance_welford):
+        (got,) = references(program(X), [X], [data], {"n": 3, "m": 7})
+        np.testing.assert_allclose(got, data.astype("float64").var(axis=1), rtol=1e-12)
 
 
 def test_gate_variance_one_pass_formulas():
@@ -186,39 +226,60 @@ def test_gate_unshifted_softmax():
     assert loose.required == ["domain"]
 
 
-# ---------------------------------------------------------------------------
-# the same checks inside the search (filter mode)
-# ---------------------------------------------------------------------------
-def test_search_time_checks_on_reducers_and_ops():
-    ins, out = te_programs.attention("naive")
-    ctx, sems = make_context(out, ins, Bounds())
-    b = ctx.bounds
-    problem = SynthesisProblem(
-        ctx.target.body,
-        ctx.dims.key(ins[1].shape[2]),
-        b.max_states,
-        b.max_merge_nodes,
-        ctx.target.sem.axis_keys,
-        b.min_states,
-        ctx.target.consts,
-        b.max_leaf_nodes,
-        b.max_state_expr_nodes,
-        b.max_latent_atoms,
-    )
-    # the re-based (printed) merge of the partial reducer is judged canonically
-    (partial,) = synthesize_partial(problem, ctx)
-    assert spec_issues(partial) == set()
-    # grammar reducers: the max-shifted ones pass, log-space / unshifted ones do not
-    verdicts = [spec_issues(sp) for sp in synthesize(problem)]
-    assert set() in verdicts and {"exp"} in [v & {"exp"} for v in verdicts]
+def test_gate_over_two_outputs():
+    X = _xs()
+    outs = _logsumexp_inline(X, shifted=True)
+    gate = AccuracyGate(outs, [X])
+    assert len(gate.cases) == 3 and gate.required == ["exp", "domain"]
+    assert gate.check(outs).ok
+    # a wrong second output fails even though the first is exact
+    n = X.shape[0]
+    off = te.compute((n,), lambda i: outs[1][i] * tir.const(1.01, "float32"), name="off")
+    report = gate.check([outs[0], off])
+    assert not report.ok and all(f.candidate > 1e-3 for f in report.families)
 
-    class Entry:  # the part of a pool entry op_issues reads
-        def __init__(self, sem):
-            self.sem = sem
 
-    assert op_issues("exp", [Entry(sems[0])]) == {"exp"}  # exp(Q) is unbounded
-    assert op_issues("div", [Entry(sems[2]), Entry(sems[0])]) == {"domain"}  # Q: either sign
-    assert op_issues("log", [Entry(sems[0])]) == {"domain"}
+def test_inputs_are_sampled_on_the_domain_of_the_program():
+    n, m = te.var("n"), te.var("m")
+    X = te.placeholder((n, m), name="X", dtype="float32")
+    W = te.placeholder((m,), name="W", dtype="float32")
+    out = _weighted_logsumexp(X, W)
+    assert positive_inputs(out, [X, W]) == [False, True]
+    gate = AccuracyGate(out, [X, W])
+    assert [c[0] for c in gate.cases] == ["unit", "offset", "wide"]  # no family skipped
+    assert all(np.all(c[1][1] > 0) for c in gate.cases)
+    assert gate.check(out).ok
+
+
+def test_gate_does_not_pass_vacuously():
+    """With no family the original is finite on, nothing was compared: that is not a pass."""
+    X = _xs()
+    n = X.shape[0]
+    bad = te.compute((n,), lambda i: tir.log(tir.const(-1.0, "float32")) + X[i, 0], name="bad")
+    gate = AccuracyGate(bad, [X])
+    assert gate.cases == []
+    report = gate.check(bad)
+    assert not report.ok and "no input family" in report.summary()
+
+
+def test_reference_keeps_reducer_identities_as_written():
+    """``0 * min_value`` is 0 in the generated code; ``0 * -inf`` would be NaN."""
+    X = _xs()
+    n, m = X.shape
+
+    def merge(a, b):
+        return (tir.max(a[0], b[0]), a[1] + b[1] + tir.const(0.0, "float32") * a[0])
+
+    def ident(t0, t1):
+        return (tir.min_value(t0), tir.const(0.0, t1))
+
+    red = te.comm_reducer(merge, ident, name="r")
+    j = te.reduce_axis((0, m), "j")
+    mx, total = te.compute((n,), lambda i: red((X[i, j], X[i, j]), axis=j), name="st")
+    data = np.random.default_rng(0).standard_normal((2, 5)).astype("float32")
+    got_mx, got_total = references([mx, total], [X], [data], {"n": 2, "m": 5})
+    np.testing.assert_allclose(got_mx, data.max(axis=1), rtol=1e-12)
+    np.testing.assert_allclose(got_total, data.astype("float64").sum(axis=1), rtol=1e-12)
 
 
 if __name__ == "__main__":

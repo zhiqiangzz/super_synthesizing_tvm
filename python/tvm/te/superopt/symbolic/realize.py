@@ -16,9 +16,10 @@
 # under the License.
 """Turn scalar symbolic expressions back into ``tirx.PrimExpr``.
 
-Used for constants (``1/sqrt(head_dim)``), reducer merge functions and
-identities. Shared sub-expressions are realised once per call (the memo acts
-as SSA/CSE), and :func:`node_count` reports the size of that SSA form.
+Used for the inputs of a reducer, its merge function and identity, and the
+epilogues formed from its states. Shared sub-expressions are realised once
+per call (the memo acts as SSA/CSE), and :func:`node_count` reports the size
+of that SSA form.
 """
 
 from __future__ import annotations
@@ -40,8 +41,9 @@ class RealizeEnv:
     dims: DimTable | None = None
     index: dict[ir.IndexExpr, object] = dataclasses.field(default_factory=dict)
     state: dict[ir.StateVar, object] = dataclasses.field(default_factory=dict)
-    atoms: dict[ir.Atom, object] = dataclasses.field(default_factory=dict)
     elem: Callable[[int, tuple], object] | None = None
+    # symbolic scalars by name (``te.var`` used as a value); extents fall back to ``dims``
+    scalars: dict[str, object] = dataclasses.field(default_factory=dict)
 
 
 def const_expr(value: ir.Number, dtype: str):
@@ -67,14 +69,14 @@ def _realize(e: ir.SymExpr, env: RealizeEnv, memo: dict):
     if isinstance(e, ir.Const):
         return const_expr(e.value, dt)
     if isinstance(e, ir.ShapeSym):
+        if e.name in env.scalars:
+            return tir.convert(env.scalars[e.name]).astype(dt)
         if env.dims is None:
             raise Unsupported("shape symbol without a DimTable")
         ext = env.dims.extent(env.dims.key_of_name(e.name))
         return tir.convert(ext).astype(dt)
     if isinstance(e, ir.StateVar):
         return env.state[e]
-    if isinstance(e, ir.Atom):
-        return env.atoms[e]
     if isinstance(e, ir.Elem):
         if env.elem is None:
             raise Unsupported("tensor element without a loader")

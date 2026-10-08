@@ -14,14 +14,14 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Precision gate: a found program may not be less accurate than the original.
+"""Precision gate: a fused program may not be less accurate than the original.
 
-Equivalence is decided over the reals, where ``exp(s - max s) / Σ exp(s - max s)``
+A reducer is derived over the reals, where ``exp(s - max s) / Σ exp(s - max s)``
 and ``exp(s) / Σ exp(s)`` are the same function and so are the two-pass and
 the one-pass variance. In floating point they are not: the first overflows
 where the second does not, the second cancels catastrophically. The gate
-compares every candidate with the program the search started from, never
-with an absolute standard, so a program is only rejected for trouble the
+compares every candidate with the program it was derived from, never with
+an absolute standard, so a program is only rejected for trouble the
 original does not already have.
 
 static
@@ -64,14 +64,16 @@ from tvm.ir import Call
 from .symbolic import ir
 from .symbolic.canonicalize import (
     Unsupported,
+    contains_node,
     instantiate,
+    is_constant,
+    map_elems,
     mk_mul,
     positive,
     recanonicalize,
     term_view,
 )
-from .symbolic.lower import LowerCtx, _is_max_value, _is_min_value, classify_combiner
-from .target import is_constant
+from .symbolic.lower import LowerCtx, classify_combiner, compute_ops
 
 # exp overflows float32 above ~88.7 and float16 above ~11; a provably bounded
 # argument is one bounded by a constant no larger than this.
@@ -126,6 +128,7 @@ class AccuracyReport:
     # argument not provably positive)
     static: tuple[tuple[str, str], ...]
     families: tuple[FamilyError, ...]
+    note: str = ""  # why no numeric comparison was possible
 
     @property
     def static_ok(self) -> bool:
@@ -135,6 +138,8 @@ class AccuracyReport:
         head = "accurate" if self.ok else "REJECTED"
         what = {"exp": "unbounded exp", "domain": "divisor/log of unknown sign"}
         parts = [f"{what[kind]} in {op}" for kind, op in self.static]
+        if self.note:
+            parts.append(self.note)
         for f in self.families:
             mark = "" if f.ok else " (!)"
             parts.append(
@@ -154,7 +159,8 @@ class _OpLower(LowerCtx):
     """Lower one op body at a time; reads of computed tensors stay opaque elements."""
 
     def __init__(self) -> None:
-        super().__init__()
+        # reductions as written: ``Σ exp(s - m)`` must not become ``exp(-m) Σ exp(s)``
+        super().__init__(raw_reductions=True)
         self.computed: list[te.Tensor] = []
         self._defs: dict[int, ir.SymExpr | None] = {}
 
@@ -165,11 +171,11 @@ class _OpLower(LowerCtx):
         self.computed.append(t)
         return PSEUDO_BASE - (len(self.computed) - 1)
 
-    def lower_expr(self, e, env, level):
-        if isinstance(e, tir.ProducerLoad) and isinstance(e.producer.op, te.ComputeOp):
+    def lower_load(self, e, env, level):
+        if isinstance(e.producer.op, te.ComputeOp):
             tid = self.pseudo_id(e.producer)
             return ir.elem(tid, tuple(self.lower_index(i, env) for i in e.indices))
-        return super().lower_expr(e, env, level)
+        return super().lower_load(e, env, level)
 
     def body(self, op, k: int) -> ir.SymExpr:
         env = {iv.var.name: ir.idx(f"i{n}") for n, iv in enumerate(op.axis)}
@@ -242,6 +248,47 @@ def _match(p: ir.Node, t: ir.Node, var: ir.BIdx, bind: dict) -> bool:
     return True
 
 
+def _running_max(m: ir.MonoidReduce) -> bool:
+    k = m.slot
+    a, b = ir.state_var("a", k), ir.state_var("b", k)
+    return isinstance(m.merge[k], ir.Max) and set(m.merge[k].args) == {a, b}
+
+
+def _looked_through(e: ir.SymExpr, scope: _Scope, fuel: int = 6) -> ir.SymExpr:
+    """``e`` with every elementwise computed tensor replaced by its definition.
+
+    Two programs may read the same quantity through a stored tensor and by
+    recomputing it (``Z[i, j]`` against ``X[i, j] / T[i]``): written down to
+    the tensors that are not elementwise, they are the same expression.
+    """
+
+    def inline(n: ir.Elem, depth: int):
+        if n.tensor > PSEUDO_BASE:
+            return None
+        d = scope.lower.definition(n.tensor)
+        if d is None or contains_node(d, lambda x: isinstance(x, ir.Reduce | ir.MonoidReduce)):
+            return None
+        return instantiate(d, {ir.idx(f"i{k}"): i for k, i in enumerate(n.indices)}, depth)
+
+    for _ in range(fuel):
+        new = map_elems(e, inline)
+        if new is e:
+            break
+        e = new
+    return e
+
+
+def _over_axis(body: ir.SymExpr, red, x: ir.SymExpr, scope: _Scope) -> bool:
+    """``x`` is ``body`` at some point of the axis ``red`` takes the maximum over."""
+    var = ir.bidx(red.level)
+    for pattern, value in ((body, x), (_looked_through(body, scope), _looked_through(x, scope))):
+        bind: dict = {}
+        if _match(pattern, value, var, bind):
+            point = bind.get(var)
+            return point is None or scope.index_key(point) == red.domain.axis
+    return False
+
+
 def _dominates(m: ir.SymExpr, x: ir.SymExpr, scope: _Scope, fuel: int = 8) -> bool:
     """Syntactic proof that ``m >= x`` everywhere."""
     if m is x:
@@ -250,6 +297,9 @@ def _dominates(m: ir.SymExpr, x: ir.SymExpr, scope: _Scope, fuel: int = 8) -> bo
         return False
     if isinstance(m, ir.Max):
         return any(_dominates(a, x, scope, fuel - 1) for a in m.args)
+    if isinstance(m, ir.MonoidReduce) and _running_max(m):
+        # a slot merged by ``max(a_k, b_k)`` is the maximum of its leaf over the axis
+        return _over_axis(m.leaf[m.slot], m, x, scope)
     wm, rm = _split_scale(m)
     wx, rx = _split_scale(x)
     if wm is not wx:
@@ -257,12 +307,7 @@ def _dominates(m: ir.SymExpr, x: ir.SymExpr, scope: _Scope, fuel: int = 8) -> bo
     if wm is not ir.ONE:
         return _dominates(rm, rx, scope, fuel - 1)
     if isinstance(m, ir.Reduce) and m.kind == "max":
-        var = ir.bidx(m.level)
-        bind: dict = {}
-        if not _match(m.body, x, var, bind):
-            return False
-        point = bind.get(var)
-        return point is None or scope.index_key(point) == m.domain.axis
+        return _over_axis(m.body, m, x, scope)
     if isinstance(m, ir.Elem) and m.tensor <= PSEUDO_BASE:
         d = scope.lower.definition(m.tensor)
         if d is None:
@@ -287,6 +332,13 @@ def _nonneg(e: ir.SymExpr) -> bool:
 
 def bounded_above(arg: ir.SymExpr, scope: _Scope) -> bool:
     """``arg <= C`` for a small constant ``C``: shifted by a dominating max, or constant."""
+    if _bounded_as_written(arg, scope):
+        return True
+    through = _looked_through(arg, scope)
+    return through is not arg and _bounded_as_written(through, scope)
+
+
+def _bounded_as_written(arg: ir.SymExpr, scope: _Scope) -> bool:
     c, terms = term_view(arg)
     if isinstance(c, float) or c > EXP_ARG_LIMIT:
         return c == float("-inf")
@@ -407,28 +459,17 @@ def _sites(e: ir.Node, depth: int, binders: dict, env: dict, signs: _Signs, out:
         _sites(c, depth, binders, env, signs, out)
 
 
-def _compute_ops(output: te.Tensor) -> list:
-    """Compute ops feeding ``output``, producers first."""
-    order: list = []
-
-    def visit(op) -> None:
-        if not isinstance(op, te.ComputeOp) or any(op.same_as(o) for o in order):
-            return
-        for t in op.input_tensors:
-            visit(t.op)
-        order.append(op)
-
-    visit(output.op)
-    return order
+def _tensors(outputs) -> list[te.Tensor]:
+    return [outputs] if isinstance(outputs, te.Tensor) else list(outputs)
 
 
-def static_issues(output: te.Tensor) -> dict[str, list[str]]:
+def static_issues(outputs) -> dict[str, list[str]]:
     """Ops (by name) with an unbounded ``exp`` argument (``"exp"``) or a divisor /
     ``log`` argument not provably positive (``"domain"``)."""
     lower = _OpLower()
     signs = _Signs(lower)
     issues: dict[str, list[str]] = {"exp": [], "domain": []}
-    for op in _compute_ops(output):
+    for op in compute_ops(outputs):
         bodies = [0] if isinstance(op.body[0], tir.Reduce) else range(len(op.body))
         out_keys = tuple(lower.dims.key(iv.dom.extent) for iv in op.axis)
         bad: set[str] = set()
@@ -494,13 +535,9 @@ class _Reference:
         raise Unsupported(f"index expression {type(e).__name__}")
 
     def ev(self, e, env):
-        if isinstance(e, tir.FloatImm):
-            if _is_min_value(e):
-                return -np.inf
-            if _is_max_value(e):
-                return np.inf
-            return float(e.value)
-        if isinstance(e, tir.IntImm):
+        if isinstance(e, tir.FloatImm | tir.IntImm):
+            # as written: a reducer identity is the dtype's lowest finite value, and
+            # ``0 * lowest`` is 0 where ``0 * -inf`` would be NaN
             return float(e.value)
         if isinstance(e, tir.Var):
             if e.name in env:
@@ -572,104 +609,174 @@ class _Reference:
         return state
 
 
-def reference(output: te.Tensor, inputs, arrays, var_values) -> np.ndarray:
-    """float64 value of ``output`` computed with the program's own expressions."""
-    return _Reference(list(inputs), list(arrays), var_values).tensor(output)
+def references(outputs, inputs, arrays, var_values) -> list[np.ndarray]:
+    """float64 values of ``outputs`` computed with the program's own expressions."""
+    ref = _Reference(list(inputs), list(arrays), var_values)
+    return [ref.tensor(t) for t in _tensors(outputs)]
+
+
+# ---------------------------------------------------------------------------
+# inputs: extents and the domain the program is defined on
+# ---------------------------------------------------------------------------
+def extent_names(outputs, inputs) -> tuple[set[str], set[str]]:
+    """``(all, reduced)``: names of the symbolic extents, and of those some reduction runs over."""
+    names: set[str] = set()
+    reduced: set[str] = set()
+
+    def note(e, reduce: bool) -> None:
+        if isinstance(e, tir.Var):
+            names.add(e.name)
+            if reduce:
+                reduced.add(e.name)
+
+    for op in compute_ops(outputs):
+        for iv in op.axis:
+            note(iv.dom.extent, False)
+        for iv in op.reduce_axis:
+            note(iv.dom.extent, True)
+    for t in [*inputs, *_tensors(outputs)]:
+        for s in t.shape:
+            note(s, False)
+    return names, reduced
+
+
+def _var_values(outputs, inputs, config: AccuracyConfig) -> dict[str, int]:
+    names, reduced = extent_names(outputs, inputs)
+    return {n: (config.reduce_extent if n in reduced else config.other_extent) for n in names}
+
+
+def positive_inputs(outputs, inputs) -> list[bool]:
+    """Per input: is it read under a ``log``, a ``sqrt`` or as a divisor?
+
+    Such an input is only meaningful when positive (a weight, a variance); it
+    is sampled that way so that the comparison happens on the program's domain.
+    """
+    hits: list = []
+
+    def scan(e, inside: bool) -> None:
+        if isinstance(e, tir.ProducerLoad):
+            if inside and isinstance(e.producer.op, te.PlaceholderOp):
+                hits.append(e.producer.op)
+        elif isinstance(e, tir.Div):
+            scan(e.a, inside)
+            scan(e.b, True)
+        elif isinstance(e, tir.Add | tir.Sub | tir.Mul | tir.Max | tir.Min):
+            scan(e.a, inside)
+            scan(e.b, inside)
+        elif isinstance(e, tir.Cast):
+            scan(e.value, inside)
+        elif isinstance(e, Call):
+            partial = e.op.name in ("tirx.log", "tirx.sqrt", "tirx.rsqrt")
+            for a in e.args:  # exp maps every real to a positive value
+                scan(a, partial or (inside and e.op.name != "tirx.exp"))
+        elif isinstance(e, tir.Reduce):
+            for x in e.source:
+                scan(x, inside)
+
+    for op in compute_ops(outputs):
+        for body in op.body:
+            scan(body, False)
+    return [any(t.op.same_as(h) for h in hits) for t in inputs]
+
+
+def concrete_shape(shape, var_values: dict[str, int]) -> tuple[int, ...]:
+    """A shape with its symbolic extents replaced by ``var_values`` (by name)."""
+    ref = _Reference([], [], var_values)
+    return tuple(ref.extent(s) for s in shape)
+
+
+def sample_inputs(inputs, positive, extent, rng, shift: float = 0.0, scale: float = 1.0):
+    """One array per input, ``shift + scale * N(0, 1)`` in the input's own dtype."""
+    arrays = []
+    for t, pos in zip(inputs, positive):
+        a = shift + scale * rng.standard_normal(tuple(extent(s) for s in t.shape))
+        if pos:
+            a = np.abs(a) + 0.1
+        arrays.append(a.astype(str(t.dtype)))
+    return arrays
 
 
 # ---------------------------------------------------------------------------
 # the gate
 # ---------------------------------------------------------------------------
-def _var_values(output: te.Tensor, inputs, config: AccuracyConfig) -> dict[str, int]:
-    names: dict[str, int] = {}
-    reduce_names: set[str] = set()
-
-    def note(e, reduce: bool) -> None:
-        if isinstance(e, tir.Var):
-            names[e.name] = 0
-            if reduce:
-                reduce_names.add(e.name)
-
-    for op in _compute_ops(output):
-        for iv in op.axis:
-            note(iv.dom.extent, False)
-        for iv in op.reduce_axis:
-            note(iv.dom.extent, True)
-    for t in [*inputs, output]:
-        for s in t.shape:
-            note(s, False)
-    return {n: (config.reduce_extent if n in reduce_names else config.other_extent) for n in names}
-
-
-def _compile(inputs, output: te.Tensor):
-    func = te.create_prim_func([*inputs, output])
+def _compile(inputs, outputs):
+    func = te.create_prim_func([*inputs, *_tensors(outputs)])
     return tvm.compile(tvm.IRModule({"main": func}), target="llvm")
 
 
-def _run(lib, arrays, out_shape, dtype: str) -> np.ndarray:
+def _run(lib, arrays, out_shapes, dtypes) -> list[np.ndarray]:
     args = [tvm.runtime.tensor(a) for a in arrays]
-    args.append(tvm.runtime.tensor(np.zeros(out_shape, dtype=dtype)))
-    lib["main"](*args)
-    return args[-1].numpy().astype(np.float64)
+    outs = [tvm.runtime.tensor(np.zeros(s, dtype=d)) for s, d in zip(out_shapes, dtypes)]
+    lib["main"](*args, *outs)
+    return [o.numpy().astype(np.float64) for o in outs]
 
 
-def _rel_err(got: np.ndarray, ref: np.ndarray) -> float:
-    if not np.all(np.isfinite(got)):
-        return float("inf")
-    scale = float(np.max(np.abs(ref))) if ref.size else 0.0
-    err = float(np.max(np.abs(got - ref))) if ref.size else 0.0
-    return err / scale if scale > 0 else err
+def _rel_err(got: list[np.ndarray], ref: list[np.ndarray]) -> float:
+    """Largest normwise relative error over the outputs."""
+    worst = 0.0
+    for g, r in zip(got, ref):
+        if not np.all(np.isfinite(g)):
+            return float("inf")
+        scale = float(np.max(np.abs(r))) if r.size else 0.0
+        err = float(np.max(np.abs(g - r))) if r.size else 0.0
+        worst = max(worst, err / scale if scale > 0 else err)
+    return worst
 
 
 class AccuracyGate:
-    """Judges candidate programs against ``output`` over ``inputs``."""
+    """Judges candidate programs against ``outputs`` over ``inputs``."""
 
-    def __init__(self, output: te.Tensor, inputs, config: AccuracyConfig | None = None) -> None:
+    def __init__(self, outputs, inputs, config: AccuracyConfig | None = None) -> None:
         self.config = config = config or AccuracyConfig()
+        outputs = _tensors(outputs)
         self.inputs = list(inputs)
-        self.dtype = str(output.dtype)
+        self.dtypes = [str(o.dtype) for o in outputs]
         # a static property is required of candidates only if the original has it
-        self.required = [k for k, ops in static_issues(output).items() if not ops]
-        self.var_values = _var_values(output, inputs, config)
+        self.required = [k for k, ops in static_issues(outputs).items() if not ops]
+        self.var_values = _var_values(outputs, inputs, config)
         ref = _Reference(self.inputs, [], self.var_values)
-        self.out_shape = tuple(ref.extent(s) for s in output.shape)
-        eps = float(np.finfo(self.dtype).eps)
+        self.out_shapes = [tuple(ref.extent(s) for s in o.shape) for o in outputs]
+        eps = max(float(np.finfo(d).eps) for d in self.dtypes)
         self.floor = config.floor_ulps * eps
+        positive = positive_inputs(outputs, self.inputs)
         rng = np.random.default_rng(config.seed)
         signs = np.random.default_rng(config.seed + 1)  # perturbations: data stays fixed
-        lib = _compile(self.inputs, output)
+        lib = _compile(self.inputs, outputs)
         # per family: (name, input arrays, float64 reference, original output, original error)
         self.cases = []
         for name, shift, scale in config.families:
-            arrays = []
-            for t in self.inputs:
-                shape = tuple(ref.extent(s) for s in t.shape)
-                arrays.append((shift + scale * rng.standard_normal(shape)).astype(self.dtype))
-            want = reference(output, self.inputs, arrays, self.var_values)
-            if not np.all(np.isfinite(want)):
+            arrays = sample_inputs(self.inputs, positive, ref.extent, rng, shift, scale)
+            want = references(outputs, self.inputs, arrays, self.var_values)
+            if not all(np.all(np.isfinite(w)) for w in want):
                 continue
             inherent = 0.0
             for _ in range(config.perturbations):
                 moved = [
-                    a.astype(np.float64) * (1.0 + eps * signs.choice((-1.0, 1.0), size=a.shape))
+                    a.astype(np.float64)
+                    * (1.0 + float(np.finfo(a.dtype).eps) * signs.choice((-1.0, 1.0), size=a.shape))
                     for a in arrays
                 ]
-                shifted = reference(output, self.inputs, moved, self.var_values)
+                shifted = references(outputs, self.inputs, moved, self.var_values)
                 inherent = max(inherent, _rel_err(shifted, want))
-            got = _run(lib, arrays, self.out_shape, self.dtype)
+            got = _run(lib, arrays, self.out_shapes, self.dtypes)
             self.cases.append((name, arrays, want, got, _rel_err(got, want), inherent))
 
-    def check(self, candidate: te.Tensor) -> AccuracyReport:
-        found = static_issues(candidate)
+    def check(self, candidates) -> AccuracyReport:
+        candidates = _tensors(candidates)
+        found = static_issues(candidates)
         bad = tuple((k, op) for k in self.required for op in found[k])
         if bad:
             return AccuracyReport(False, bad, ())
-        lib = _compile(self.inputs, candidate)
+        if not self.cases:  # nothing to compare on: the original itself is not finite
+            return AccuracyReport(False, (), (), "no input family with a finite reference")
+        lib = _compile(self.inputs, candidates)
         fams = []
         for name, arrays, want, orig, orig_err, inherent in self.cases:
-            got = _run(lib, arrays, self.out_shape, self.dtype)
+            got = _run(lib, arrays, self.out_shapes, self.dtypes)
             err = _rel_err(got, want)
-            new_nonfinite = bool(np.any(~np.isfinite(got) & np.isfinite(orig)))
+            new_nonfinite = any(
+                bool(np.any(~np.isfinite(g) & np.isfinite(o))) for g, o in zip(got, orig)
+            )
             bar = self.config.factor * max(orig_err, inherent) + self.floor
             ok = not new_nonfinite and err <= bar
             fams.append(FamilyError(name, orig_err, inherent, err, ok))
@@ -677,23 +784,8 @@ class AccuracyGate:
 
 
 # ---------------------------------------------------------------------------
-# the static checks during the search (filter mode): prune early what the
-# gate would reject at the end
+# the static checks on a derived reducer, before any code is generated
 # ---------------------------------------------------------------------------
-def op_issues(name: str, entries) -> set[str]:
-    """Static issues a new search op adds: ``exp`` of an unbounded tensor, a
-    division by / ``log`` of a tensor not provably positive."""
-    if name == "exp":
-        a = entries[0].sem
-        if not bounded_above(a.body, _Scope(_OpLower(), tuple(a.axis_keys), {}, 0)):
-            return {"exp"}
-    elif name in ("div", "log"):
-        operand = entries[1 if name == "div" else 0].sem.body
-        if _Signs(_OpLower()).sign(operand, {}) != POS:
-            return {"domain"}
-    return set()
-
-
 def spec_issues(spec) -> set[str]:
     """Static issues of a synthesised reducer: its inputs and its (printed) merge.
 
@@ -724,8 +816,11 @@ __all__ = [
     "AccuracyReport",
     "FamilyError",
     "bounded_above",
-    "op_issues",
-    "reference",
+    "concrete_shape",
+    "extent_names",
+    "positive_inputs",
+    "references",
+    "sample_inputs",
     "spec_issues",
     "static_issues",
 ]
