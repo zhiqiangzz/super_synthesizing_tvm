@@ -16,16 +16,18 @@
 # under the License.
 """Lower a ``te.Tensor`` to its symbolic (real-number) semantics.
 
-The result is a :class:`TensorSem` whose body is fully inlined down to the
-input placeholders, so that syntactically different TE programs computing the
-same function canonicalise to the same node whenever the rewrite theory in
-:mod:`canonicalize` can see it.
+By default the result is a :class:`TensorSem` whose body is fully inlined
+down to the input placeholders, so that syntactically different TE programs
+computing the same function canonicalise to the same node whenever the
+rewrite theory in :mod:`canonicalize` can see it. What a tensor read lowers
+to is the one decision subclasses change (:meth:`LowerCtx.lower_load`): the
+chain analysis keeps the tensors of a chain opaque, the accuracy checks keep
+every computed tensor opaque.
 """
 
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable
 from fractions import Fraction
 
 from tvm import te
@@ -60,33 +62,22 @@ class TensorSem:
     axis_keys: tuple[DimKey, ...]
     dtype: str
 
-    @property
-    def index_vars(self) -> tuple[ir.Idx, ...]:
-        return tuple(ir.idx(f"i{k}") for k in range(self.rank))
-
-
-def dtype_str(t: te.Tensor) -> str:
-    return str(t.dtype)
-
 
 class LowerCtx:
-    """Shared state: the extent table, placeholder ids and an optional reducer decoder."""
+    """Shared state of a lowering: the extent table and the ids of the tensors read."""
 
-    def __init__(self, dims: DimTable | None = None) -> None:
+    def __init__(self, dims: DimTable | None = None, raw_reductions: bool = False) -> None:
         self.dims = dims if dims is not None else DimTable()
+        # Keep ``sum``/``max`` reductions as written instead of canonicalising them
+        # (``Σ exp(s - m)`` stays what the program evaluates, not ``exp(-m) Σ exp(s)``).
+        self.raw_reductions = raw_reductions
         self._placeholders: list[tuple[te.Tensor, int]] = []
+        # Symbolic scalars (extents, other ``te.var``) met as real values, by name.
+        self.scalars: dict[str, object] = {}
         self._memo: dict[tuple[int, int], TensorSem] = {}
         self._ops: list = []
-        # Called on an opaque MonoidReduce; may return closed forms per slot.
-        self.closed_form: Callable[[ir.MonoidReduce], ir.SymExpr | None] | None = None
-        # Ops built by the search, whose semantics are known by construction.
-        self._known: list[tuple[object, tuple[TensorSem, ...]]] = []
 
-    def register(self, op, sems: tuple[TensorSem, ...]) -> None:
-        """Record the semantics of every output of a freshly built op."""
-        self._known.append((op, tuple(sems)))
-
-    # -- placeholder identity -------------------------------------------------
+    # -- identity of the tensors read ------------------------------------------
     def tensor_id(self, t: te.Tensor) -> int:
         for known, tid in self._placeholders:
             if known.op.same_as(t.op) and known.value_index == t.value_index:
@@ -117,21 +108,16 @@ class LowerCtx:
             return hit
         op = t.op
         axis_keys = self.dims.keys(t.shape)
-        for known, sems in self._known:
-            if known.same_as(op):
-                sem = sems[int(t.value_index)]
-                self._memo[key] = sem
-                return sem
         if isinstance(op, te.PlaceholderOp):
             tid = self.tensor_id(t)
             body = ir.elem(tid, tuple(ir.idx(f"i{k}") for k in range(len(t.shape))))
-            sem = TensorSem(len(t.shape), body, axis_keys, dtype_str(t))
+            sem = TensorSem(len(t.shape), body, axis_keys, str(t.dtype))
         elif isinstance(op, te.ComputeOp):
             env = {iv.var.name: ir.idx(f"i{k}") for k, iv in enumerate(op.axis)}
             if len(env) != len(op.axis):
                 raise Unsupported("duplicate axis names in compute")
             body = self.lower_expr(op.body[int(t.value_index)], env, 0)
-            sem = TensorSem(len(op.axis), body, axis_keys, dtype_str(t))
+            sem = TensorSem(len(op.axis), body, axis_keys, str(t.dtype))
         else:
             raise Unsupported(f"operation {type(op).__name__}")
         self._memo[key] = sem
@@ -145,6 +131,7 @@ class LowerCtx:
             name = e.name
             if name in env:
                 raise Unsupported("loop variable used as a real value")
+            self.scalars[name] = e
             return ir.shape_sym(name)
         if isinstance(e, tir.Cast):
             return self.lower_expr(e.value, env, level)
@@ -174,13 +161,16 @@ class LowerCtx:
                 return mk_div(ir.ONE, mk_sqrt(self.lower_expr(e.args[0], env, level)))
             raise Unsupported(f"intrinsic {name}")
         if isinstance(e, tir.ProducerLoad):
-            producer = e.producer
-            sem = self.lower(producer)
-            index_map = {ir.idx(f"i{k}"): self.lower_index(i, env) for k, i in enumerate(e.indices)}
-            return instantiate(sem.body, index_map, level)
+            return self.lower_load(e, env, level)
         if isinstance(e, tir.Reduce):
             return self.lower_reduce(e, env, level)
         raise Unsupported(f"expression {type(e).__name__}")
+
+    def lower_load(self, e, env: dict[str, ir.IndexExpr], level: int) -> ir.SymExpr:
+        """A tensor read; by default the producer is inlined down to the placeholders."""
+        sem = self.lower(e.producer)
+        index_map = {ir.idx(f"i{k}"): self.lower_index(i, env) for k, i in enumerate(e.indices)}
+        return instantiate(sem.body, index_map, level)
 
     def lower_index(self, e, env: dict[str, ir.IndexExpr]) -> ir.IndexExpr:
         if isinstance(e, tir.Var):
@@ -207,9 +197,10 @@ class LowerCtx:
         kind = classify_combiner(e.combiner)
         if kind is not None:
             body = self.lower_expr(e.source[0], inner_env, depth)
+            make = ir.raw_reduce if self.raw_reductions else mk_reduce
             for n in reversed(range(len(axes))):
                 dom = ir.dfull(self.dims.key(axes[n].dom.extent))
-                body = mk_reduce(kind, dom, level + n, body)
+                body = make(kind, dom, level + n, body)
             return body
         if len(axes) != 1:
             raise Unsupported("tuple reduction over several axes")
@@ -223,12 +214,7 @@ class LowerCtx:
         merge = tuple(self._lower_merge(x, merge_map, menv) for x in comb.result)
         identity = tuple(self.lower_expr(x, {}, 0) for x in comb.identity_element)
         dom = ir.dfull(self.dims.key(axes[0].dom.extent))
-        node = mk_monoid(dom, level, leaf, merge, identity, int(e.value_index))
-        if self.closed_form is not None and isinstance(node, ir.MonoidReduce):
-            closed = self.closed_form(node)
-            if closed is not None:
-                return closed
-        return node
+        return mk_monoid(dom, level, leaf, merge, identity, int(e.value_index))
 
     def _lower_merge(self, e, merge_map: dict[str, ir.SymExpr], env) -> ir.SymExpr:
         if isinstance(e, tir.Var) and e.name in merge_map:
@@ -247,13 +233,20 @@ class LowerCtx:
                 return fn(
                     self._lower_merge(e.a, merge_map, env), self._lower_merge(e.b, merge_map, env)
                 )
-        if isinstance(e, Call) and e.op.name == "tirx.exp":
-            return mk_exp(self._lower_merge(e.args[0], merge_map, env))
-        if isinstance(e, Call) and e.op.name == "tirx.sqrt":
-            return mk_sqrt(self._lower_merge(e.args[0], merge_map, env))
-        if isinstance(e, Call) and e.op.name == "tirx.log":
-            return mk_log(self._lower_merge(e.args[0], merge_map, env))
-        return self.lower_expr(e, env, 0)
+        if isinstance(e, tir.Min):
+            a = self._lower_merge(e.a, merge_map, env)
+            b = self._lower_merge(e.b, merge_map, env)
+            return mk_neg(mk_max(mk_neg(a), mk_neg(b)))
+        unary = {"tirx.exp": mk_exp, "tirx.sqrt": mk_sqrt, "tirx.log": mk_log}
+        if isinstance(e, Call):
+            if e.op.name in unary:
+                return unary[e.op.name](self._lower_merge(e.args[0], merge_map, env))
+            if e.op.name == "tirx.rsqrt":
+                return mk_div(ir.ONE, mk_sqrt(self._lower_merge(e.args[0], merge_map, env)))
+            raise Unsupported(f"intrinsic {e.op.name} in a merge function")
+        if isinstance(e, tir.FloatImm | tir.IntImm | tir.Var):
+            return self.lower_expr(e, env, 0)  # a constant or an extent
+        raise Unsupported(f"{type(e).__name__} in a merge function")
 
 
 def lower_imm(e) -> ir.Const:
@@ -317,5 +310,17 @@ def _is_max_value(e) -> bool:
     return v == highest
 
 
-def lower_tensor(t: te.Tensor, ctx: LowerCtx | None = None) -> TensorSem:
-    return (ctx or LowerCtx()).lower(t)
+def compute_ops(outputs) -> list:
+    """Compute ops feeding ``outputs`` (a tensor or several), producers first."""
+    order: list = []
+
+    def visit(op) -> None:
+        if not isinstance(op, te.ComputeOp) or any(op.same_as(o) for o in order):
+            return
+        for t in op.input_tensors:
+            visit(t.op)
+        order.append(op)
+
+    for t in [outputs] if isinstance(outputs, te.Tensor) else list(outputs):
+        visit(t.op)
+    return order

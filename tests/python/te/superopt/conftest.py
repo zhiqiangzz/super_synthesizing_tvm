@@ -14,10 +14,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Symbolic shadow semantics of TE tensors."""
+"""Make the operator registry of ``super_opt/examples`` importable as ``chain_ops``."""
 
-from . import canonicalize, ir, lower
-from .canonicalize import Unsupported
-from .lower import LowerCtx, TensorSem
+import pathlib
+import sys
 
-__all__ = ["LowerCtx", "TensorSem", "Unsupported", "canonicalize", "ir", "lower"]
+_EXAMPLES = pathlib.Path(__file__).resolve().parents[4] / "super_opt" / "examples"
+if str(_EXAMPLES) not in sys.path:
+    sys.path.insert(0, str(_EXAMPLES))

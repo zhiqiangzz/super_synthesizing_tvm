@@ -14,18 +14,37 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Result-directed synthesis of tuple ``te.comm_reducer`` reductions."""
+"""From a reduction chain to a tuple ``te.comm_reducer``.
 
-from .op import CommReduce, Realized
-from .synth import ReducerSpec, SynthesisProblem, synthesize
-from .verify import check_laws, equal_modulo_max
+``chain``   read the chains off a TE graph
+``states``  the candidate states of a chain and the reducers they give
+``rebase``  merging partial results whose context has moved
+``derive``  leaf, merge, identity and epilogues from a set of states
+``verify``  the monoid laws, and the identity element in floating point
+``build``   write the reducer back as TE and rebuild the program around it
+``source``  the same as text
+"""
+
+from .build import Rewriter, build_chain
+from .chain import Chain, Member, Skipped, discover_chains
+from .derive import ReducerSpec, derive
+from .rebase import Candidate
+from .states import Pool, Solution, synthesize
+from .verify import check_laws, identity_safe
 
 __all__ = [
-    "CommReduce",
-    "Realized",
+    "Candidate",
+    "Chain",
+    "Member",
+    "Pool",
     "ReducerSpec",
-    "SynthesisProblem",
+    "Rewriter",
+    "Skipped",
+    "Solution",
+    "build_chain",
     "check_laws",
-    "equal_modulo_max",
+    "derive",
+    "discover_chains",
+    "identity_safe",
     "synthesize",
 ]

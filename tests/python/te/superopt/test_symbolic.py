@@ -14,11 +14,10 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""M2: canonical symbolic semantics, lowering and the numpy interpreter."""
+"""Canonical symbolic semantics and lowering."""
 
 from fractions import Fraction
 
-import numpy as np
 import te_programs
 
 import tvm.testing
@@ -40,7 +39,6 @@ from tvm.te.superopt.symbolic.canonicalize import (
     positive,
     subst_domain,
 )
-from tvm.te.superopt.symbolic.interp import evaluate
 
 x, y, z = ir.atom("x"), ir.atom("y"), ir.atom("z")
 c2, c3 = ir.const(2), ir.const(3)
@@ -131,10 +129,6 @@ def test_domain_algebra():
     )
     assert subst_domain(s, {ir.dsym(axis, "R"): ir.dempty(axis)}) is ir.ZERO
     assert subst_domain(m, {ir.dsym(axis, "R"): ir.dempty(axis)}) is ir.NEG_INF_C
-    point = ir.iconst(0)
-    assert subst_domain(s, {ir.dsym(axis, "R"): ir.dsingleton(axis, point)}) is _elem(
-        0, ir.idx("i0"), point
-    )
 
 
 def test_alpha_equivalence_of_nested_reductions():
@@ -158,8 +152,7 @@ def test_dimtable_symbolic_vs_concrete():
     assert dims.key(n) != dims.key(m)
     assert dims.key(4) == dims.key(4)
     assert dims.key(4) != dims.key(n)
-    assert dims.name(dims.key(n)) == "n"
-    assert dims.is_symbolic(dims.key(n)) and not dims.is_symbolic(dims.key(4))
+    assert dims.name(dims.key(n)) == "n" and dims.key_of_name("n") == dims.key(n)
 
 
 def test_lower_attention_naive_equals_flash_closed_form():
@@ -191,25 +184,6 @@ def _all_nodes(e):
         out.append(n)
         stack.extend(n.children())
     return out
-
-
-def test_interp_matches_reference_both_forms():
-    rng = np.random.default_rng(0)
-    ext = dict(batch=1, num_heads=2, seqlen_q=2, seqlen_k=3, head_dim=2)
-    for kind in ("naive", "flash"):
-        ins, out = te_programs.attention(kind)
-        ctx = LowerCtx()
-        sem = ctx.lower(out)
-        axis_ext = {ctx.dims.key_of_name(n): v for n, v in ext.items()}
-        data = {}
-        arrays = []
-        for t in ins:
-            arr = rng.standard_normal(tuple(axis_ext[k] for k in ctx.dims.keys(t.shape)))
-            data[ctx.tensor_id(t)] = arr
-            arrays.append(arr)
-        got = evaluate(sem, data, axis_ext, ext)
-        ref = te_programs.attention_reference(*arrays)
-        np.testing.assert_allclose(got, ref, rtol=1e-10, atol=1e-12)
 
 
 if __name__ == "__main__":

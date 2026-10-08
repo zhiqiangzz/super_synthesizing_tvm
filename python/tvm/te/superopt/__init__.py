@@ -14,29 +14,37 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""TE algorithm superoptimizer: enumerate and verify equivalent TE programs.
+"""Reduction-chain fusion for TE: several passes over an axis become one.
 
-Given a TE tensor with symbolic shapes, :func:`superoptimize` searches a
-bounded space of real TE programs built from a small operator grammar --
-including automatically synthesised tuple ``te.comm_reducer`` reductions --
-and returns those proven equivalent under real-number semantics. It performs
-no performance analysis; that is the job of later s_TIR passes.
+A *reduction chain* is a set of reductions over the same axis in which a
+later one reads the final value of an earlier one: the maximum and the
+shifted sum of a softmax, the mean and the moments about it. Written that
+way a program walks the axis once per link. :func:`fuse` rewrites each
+chain into a single tuple ``te.comm_reducer`` reduction -- the online
+softmax, FlashAttention's reducer, Welford's variance -- together with
+whatever has to happen before and after it.
+
+The reducer is derived from the program, not looked up: its states are the
+program's own tensors restricted to a part of the axis, plus what merging
+two such parts turns out to need (see :mod:`reducer.states`). It performs
+no scheduling and makes no performance claim; that is the job of later
+s_TIR passes.
 """
 
-from .api import Result, iter_superoptimize, superoptimize
-from .config import Bounds
+from .accuracy import AccuracyConfig, AccuracyReport
 from .dims import DimKey, DimTable
-from .symbolic import LowerCtx, TensorSem, Unsupported, lower_tensor
+from .fusion import ChainReport, Fused, fuse
+from .symbolic import LowerCtx, TensorSem, Unsupported
 
 __all__ = [
-    "Bounds",
+    "AccuracyConfig",
+    "AccuracyReport",
+    "ChainReport",
     "DimKey",
     "DimTable",
+    "Fused",
     "LowerCtx",
-    "Result",
     "TensorSem",
     "Unsupported",
-    "iter_superoptimize",
-    "lower_tensor",
-    "superoptimize",
+    "fuse",
 ]

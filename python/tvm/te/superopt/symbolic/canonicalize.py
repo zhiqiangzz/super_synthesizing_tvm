@@ -34,7 +34,7 @@ node for the operation, applying (to a fixpoint) the rewrite theory:
   ``max_j c f = c max_j f`` (``c > 0``), ``max_j max(f, g) = max(max_j f,
   max_j g)``, ``max_j exp(f) = exp(max_j f)``;
 * domain algebra: ``Σ_{A u B} = Σ_A + Σ_B``, ``max_{A u B} = max(max_A,
-  max_B)``, ``Σ_∅ = 0``, ``max_∅ = -inf``, ``Σ_{{p}} f = f[p]``.
+  max_B)``, ``Σ_∅ = 0``, ``max_∅ = -inf``.
 
 Because the constructors are the only way to build nodes, ``a is b`` decides
 equality modulo this theory.
@@ -58,7 +58,6 @@ from .ir import (
     Const,
     DEmpty,
     Domain,
-    DSingleton,
     DUnion,
     Elem,
     Exp,
@@ -447,9 +446,6 @@ def _mk_reduce(kind: str, domain: Domain, level: int, body: SymExpr) -> SymExpr:
         return mk_add(a, b) if kind == "sum" else mk_max(a, b)
     if isinstance(domain, DEmpty):
         return ZERO if kind == "sum" else NEG_INF_C
-    if isinstance(domain, DSingleton):
-        inst = subst(body, {ir.bidx(level): domain.point})
-        return shift(inst, level + 1, -1)
     if not body.uses_level(level):
         # Body does not depend on the bound index.
         out = shift(body, level + 1, -1)
@@ -532,8 +528,6 @@ def mk_card(domain: Domain) -> SymExpr:
         return mk_add(mk_card(domain.a), mk_card(domain.b))
     if isinstance(domain, DEmpty):
         return ZERO
-    if isinstance(domain, DSingleton):
-        return ONE
     if isinstance(domain, ir.DFull):
         ext = ir.extent_of(domain.axis)
         if ext is not None:
@@ -583,8 +577,6 @@ def rebuild(e: Node, children: dict[Node, Node]) -> Node:
         return mk_card(children.get(e.domain, e.domain))
     if isinstance(e, DUnion):
         return ir.dunion(children.get(e.a, e.a), children.get(e.b, e.b))
-    if isinstance(e, DSingleton):
-        return ir.dsingleton(e.axis, children.get(e.point, e.point))
     return e
 
 
@@ -667,18 +659,6 @@ def shift(e: Node, cutoff: int, delta: int) -> Node:
     return out
 
 
-def max_binder_level(e: Node) -> int:
-    """Largest ``Reduce.level`` inside ``e`` (``-1`` if none)."""
-    best = -1
-    stack = [e]
-    while stack:
-        n = stack.pop()
-        if isinstance(n, Reduce | MonoidReduce):
-            best = max(best, n.level)
-        stack.extend(n.children())
-    return best
-
-
 def subst_domain(e: Node, mapping: dict[Domain, Domain]) -> Node:
     return transform(e, lambda n: mapping.get(n) if isinstance(n, Domain) else None)
 
@@ -716,6 +696,17 @@ def positive(e: SymExpr) -> bool:
     return r
 
 
+def is_constant(e: Node) -> bool:
+    """True if ``e`` reads no tensor data and no bound index (an extent-only value)."""
+    stack = [e]
+    while stack:
+        n = stack.pop()
+        if isinstance(n, Elem | BIdx | Idx | StateVar | Atom | Reduce | MonoidReduce):
+            return False
+        stack.extend(n.children())
+    return True
+
+
 def contains_node(e: Node, pred) -> bool:
     stack = [e]
     while stack:
@@ -726,30 +717,41 @@ def contains_node(e: Node, pred) -> bool:
     return False
 
 
-def reductions(e: Node) -> list[Reduce]:
-    out = []
+def walk(e: Node):
+    """Every distinct node of ``e``."""
     stack = [e]
+    seen = set()
     while stack:
         n = stack.pop()
-        if isinstance(n, Reduce):
-            out.append(n)
+        if n in seen:
+            continue
+        seen.add(n)
+        yield n
         stack.extend(n.children())
-    return out
 
 
-def leaves(e: Node, cls=(Elem, ShapeSym, Atom, StateVar, Idx, BIdx)) -> set[Node]:
-    out = set()
-    stack = [e]
-    while stack:
-        n = stack.pop()
-        if isinstance(n, cls):
-            out.add(n)
-        stack.extend(n.children())
-    return out
+def map_elems(e: Node, fn, depth_domain: dict | None = None, depth: int = 0) -> Node:
+    """Rewrite tensor elements with ``fn(elem, depth)`` (``None`` keeps the element).
 
-
-def elems(e: Node) -> set[int]:
-    return {n.tensor for n in leaves(e, (Elem,))}
+    ``depth`` is the binder depth the element sits at; ``depth_domain``, when
+    given, records the domain of the reduction binding each depth.
+    """
+    if isinstance(e, Elem):
+        out = fn(e, depth)
+        return e if out is None else out
+    if isinstance(e, Reduce):
+        if depth_domain is not None:
+            depth_domain[e.level + 1] = e.domain
+        body = map_elems(e.body, fn, depth_domain, e.level + 1)
+        return e if body is e.body else mk_reduce(e.kind, e.domain, e.level, body)
+    if not e.children() or isinstance(e, Domain):
+        return e
+    kids = {}
+    for c in e.children():
+        nc = map_elems(c, fn, depth_domain, depth)
+        if nc is not c:
+            kids[c] = nc
+    return rebuild(e, kids) if kids else e
 
 
 __all__ = [
@@ -757,11 +759,10 @@ __all__ = [
     "POS_INF",
     "Unsupported",
     "contains_node",
-    "elems",
     "factor_view",
     "instantiate",
-    "leaves",
-    "max_binder_level",
+    "is_constant",
+    "map_elems",
     "mk_add",
     "mk_card",
     "mk_div",
@@ -778,10 +779,10 @@ __all__ = [
     "positive",
     "rebuild",
     "recanonicalize",
-    "reductions",
     "shift",
     "subst",
     "subst_domain",
     "term_view",
     "transform",
+    "walk",
 ]

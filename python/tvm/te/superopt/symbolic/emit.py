@@ -29,15 +29,13 @@ import dataclasses
 from collections.abc import Callable
 from fractions import Fraction
 
-from ..dims import DimTable
 from . import ir
-from .canonicalize import Unsupported, mk_pow
+from .canonicalize import Unsupported, mk_pow, walk
 
 
 @dataclasses.dataclass
 class SourceEnv:
     dtype: str
-    dims: DimTable | None = None
     index: dict[ir.IndexExpr, str] = dataclasses.field(default_factory=dict)
     state: dict[ir.StateVar, str] = dataclasses.field(default_factory=dict)
     elem: Callable[[int, tuple[str, ...]], str] | None = None
@@ -51,10 +49,6 @@ def const_source(value: ir.Number, dtype: str, quoted: bool = True) -> str:
     return f"tir.const({float(value)!r}, {dt})"
 
 
-def _fmt(v: Fraction) -> str:
-    return repr(float(v))
-
-
 def to_source(e: ir.SymExpr, env: SourceEnv, hoist: dict[ir.Node, str] | None = None) -> str:
     """Source text of ``e``; nodes present in ``hoist`` print as their variable name."""
     if hoist and e in hoist:
@@ -66,8 +60,6 @@ def to_source(e: ir.SymExpr, env: SourceEnv, hoist: dict[ir.Node, str] | None = 
         return f'{e.name}.astype("{dt}")'
     if isinstance(e, ir.StateVar):
         return env.state[e]
-    if isinstance(e, ir.Atom):
-        return e.name
     if isinstance(e, ir.Elem):
         if env.elem is None:
             raise Unsupported("tensor element without a loader")
@@ -91,11 +83,14 @@ def to_source(e: ir.SymExpr, env: SourceEnv, hoist: dict[ir.Node, str] | None = 
                 den.append(_atom(to_source(mk_pow(a.base, -a.exponent), env, hoist)))
             else:
                 num.append(_atom(to_source(a, env, hoist)))
-        if coeff != 1 or not num:
+        negated = coeff == -1 and bool(num)
+        if (coeff != 1 and not negated) or not num:
             num.insert(0, const_source(coeff, dt))
         out = " * ".join(num)
         for d in den:
             out += f" / {d}"
+        if negated:
+            return f"(-{out})"
         return f"({out})" if len(num) + len(den) > 1 else out
     if isinstance(e, ir.Pow):
         p = e.exponent
@@ -168,7 +163,7 @@ def shared_subexpressions(
     def visit(n: ir.Node) -> None:
         if isinstance(n, leaf_types) or not n.children():
             return
-        if not any(isinstance(x, ir.StateVar | ir.Atom | ir.Elem) for x in _walk(n)):
+        if not any(isinstance(x, ir.StateVar | ir.Elem) for x in walk(n)):
             return  # a pure constant: printed inline
         if isinstance(n, ir.Mul) and isinstance(n.args[0], ir.Const):
             for a in n.args[1:]:  # coefficient wrapper: printed inline as "c * x" / "x - y"
@@ -187,14 +182,6 @@ def shared_subexpressions(
     for e in exprs:
         visit(e)
     return [n for n in order if uses[n] > 1]
-
-
-def _walk(e: ir.Node):
-    stack = [e]
-    while stack:
-        n = stack.pop()
-        yield n
-        stack.extend(n.children())
 
 
 def hoisted_source(exprs, env: SourceEnv, prefix: str = "v") -> tuple[list[str], list[str]]:
