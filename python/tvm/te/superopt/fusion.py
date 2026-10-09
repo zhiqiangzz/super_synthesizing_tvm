@@ -39,6 +39,12 @@ laws are verified. The checks are about what that leaves open:
   inputs (:mod:`accuracy`).
 
 A chain nothing passes for is left as it was, with the reason reported.
+
+Whether a single pass exists at all is a separate question from whether the
+derivation found one. :func:`judge` answers it from the program alone, on
+probes (:mod:`reducer.probe`): the rank of every sum that reads an earlier
+result, the extremes that decide every maximum that does. A chain that is
+not fused carries that verdict next to its reason.
 """
 
 from __future__ import annotations
@@ -63,6 +69,8 @@ from .accuracy import (
 )
 from .reducer.build import Rewriter, build_chain
 from .reducer.chain import Chain, Skipped, discover_chains
+from .reducer.probe import Theory
+from .reducer.probe import judge as judge_chain
 from .reducer.source import chain_source, describe_members, render
 from .reducer.states import Pool, Solution, synthesize
 from .reducer.verify import identity_safe
@@ -90,10 +98,18 @@ class ChainReport:
     solution: Solution | None = None
     accuracy: AccuracyReport | None = None
     rejected: list[Rejected] = dataclasses.field(default_factory=list)
+    _theory: Theory | None = dataclasses.field(default=None, repr=False)
 
     @property
     def axis(self) -> str:
         return self.chain.jname
+
+    @property
+    def theory(self) -> Theory:
+        """Whether a finite single pass exists for this chain, by the probes."""
+        if self._theory is None:
+            self._theory = judge_chain(self.chain)
+        return self._theory
 
     @property
     def members(self) -> tuple[str, ...]:
@@ -133,6 +149,7 @@ class ChainReport:
         how = {
             "context": "computed in place by the program",
             "extent": "the extent of the axis, as far as it has been reduced",
+            "part": "one of the reductions {} is the largest of",
             "closure": "left behind when {} is re-based",
             "hoist": "left when the contexts of {} are taken out of its reduction",
         }
@@ -185,7 +202,11 @@ class Fused:
         return "\n\n".join(parts)
 
     def summary(self) -> str:
-        lines = [c.summary() for c in self.chains]
+        lines = []
+        for c in self.chains:
+            lines.append(c.summary())
+            if not c.fused:  # found nothing: does anything exist?
+                lines.append(f"  probes: {c.theory.summary()}")
         lines += [f"{', '.join(s.members)}: not fused -- {s.reason}" for s in self.skipped]
         if not lines:
             lines = ["no reduction chain in the program"]
@@ -201,11 +222,11 @@ class _Agreement:
     axes do not go unnoticed; all-ones covers the degenerate reduction.
     """
 
-    def __init__(self, outputs, inputs, rtol: float = 1e-6, atol: float = 1e-9) -> None:
+    def __init__(self, outputs, inputs, declared=(), rtol: float = 1e-6, atol: float = 1e-9):
         self.inputs = list(inputs)
         self.rtol, self.atol = rtol, atol
         names = sorted(extent_names(outputs, inputs)[0])
-        positive = positive_inputs(outputs, inputs)
+        positive = positive_inputs(outputs, inputs, declared)
         rng = np.random.default_rng(0)
         self.cases = []
         for values in (
@@ -236,9 +257,13 @@ def _why_not(pool: Pool, report: ChainReport, max_states: int) -> str:
         cand = next(c for c in pool.cands if c.name == name)
         ctx = ", ".join(pool.rebaser.by_pid[p].name for p in pool.rebaser.contexts(cand))
         if name in pool.stuck:
+            verdict = report.theory.verdict(name)
+            exists = verdict is not None and verdict.fusible
             parts.append(
                 f"{name} reads {ctx} from inside its reduction and neither re-basing nor "
-                "hoisting takes it out (no finite lifting found)"
+                "hoisting takes it out "
+                + ("(a finite lifting exists by the probes, none was derived)" if exists else "")
+                + ("" if exists else "(no finite lifting found)")
             )
         else:
             parts.append(
@@ -345,8 +370,15 @@ def fuse(
     reports: list[ChainReport] = []
     rewriter = Rewriter()
     if chains:
-        gate = AccuracyGate(outputs, inputs, accuracy_config) if accuracy != "off" else None
-        agree = _Agreement(outputs, inputs)
+        config = accuracy_config or AccuracyConfig()
+        try:
+            gate = AccuracyGate(outputs, inputs, config) if accuracy != "off" else None
+            agree = _Agreement(outputs, inputs, config.positive)
+        except Unsupported as err:
+            # nothing is rewritten that cannot be checked against the original
+            why = f"the program cannot be evaluated to check a rewrite against ({err})"
+            reports = [ChainReport(chain, reason=why) for chain in chains]
+            chains = []
         for chain in chains:
             report, rewriter = _fuse_chain(
                 chain, outputs, rewriter, gate, agree, max_states, accuracy
@@ -356,4 +388,18 @@ def fuse(
     return Fused([rewriter.tensor(t) for t in outputs], inputs, reports, skipped, verdict)
 
 
-__all__ = ["ChainReport", "Fused", "Rejected", "fuse"]
+def judge(outputs) -> list[Theory]:
+    """For every reduction chain behind ``outputs``: does a finite single pass exist?
+
+    Nothing is derived or rewritten. Each chain is probed
+    (:mod:`reducer.probe`): a sum that reads an earlier result is fusible
+    when its body separates into finitely many products of an element part
+    and a context part (its rank), a maximum or minimum when the element
+    attaining it does not depend on the context (an extreme of the data).
+    """
+    outputs = [outputs] if isinstance(outputs, te.Tensor) else list(outputs)
+    chains, _ = discover_chains(outputs)
+    return [judge_chain(chain) for chain in chains]
+
+
+__all__ = ["ChainReport", "Fused", "Rejected", "fuse", "judge"]

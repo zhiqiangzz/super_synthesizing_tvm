@@ -66,6 +66,7 @@ from ..symbolic.canonicalize import (
     recanonicalize,
     subst,
     subst_domain,
+    term_view,
     walk,
 )
 from . import verify
@@ -79,8 +80,9 @@ class Candidate:
     """A possible reducer state: a function of partial reductions over a sub-range ``R``."""
 
     name: str
-    kind: str  # "sum" / "max": merged by re-basing; "value": a function of other candidates
-    origin: str  # "member", "context", "extent", "closure" or "hoist"
+    # "sum" / "max" / "min": merged by re-basing; "value": a function of other candidates
+    kind: str
+    origin: str  # "member", "context", "extent", "part", "closure" or "hoist"
     state: ir.SymExpr  # canonical, down to the boundary tensors
     struct: ir.SymExpr  # the same with reads of chain members kept (pinned) as written
     index: tuple[ir.IndexExpr, ...]  # chain coordinates of its own axes
@@ -109,6 +111,7 @@ class Decomposition:
     terms: tuple[Term, ...] = ()
     parts: tuple[Decomposition, ...] = ()  # non-empty: this is ``max(parts)``
     corr: tuple = ()  # (atom, side, pid, mode) for every correction
+    negated: bool = False  # ``-max(parts)``: how a minimum is merged
 
     def all_terms(self):
         yield from self.terms
@@ -118,6 +121,27 @@ class Decomposition:
 
 def _is_partial(x: ir.Node) -> bool:
     return isinstance(x, ir.Reduce | ir.Card) and isinstance(x.domain, ir.DSym)
+
+
+def content(e: ir.SymExpr):
+    """The rational factor to divide out: ``-3 Σ f`` and ``Σ f`` are the same state.
+
+    The coefficient of one fixed term, chosen by the term itself so that every
+    multiple of ``e`` picks the same one.
+    """
+    _, terms = term_view(e)
+    if not terms:
+        return 1
+    return terms[min(terms, key=lambda core: core.uid)]
+
+
+def scaled(e: ir.SymExpr, by) -> ir.SymExpr:
+    return e if by == 1 else mk_mul(ir.const(1 / by), e)
+
+
+def normalised(e: ir.SymExpr) -> ir.SymExpr:
+    """``e`` with its rational content divided out."""
+    return scaled(e, content(e))
 
 
 class Rebaser:
@@ -205,7 +229,17 @@ class Rebaser:
         return self._memo[key]
 
     def _admissible(self, cand: Candidate, d: Decomposition) -> bool:
-        return any(t.side == "a" and self.coeff_state(t) is cand.state for t in d.all_terms())
+        """Some coefficient is the candidate itself (a minimum is ``-max`` of its negation)."""
+        own = normalised(cand.state)
+        for t in d.all_terms():
+            if t.side != "a":
+                continue
+            try:
+                if normalised(self.coeff_state(t)) is own:
+                    return True
+            except Unsupported:
+                continue
+        return False
 
     def _rebased(self, cand: Candidate, modes: dict[int, str]) -> Decomposition | None:
         union = ir.dunion(self.sides["a"], self.sides["b"])
@@ -231,17 +265,21 @@ class Rebaser:
 
     def _group(self, e: ir.SymExpr, corr, table) -> Decomposition | None:
         """``e`` as Σ correction · (a partial value of one side), or a max of such sums."""
-        scale = ir.ONE
-        if isinstance(e, ir.Mul):  # c · max(u, v) = max(c u, c v) for c > 0
+        scale, negated = ir.ONE, False
+        if isinstance(e, ir.Mul):  # c · max(u, v) = max(c u, c v) for c > 0, -max(-c u, -c v) else
             maxes = [f for f in e.args if isinstance(f, ir.Max)]
             others = [f for f in e.args if not isinstance(f, ir.Max)]
-            if len(maxes) == 1 and all(positive(f) and is_constant(f) for f in others):
-                e, scale = maxes[0], mk_mul(*others)
+            if len(maxes) == 1 and all(is_constant(f) for f in others):
+                c = mk_mul(*others)
+                if positive(c):
+                    e, scale = maxes[0], c
+                elif positive(mk_mul(ir.MINUS_ONE, c)):
+                    e, scale, negated = maxes[0], mk_mul(ir.MINUS_ONE, c), True
         if isinstance(e, ir.Max):
             parts = [self._group(mk_mul(scale, a), corr, table) for a in e.args]
             if any(p is None for p in parts):
                 return None
-            return Decomposition(parts=tuple(parts), corr=table)
+            return Decomposition(parts=tuple(parts), corr=table, negated=negated)
         groups: dict[tuple[str | None, ir.SymExpr], list[ir.SymExpr]] = {}
         for term in e.args if isinstance(e, ir.Add) else (e,):
             factors = term.args if isinstance(term, ir.Mul) else (term,)
@@ -337,7 +375,10 @@ class Printer:
     def _evaluate(self, d: Decomposition) -> ir.SymExpr | None:
         if d.parts:
             args = [self._evaluate(p) for p in d.parts]
-            return None if any(a is None for a in args) else ir.raw_max(args)
+            if any(a is None for a in args):
+                return None
+            largest = ir.raw_max(args)
+            return ir.raw_mul([ir.MINUS_ONE, largest]) if d.negated else largest
         corr = {atom: (side, pid, mode) for atom, side, pid, mode in d.corr}
         printed = []
         for t in d.terms:
@@ -457,4 +498,15 @@ def printed_merges(printer: Printer) -> tuple[ir.SymExpr, ...] | None:
     return tuple(expanded)
 
 
-__all__ = ["Candidate", "Decomposition", "Printer", "Rebaser", "Term", "printed_merges", "proves"]
+__all__ = [
+    "Candidate",
+    "Decomposition",
+    "Printer",
+    "Rebaser",
+    "Term",
+    "content",
+    "normalised",
+    "printed_merges",
+    "proves",
+    "scaled",
+]

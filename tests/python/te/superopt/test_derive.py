@@ -16,9 +16,14 @@
 # under the License.
 """Deriving a reducer (leaf, merge, identity, epilogues) from state definitions."""
 
+import itertools
+
+from chain_ops import OPERATORS
+
 import tvm.testing
 from tvm import te
 from tvm.te.superopt.dims import DimTable
+from tvm.te.superopt.reducer import Pool, discover_chains
 from tvm.te.superopt.reducer.derive import atoms_in, derive, domains
 from tvm.te.superopt.symbolic import ir
 from tvm.te.superopt.symbolic.canonicalize import (
@@ -158,6 +163,21 @@ def test_state_made_of_two_reductions_is_solved_for_one_of_them():
     # a reduction it does not contain stays out of reach
     square = subst_domain(mk_reduce("sum", R, 0, mk_mul(y, y)), {R: full})
     assert derive((s,), (square,), axis) is None
+
+
+def test_states_that_leave_the_closed_form_undefined_are_refused():
+    """Two coefficients of a co-moment under the constant reading of the extent: solving
+    them for the reductions divides by zero. That is no reducer, not an error."""
+    _, outs = OPERATORS["pearson"].unfused()
+    (chain,), _ = discover_chains(outs)
+    pool = Pool(chain, count=False)
+    full, R, _, _ = domains(chain.axis)
+    by_pid = pool.rebaser.by_pid
+    required = tuple(subst_domain(by_pid[m.pid].state, {R: full}) for m in chain.required)
+    stats: dict = {}
+    for chosen in itertools.combinations(pool.cands, 2):
+        assert derive(tuple(c.state for c in chosen), required, chain.axis, stats) is None
+    assert set(stats) <= {"derive:unsolvable", "derive:uncovered", "derive:missing_context"}
 
 
 if __name__ == "__main__":

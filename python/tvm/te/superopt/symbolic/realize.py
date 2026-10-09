@@ -98,6 +98,12 @@ def _realize(e: ir.SymExpr, env: RealizeEnv, memo: dict):
             out = out - n
         return out
     if isinstance(e, ir.Mul):
+        smallest = ir.min_args(e)
+        if smallest is not None:
+            out = to_prim(smallest[0], env, memo)
+            for a in smallest[1:]:
+                out = tir.min(out, to_prim(a, env, memo))
+            return out
         num, den = [], []
         coeff: ir.Number = Fraction(1)
         for a in e.args:
@@ -155,6 +161,8 @@ def ir_pow_abs(p: ir.Pow) -> ir.SymExpr:
 def _coeff(a: ir.SymExpr) -> tuple[Fraction, ir.SymExpr]:
     if isinstance(a, ir.Const):
         return a.value, ir.ONE
+    if ir.min_args(a) is not None:  # a minimum is one operand, not minus a maximum
+        return Fraction(1), a
     if isinstance(a, ir.Mul) and isinstance(a.args[0], ir.Const) and not ir.is_inf(a.args[0]):
         rest = a.args[1:]
         core = rest[0] if len(rest) == 1 else ir.raw_mul(rest)

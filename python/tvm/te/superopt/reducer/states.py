@@ -35,6 +35,13 @@ hoisting
     coefficients of the context's monomials are the candidates, and the
     context itself moves to the epilogue. Where re-basing would have to
     correct a value by ``log`` of an empty side, hoisting needs nothing.
+    Out of a maximum a context only comes as a shift or as a factor that
+    cannot be negative (``max_j (x - mean) / sigma``): what is left is an
+    extreme of the data alone.
+parts
+    A member that is the largest of several reductions (``max_j |x - mean|``
+    is the larger of ``max_j (x - mean)`` and ``max_j (mean - x)``) has no
+    state of its own to merge: each of those reductions is a candidate.
 
 A state set is a subset of the candidates. :func:`derive` decides whether it
 is a reducer; smaller sets come first, then those that hoist less.
@@ -51,18 +58,21 @@ from ..symbolic.canonicalize import (
     Unsupported,
     contains_node,
     instantiate,
+    is_constant,
     map_elems,
     mk_add,
     mk_card,
     mk_mul,
+    nonneg_alias,
+    nonnegative,
     subst_domain,
-    term_view,
-    walk,
 )
 from ..symbolic.realize import node_count
 from .chain import Chain, extent_symbol, partial
 from .derive import ReducerSpec, derive, domains, solve_atoms, spec_key
 from .rebase import Candidate, Printer, Rebaser, printed_merges
+from .rebase import content as _content
+from .rebase import scaled as _scaled
 
 MAX_CANDIDATES = 24  # bound on the lifting: members plus everything derived from them
 MAX_HOIST_DEPTH = 3  # contexts taken out of their reduction along the way to one state
@@ -83,22 +93,6 @@ class Solution:
     @property
     def hoists(self) -> int:
         return sum(c.depth for c in self.states)
-
-
-def _content(e: ir.SymExpr):
-    """The rational factor to divide out: ``-3 Σ f`` and ``Σ f`` are the same state.
-
-    The coefficient of one fixed term, chosen by the term itself so that every
-    multiple of ``e`` picks the same one.
-    """
-    _, terms = term_view(e)
-    if not terms:
-        return 1
-    return terms[min(terms, key=lambda core: core.uid)]
-
-
-def _scaled(e: ir.SymExpr, content) -> ir.SymExpr:
-    return e if content == 1 else mk_mul(ir.const(1 / content), e)
 
 
 class Pool:
@@ -167,6 +161,7 @@ class Pool:
             cand = queue.pop(0)
             if cand.kind == "value":
                 continue
+            queue.extend(self._parts(cand))
             rebased = self.rebaser.decompose(cand) is not None
             queue.extend(self._closure(cand))
             hoisted = self._hoist(cand) if cand.depth < MAX_HOIST_DEPTH else []
@@ -175,6 +170,38 @@ class Pool:
                 self.unrebased.append(cand.name)
                 if not hoisted:
                     self.stuck.append(cand.name)
+
+    # -- parts -------------------------------------------------------------------
+    def _parts(self, cand: Candidate) -> list[Candidate]:
+        """The reductions ``cand`` is the largest (or the smallest) of."""
+        e = cand.struct
+        if isinstance(e, ir.Mul):
+            maxes = [f for f in e.args if isinstance(f, ir.Max)]
+            if len(maxes) == 1 and all(is_constant(f) for f in e.args if f is not maxes[0]):
+                e = maxes[0]
+        if not isinstance(e, ir.Max):
+            return []
+        out = []
+        for n, struct in enumerate(e.args):
+            if not contains_node(struct, lambda x: isinstance(x, ir.Reduce)):
+                continue
+            state = self._state(struct)
+            by = _content(state)
+            new = self._add(
+                Candidate(
+                    f"{cand.name}.m{n}",
+                    cand.kind,
+                    "part",
+                    _scaled(state, by),
+                    _scaled(struct, by),
+                    cand.index,
+                    depth=cand.depth,
+                    source=cand.name,
+                )
+            )
+            if new is not None:
+                out.append(new)
+        return out
 
     # -- closure -----------------------------------------------------------------
     def _closure(self, cand: Candidate) -> list[Candidate]:
@@ -193,7 +220,7 @@ class Pool:
             new = self._add(
                 Candidate(
                     f"{cand.name}.r{n}",
-                    "sum",
+                    cand.kind,
                     "closure",
                     state,
                     struct,
@@ -222,7 +249,7 @@ class Pool:
                     new = self._add(
                         Candidate(
                             f"{cand.name}.h{len(out)}",
-                            "sum",
+                            cand.kind,
                             "hoist",
                             _scaled(state, content),
                             _scaled(struct, content),
@@ -236,30 +263,62 @@ class Pool:
         return out
 
     def _coefficients(self, cand: Candidate, hoisted: set[int]) -> list[ir.SymExpr] | None:
-        """``cand`` as Σ (monomial of the hoisted contexts) · coefficient; the coefficients."""
+        """``cand`` as Σ (monomial of the hoisted contexts) · coefficient; the coefficients.
+
+        A context whose own definition cannot be negative (a square root, a
+        sum of exponentials) is taken out as such, which is what lets it
+        leave a maximum. Under a maximum of several such sums every one of
+        them is read the same way.
+        """
         free: set[ir.Elem] = set()
 
         def unpin(n: ir.Elem, depth: int):
             if self.rebaser.pinned(n) and n.tensor in hoisted:
                 out = ir.elem(n.tensor, n.indices[:-1])  # no longer moves with j
+                if nonnegative(self.rebaser.by_pid[n.tensor].state):
+                    out = nonneg_alias(out)
                 free.add(out)
                 return out
             return None
 
-        e = map_elems(cand.struct, unpin)
-        if isinstance(e, ir.Max):
-            return None
-        groups: dict[ir.SymExpr, list[ir.SymExpr]] = {}
-        for term in e.args if isinstance(e, ir.Add) else (e,):
-            factors = term.args if isinstance(term, ir.Mul) else (term,)
-            key = [f for f in factors if contains_node(f, lambda x: x in free)]
-            rest = [f for f in factors if not contains_node(f, lambda x: x in free)]
-            if any(isinstance(x, ir.Reduce | ir.Card) for f in key for x in walk(f)):
-                return None  # the context does not leave the reduction
-            groups.setdefault(mk_mul(*key), []).append(mk_mul(*rest))
-        if len(groups) == 1 and ir.ONE in groups:
-            return None  # nothing was hoisted
-        return [mk_add(*rests) for rests in groups.values()]
+        def moved(f: ir.SymExpr) -> bool:
+            return contains_node(f, lambda x: x in free)
+
+        def reduces(f: ir.SymExpr) -> bool:
+            return contains_node(f, lambda x: isinstance(x, ir.Reduce | ir.Card))
+
+        coeffs: list[ir.SymExpr] = []
+        keys: set[ir.SymExpr] = set()
+
+        def visit(e: ir.SymExpr) -> bool:
+            if isinstance(e, ir.Max):
+                return all(visit(a) for a in e.args)
+            groups: dict[ir.SymExpr, list[ir.SymExpr]] = {}
+            for term in e.args if isinstance(e, ir.Add) else (e,):
+                factors = term.args if isinstance(term, ir.Mul) else (term,)
+                key = [f for f in factors if moved(f)]
+                rest = [f for f in factors if not moved(f)]
+                inside = [f for f in key if reduces(f)]
+                if inside:
+                    # c · max(u, v) with the contexts next to the reductions of u and v
+                    if (
+                        len(inside) > 1
+                        or not isinstance(inside[0], ir.Max)
+                        or any(map(reduces, rest))
+                    ):
+                        return False  # the context does not leave the reduction
+                    keys.update(f for f in key if f is not inside[0])
+                    if not visit(inside[0]):
+                        return False
+                    continue
+                groups.setdefault(mk_mul(*key), []).append(mk_mul(*rest))
+            keys.update(groups)
+            coeffs.extend(mk_add(*rests) for rests in groups.values())
+            return True
+
+        if not visit(map_elems(cand.struct, unpin)) or keys <= {ir.ONE}:
+            return None  # stuck, or nothing was hoisted
+        return coeffs
 
 
 def synthesize(

@@ -16,7 +16,7 @@
 # under the License.
 """Reduction chains: reductions over one axis that depend on each other's results.
 
-A *chain* is a set of ``sum``/``max`` reductions over the same axis ``j`` in
+A *chain* is a set of ``sum``/``max``/``min`` reductions over the same axis ``j`` in
 which a later one reads the final value of an earlier one from a context that
 does not move with ``j``::
 
@@ -73,7 +73,7 @@ class Member:
     program computes in place without naming it (``op`` is ``None``)."""
 
     op: object
-    kind: str  # "sum" / "max" (a reduction over j) or "value"
+    kind: str  # "sum" / "max" / "min" (a reduction over j) or "value"
     coords: tuple[int, ...]  # chain coordinate of each of its axes
     pid: int = 0
     # Own definition over the chain coordinates, reads of other members kept as
@@ -278,7 +278,7 @@ def partial(e: ir.SymExpr, axis: DimKey, count: bool = True) -> ir.SymExpr:
 # reading the TE graph
 # ---------------------------------------------------------------------------
 def reduction_of(op):
-    """``(kind, iter_var)`` for a plain ``sum``/``max`` reduction over a single axis."""
+    """``(kind, iter_var)`` for a plain ``sum``/``max``/``min`` reduction over a single axis."""
     if len(op.body) != 1:
         return None
     body = op.body[0]

@@ -323,6 +323,51 @@ def entropy_reference(x):
     return (-(np.exp(logp) * logp).sum(axis=1),)
 
 
+# ---------------------------------------------------------------------------
+# outside what any finite reducer reaches: the scores are divided by a sum of their own
+# ---------------------------------------------------------------------------
+def logit_norm_unfused():
+    """LogitNorm: ``lse(x / ‖x‖)``. The norm multiplies the score inside the ``exp``."""
+    X = _scores()
+    n, m = X.shape
+    j1, j2 = te.reduce_axis((0, m), "j"), te.reduce_axis((0, m), "j")
+    ssq = te.compute((n,), lambda i: te.sum(X[i, j1] * X[i, j1], axis=j1), name="ssq")
+    nrm = te.compute((n,), lambda i: tir.sqrt(ssq[i]), name="nrm")
+    den = te.compute((n,), lambda i: te.sum(tir.exp(X[i, j2] / nrm[i]), axis=j2), name="den")
+    return [X], [te.compute((n,), lambda i: tir.log(den[i]), name="lse_out")]
+
+
+def logit_norm_reference(x):
+    x = x.astype(np.float64)
+    nrm = np.sqrt((x * x).sum(axis=1, keepdims=True))
+    return (np.log(np.exp(x / nrm).sum(axis=1)),)
+
+
+def standardised_softmax_unfused():
+    """The normaliser of a softmax over standardised scores: ``Σ exp((x - mean) / sigma)``."""
+    X = _scores()
+    n, m = X.shape
+    count = m.astype(DTYPE)
+    j1, j2, j3 = (te.reduce_axis((0, m), "j") for _ in range(3))
+    total = te.compute((n,), lambda i: te.sum(X[i, j1], axis=j1), name="total")
+    mean = te.compute((n,), lambda i: total[i] / count, name="mean")
+    ss = te.compute(
+        (n,), lambda i: te.sum((X[i, j2] - mean[i]) * (X[i, j2] - mean[i]), axis=j2), name="ss"
+    )
+    sigma = te.compute((n,), lambda i: tir.sqrt(ss[i] / count), name="sigma")
+    return [X], [
+        te.compute(
+            (n,), lambda i: te.sum(tir.exp((X[i, j3] - mean[i]) / sigma[i]), axis=j3), name="zden"
+        )
+    ]
+
+
+def standardised_softmax_reference(x):
+    x = x.astype(np.float64)
+    z = (x - x.mean(axis=1, keepdims=True)) / x.std(axis=1, keepdims=True)
+    return (np.exp(z).sum(axis=1),)
+
+
 register(
     Operator(
         "softmax",
@@ -398,5 +443,29 @@ register(
         entropy_reference,
         entropy_fused,
         states=3,
+    )
+)
+register(
+    Operator(
+        "logit_norm",
+        "negative",
+        "log Σ exp(x / ‖x‖): the norm scales the score under the exp",
+        logit_norm_unfused,
+        logit_norm_reference,
+        fusible=False,
+        reason="den reads nrm from inside its reduction and neither",
+        exists=False,
+    )
+)
+register(
+    Operator(
+        "standardised_softmax",
+        "negative",
+        "Σ exp((x - mean) / sigma): the mean can leave the exp, the deviation cannot",
+        standardised_softmax_unfused,
+        standardised_softmax_reference,
+        fusible=False,
+        reason="(no finite lifting found)",
+        exists=False,
     )
 )

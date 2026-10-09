@@ -26,13 +26,14 @@ node for the operation, applying (to a fixpoint) the rewrite theory:
   ``exp(log x) = x``, ``log(exp x) = x``, ``log(x y) = log x + log y`` and
   ``log(x^p) = p log x`` for provably positive ``x``, ``y``;
 * ``max(f + c, g + c) = max(f, g) + c`` and ``max(c f, c g) = c max(f, g)``
-  for ``c > 0``;
+  for ``c >= 0``;
 * for ``sum`` reductions: ``Σ(f + g) = Σf + Σg``, ``Σ c f = c Σ f`` and
   ``Σ exp(x_j + y) = exp(y) Σ exp(x_j)`` whenever ``c``/``y`` do not depend
   on the bound index, ``Σ_D c = c |D|``;
 * for ``max`` reductions: ``max_j (f + c) = max_j f + c``,
-  ``max_j c f = c max_j f`` (``c > 0``), ``max_j max(f, g) = max(max_j f,
-  max_j g)``, ``max_j exp(f) = exp(max_j f)``;
+  ``max_j c f = c max_j f`` (``c >= 0``: a positive number, a square root, an
+  even power), ``max_j max(f, g) = max(max_j f, max_j g)``,
+  ``max_j exp(f) = exp(max_j f)``;
 * domain algebra: ``Σ_{A u B} = Σ_A + Σ_B``, ``max_{A u B} = max(max_A,
   max_B)``, ``Σ_∅ = 0``, ``max_∅ = -inf``.
 
@@ -280,7 +281,18 @@ def mk_pow(base: SymExpr, exponent) -> SymExpr:
             return const(root**p.numerator)
         return ir.raw_pow(base, p)
     if isinstance(base, Pow):
-        return mk_pow(base.base, base.exponent * p)
+        q = base.exponent
+        merged = q * p
+        # (x^q)^p = |x|^(qp) when an even power sits under an even root: only then
+        # does the sign of x get lost, and only an odd result can tell
+        if (
+            p.denominator % 2 == 1
+            or q.numerator % 2 == 1
+            or merged.numerator % 2 == 0
+            or nonnegative(base.base)
+        ):
+            return mk_pow(base.base, merged)
+        return ir.raw_pow(base, p)
     if isinstance(base, Mul):
         return mk_mul(*[mk_pow(a, p) for a in base.args])
     if isinstance(base, Add) and p.denominator == 1 and 2 <= p <= 4:
@@ -411,7 +423,7 @@ def mk_max(*args: SymExpr) -> SymExpr:
     if all(isinstance(c, Fraction) and c == coeffs[0] and c > 0 for c in coeffs) and coeffs[0] != 1:
         pull.append(const(coeffs[0]))
     for base, p in fviews[0][1].items():
-        if positive(base) and all(fv[1].get(base) == p for fv in fviews[1:]):
+        if all(fv[1].get(base) == p for fv in fviews[1:]) and nonnegative(mk_pow(base, p)):
             pull.append(mk_pow(base, p))
     if fviews[0][2] is not None and all(fv[2] is fviews[0][2] for fv in fviews[1:]):
         pull.append(mk_exp(fviews[0][2]))
@@ -506,7 +518,7 @@ def _mk_rmax(domain: Domain, level: int, body: SymExpr) -> SymExpr:
         inner.append(_num_const(coeff))
     for base, p in factors.items():
         f = mk_pow(base, p)
-        if not f.uses_level(level) and positive(f):
+        if not f.uses_level(level) and nonnegative(f):
             outer.append(f)
         else:
             inner.append(f)
@@ -696,6 +708,45 @@ def positive(e: SymExpr) -> bool:
     return r
 
 
+NONNEG = -40_000  # added to the id of a tensor to read it as a value known to be >= 0
+
+
+def nonneg_alias(e: Elem) -> Elem:
+    """``e`` read as a value known to be non-negative (see :func:`nonnegative`)."""
+    return ir.elem(e.tensor + NONNEG, e.indices)
+
+
+def nonnegative(e: SymExpr) -> bool:
+    """Syntactic proof that ``e >= 0`` wherever it is defined.
+
+    Weaker than :func:`positive` and enough to take a factor out of a
+    maximum: a square root, an even power, a tensor declared so.
+    """
+    key = "nonnegative"
+    hit = e.cache.get(key)
+    if hit is not None:
+        return hit
+    if positive(e):
+        r = True
+    elif isinstance(e, Const):
+        r = e.value >= 0
+    elif isinstance(e, Elem):
+        r = NONNEG - 10_000 < e.tensor < NONNEG + 10_000
+    elif isinstance(e, Pow):
+        p = e.exponent
+        r = p.denominator % 2 == 0 or p.numerator % 2 == 0 or nonnegative(e.base)
+    elif isinstance(e, Mul | Add):
+        r = all(nonnegative(a) for a in e.args)
+    elif isinstance(e, Max):
+        r = any(nonnegative(a) for a in e.args)
+    elif isinstance(e, Reduce):
+        r = nonnegative(e.body)
+    else:
+        r = False
+    e.cache[key] = r
+    return r
+
+
 def is_constant(e: Node) -> bool:
     """True if ``e`` reads no tensor data and no bound index (an extent-only value)."""
     stack = [e]
@@ -776,6 +827,8 @@ __all__ = [
     "mk_reduce",
     "mk_sqrt",
     "mk_sub",
+    "nonneg_alias",
+    "nonnegative",
     "positive",
     "rebuild",
     "recanonicalize",

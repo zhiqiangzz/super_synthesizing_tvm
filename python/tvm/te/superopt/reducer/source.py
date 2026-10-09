@@ -28,7 +28,7 @@ from __future__ import annotations
 from fractions import Fraction
 
 from ..symbolic import ir
-from ..symbolic.canonicalize import Unsupported, term_view
+from ..symbolic.canonicalize import Unsupported, recanonicalize, term_view
 from ..symbolic.emit import SourceEnv, const_source, hoisted_source, to_source
 from .chain import Chain
 from .derive import ReducerSpec
@@ -103,6 +103,14 @@ def render(e: ir.Node, chain: Chain) -> str:
                 out += f" {'-' if neg else '+'} {body}"
             return out
         if isinstance(n, ir.Mul):
+            if len(n.args) == 2 and n.args[0] is ir.MINUS_ONE and isinstance(n.args[1], ir.Reduce):
+                red = n.args[1]  # -max_j -f is how the IR writes min_j f
+                body = recanonicalize(ir.raw_mul([ir.MINUS_ONE, red.body]))
+                if red.kind == "max":
+                    return f"min_{j} {atom(go(body))}"
+            smallest = ir.min_args(n)
+            if smallest is not None:
+                return f"min({', '.join(go(a) for a in smallest)})"
             sign = "-" if any(a is ir.MINUS_ONE for a in n.args) else ""
             args = [a for a in n.args if a is not ir.MINUS_ONE]
             num = [atom(go(a)) for a in args if not (isinstance(a, ir.Pow) and a.exponent < 0)]

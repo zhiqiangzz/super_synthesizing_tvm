@@ -516,3 +516,18 @@ def raw_subst(e: Node, mapping: dict[Node, Node]) -> Node:
 
 def is_inf(e: Node) -> bool:
     return isinstance(e, Const) and isinstance(e.value, float)
+
+
+def min_args(e: Node) -> list[SymExpr] | None:
+    """``[a, b, ..]`` when ``e`` is ``-max(-a, -b, ..)``, the way a minimum is written."""
+    if not (isinstance(e, Mul) and len(e.args) == 2 and e.args[0] is MINUS_ONE):
+        return None
+    if not isinstance(e.args[1], Max):
+        return None
+    out = []
+    for a in e.args[1].args:
+        if not (isinstance(a, Mul) and a.args[0] is MINUS_ONE):
+            return None
+        rest = a.args[1:]
+        out.append(rest[0] if len(rest) == 1 else raw_mul(rest))
+    return out

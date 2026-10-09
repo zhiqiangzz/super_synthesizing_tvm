@@ -354,21 +354,24 @@ def derive(
     """
     full, R, A, B = domains(axis)
     states = tuple(states)
-    sol = solve_atoms(states, R)
+    try:
+        sol = solve_atoms(states, R)
+    except Unsupported:  # solving one state for a reduction divides by zero under another
+        sol = None
     if sol is None:
         count(stats, "derive:unsolvable")
         return None
     n = len(states)
     closed = tuple(subst_domain(s, {R: full}) for s in states)
     refs = {ir.state_var("a", k): out_ref(k, closed[k]) for k in range(n)}
-    out_map = {}
-    for atom, expr in sol.items():
-        atom_full = subst_domain(atom, {R: full})
-        if not is_constant(atom_full):
-            out_map[atom_full] = subst_domain(subst(expr, refs), {R: full})
     try:
+        out_map = {}
+        for atom, expr in sol.items():
+            atom_full = subst_domain(atom, {R: full})
+            if not is_constant(atom_full):
+                out_map[atom_full] = subst_domain(subst(expr, refs), {R: full})
         epilogues = tuple(subst(t, out_map) for t in required)
-    except Unsupported:
+    except Unsupported:  # the closed form is not defined over these states (0 / 0)
         count(stats, "derive:uncovered")
         return None
     if any(atoms_in(e, full) for e in epilogues):
@@ -376,7 +379,10 @@ def derive(
         return None
     merge = []
     for st in states:
-        m = merge_of(st, sol, R, A, B)
+        try:
+            m = merge_of(st, sol, R, A, B)
+        except Unsupported:
+            m = None
         if m is None:
             count(stats, "derive:missing_context")
             return None

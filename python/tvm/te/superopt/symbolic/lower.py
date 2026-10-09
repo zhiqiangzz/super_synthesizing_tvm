@@ -47,6 +47,7 @@ from .canonicalize import (
     mk_monoid,
     mk_mul,
     mk_neg,
+    mk_pow,
     mk_reduce,
     mk_sqrt,
     mk_sub,
@@ -159,6 +160,11 @@ class LowerCtx:
                 return mk_log(self.lower_expr(e.args[0], env, level))
             if name == "tirx.rsqrt":
                 return mk_div(ir.ONE, mk_sqrt(self.lower_expr(e.args[0], env, level)))
+            if name == "tirx.pow":
+                return integer_power(self.lower_expr(e.args[0], env, level), e)
+            if name == "tirx.fabs":
+                a = self.lower_expr(e.args[0], env, level)
+                return mk_max(a, mk_neg(a))
             raise Unsupported(f"intrinsic {name}")
         if isinstance(e, tir.ProducerLoad):
             return self.lower_load(e, env, level)
@@ -198,10 +204,12 @@ class LowerCtx:
         if kind is not None:
             body = self.lower_expr(e.source[0], inner_env, depth)
             make = ir.raw_reduce if self.raw_reductions else mk_reduce
+            if kind == "min":  # min f = -max(-f): the IR has one order reduction
+                body = mk_neg(body)
             for n in reversed(range(len(axes))):
                 dom = ir.dfull(self.dims.key(axes[n].dom.extent))
-                body = make(kind, dom, level + n, body)
-            return body
+                body = make("sum" if kind == "sum" else "max", dom, level + n, body)
+            return mk_neg(body) if kind == "min" else body
         if len(axes) != 1:
             raise Unsupported("tuple reduction over several axes")
         comb = e.combiner
@@ -243,10 +251,34 @@ class LowerCtx:
                 return unary[e.op.name](self._lower_merge(e.args[0], merge_map, env))
             if e.op.name == "tirx.rsqrt":
                 return mk_div(ir.ONE, mk_sqrt(self._lower_merge(e.args[0], merge_map, env)))
+            if e.op.name == "tirx.pow":
+                return integer_power(self._lower_merge(e.args[0], merge_map, env), e)
+            if e.op.name == "tirx.fabs":
+                a = self._lower_merge(e.args[0], merge_map, env)
+                return mk_max(a, mk_neg(a))
             raise Unsupported(f"intrinsic {e.op.name} in a merge function")
         if isinstance(e, tir.FloatImm | tir.IntImm | tir.Var):
             return self.lower_expr(e, env, 0)  # a constant or an extent
         raise Unsupported(f"{type(e).__name__} in a merge function")
+
+
+def integer_power(base: ir.SymExpr, call) -> ir.SymExpr:
+    """``pow(base, k)`` for an integer constant ``k``: ``base`` times itself.
+
+    Formed factor by factor, the way the program would have written the
+    product, so that the two spellings are one expression at every degree.
+    Any other exponent is a different function of ``base`` (not defined where
+    it is negative, not a polynomial) and is left unsupported.
+    """
+    k = call.args[1]
+    while isinstance(k, tir.Cast):
+        k = k.value
+    if not (isinstance(k, tir.IntImm | tir.FloatImm) and float(k.value) == int(k.value)):
+        raise Unsupported("pow with an exponent that is not an integer constant")
+    out = ir.ONE
+    for _ in range(abs(int(k.value))):
+        out = mk_mul(out, base)
+    return out if k.value >= 0 else mk_pow(out, -1)
 
 
 def lower_imm(e) -> ir.Const:
@@ -261,7 +293,7 @@ def lower_imm(e) -> ir.Const:
 
 
 def classify_combiner(comb) -> str | None:
-    """``"sum"`` / ``"max"`` for the standard single-slot reducers, else ``None``."""
+    """``"sum"`` / ``"max"`` / ``"min"`` for the standard single-slot reducers, else ``None``."""
     if len(comb.result) != 1:
         return None
     lhs, rhs, res, ident = comb.lhs[0], comb.rhs[0], comb.result[0], comb.identity_element[0]
@@ -269,6 +301,8 @@ def classify_combiner(comb) -> str | None:
         return "sum"
     if isinstance(res, tir.Max) and _is_pair(res, lhs, rhs) and _is_min_value(ident):
         return "max"
+    if isinstance(res, tir.Min) and _is_pair(res, lhs, rhs) and _is_max_value(ident):
+        return "min"
     return None
 
 

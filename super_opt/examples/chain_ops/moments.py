@@ -51,15 +51,8 @@ def _central(X, mean, power: int, name: str):
     """``Σ_j (x - mean)^power``."""
     n, m = X.shape
     j = te.reduce_axis((0, m), "j")
-
-    def body(i):
-        d = X[i, j] - mean[i]
-        out = d
-        for _ in range(power - 1):
-            out = out * d
-        return te.sum(out, axis=j)
-
-    return te.compute((n,), body, name=name)
+    k = tir.const(float(power), DTYPE)
+    return te.compute((n,), lambda i: te.sum(tir.power(X[i, j] - mean[i], k), axis=j), name=name)
 
 
 def _zeros(k: int):
@@ -326,6 +319,7 @@ register(
         mad_reference,
         fusible=False,
         reason="dev reads mean from inside its reduction and neither",
+        exists=False,
     )
 )
 register(
@@ -348,5 +342,6 @@ register(
         cov_matrix_reference,
         fusible=False,
         reason="read at two different indices of C",
+        exists=None,
     )
 )

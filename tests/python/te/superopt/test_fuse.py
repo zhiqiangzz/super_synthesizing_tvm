@@ -187,6 +187,27 @@ def test_variance_is_welford_however_it_is_written(m, mean_inline):
     _same_results([X], [var], res)
 
 
+def test_power_intrinsic_fuses_like_the_product():
+    """The third central moment with ``tir.power`` instead of ``d * d * d``."""
+    n, m = te.var("n"), te.var("m")
+    X = te.placeholder((n, m), name="X")
+    j1, j2 = te.reduce_axis((0, m), "j"), te.reduce_axis((0, m), "j")
+    total = te.compute((n,), lambda i: te.sum(X[i, j1], axis=j1), name="total")
+    mean = te.compute((n,), lambda i: total[i] / m.astype("float32"), name="mean")
+    cube = tir.const(3.0, "float32")
+    s3 = te.compute((n,), lambda i: te.sum(tir.power(X[i, j2] - mean[i], cube), axis=j2), name="s3")
+    res = fuse(s3, [X])
+    (report,) = res.chains
+    assert report.fused and len(report.states) == 4, res.summary()
+    assert sorted(c.origin for c in report.solution.states) == [
+        "closure",
+        "extent",
+        "member",
+        "member",
+    ]
+    _same_results([X], [s3], res)
+
+
 def test_scores_stored_in_a_tensor_of_their_own():
     """softmax(x / T): the reducer recomputes the scores, the output reads the stored ones."""
     n, m = te.var("n"), te.var("m")
@@ -200,6 +221,65 @@ def test_scores_stored_in_a_tensor_of_their_own():
     res = fuse(P, [X, T])
     assert res.fused and res.chains[0].states == ("mx", "den"), res.summary()
     _same_results([X, T], [P], res)
+
+
+def test_minimum_is_fused_like_a_maximum():
+    """Weights ``exp(-(x - min x))``: the online softmax mirrored, a running minimum."""
+    n, m = te.var("n"), te.var("m")
+    X = te.placeholder((n, m), name="X")
+    j1, j2 = te.reduce_axis((0, m), "j"), te.reduce_axis((0, m), "j")
+    lo = te.compute((n,), lambda i: te.min(X[i, j1], axis=j1), name="lo")
+    Z = te.compute((n,), lambda i: te.sum(tir.exp(lo[i] - X[i, j2]), axis=j2), name="Z")
+    out = te.compute((n,), lambda i: lo[i] - tir.log(Z[i]), name="softmin")
+    res = fuse(out, [X])
+    (report,) = res.chains
+    assert report.fused and report.states == ("lo", "Z") and not report.rejected
+    assert passes([out], m) == 2 and passes(res.outputs, m) == 1
+    source = res.source()
+    assert "t0 = tir.min(a[0], b[0])" in source and "tir.max_value(t0)" in source
+    assert "tir.exp((t0 - a[0]))" in source  # the weights only ever shrink
+    _same_results([X], [out], res)
+
+
+def test_maximum_of_standard_scores_keeps_the_largest_element():
+    """``max_j (x - mean) / sigma``: Welford's states and ``max_j x``; the score at the end."""
+    ins, outs = OPERATORS["zscore_max"].unfused()
+    res = fuse(outs, ins)
+    (report,) = res.chains
+    assert report.fused and report.states[:3] == ("mean", "ss", "count")
+    (extreme,) = [c for c in report.solution.states if c.origin == "hoist"]
+    assert extreme.source == "zmax" and "max_j X[i, j]" in "".join(report.derived())
+    assert passes(outs, ins[0].shape[1]) == 3 and passes(res.outputs, ins[0].shape[1]) == 1
+    _same_results(ins, outs, res)
+
+
+def test_minimum_of_standard_scores_keeps_the_smallest_element():
+    """The same chain ending in ``te.min``: the state left is ``max_j -x``, a minimum."""
+    n, m = te.var("n"), te.var("m")
+    X = te.placeholder((n, m), name="X")
+    count = m.astype("float32")
+    j1, j2, j3 = (te.reduce_axis((0, m), "j") for _ in range(3))
+    total = te.compute((n,), lambda i: te.sum(X[i, j1], axis=j1), name="total")
+    mean = te.compute((n,), lambda i: total[i] / count, name="mean")
+    ss = te.compute(
+        (n,), lambda i: te.sum((X[i, j2] - mean[i]) * (X[i, j2] - mean[i]), axis=j2), name="ss"
+    )
+    sigma = te.compute((n,), lambda i: tir.sqrt(ss[i] / count), name="sigma")
+    zmin = te.compute((n,), lambda i: te.min((X[i, j3] - mean[i]) / sigma[i], axis=j3), name="zmin")
+    res = fuse(zmin, [X])
+    (report,) = res.chains
+    assert report.fused and len(report.states) == 4, res.summary()
+    assert passes([zmin], m) == 3 and passes(res.outputs, m) == 1
+    _same_results([X], [zmin], res)
+
+
+def test_largest_absolute_deviation_is_two_extremes():
+    ins, outs = OPERATORS["max_abs_deviation"].unfused()
+    res = fuse(outs, ins)
+    (report,) = res.chains
+    assert report.fused and [c.origin for c in report.solution.states].count("part") == 2
+    assert "is the largest of" in "".join(report.derived())
+    _same_results(ins, outs, res)
 
 
 # ---------------------------------------------------------------------------
@@ -266,6 +346,53 @@ def test_fewer_contexts_are_taken_out_first():
     assert 1e-5 < rel_err(cancelled, want) < 1e-2
 
 
+def test_scaled_norm_is_not_traded_for_a_sum_of_squares():
+    """Fused, the norm with scaling is ``sqrt(Σ x²)`` again: correct, and it overflows where
+    the original was written not to. The magnitude families of the gate keep it out."""
+    ins, outs = OPERATORS["scaled_norm"].unfused()
+    res = fuse(outs, ins)
+    (report,) = res.chains
+    assert not res.fused and res.outputs[0].same_as(outs[0])
+    assert any("huge: inf" in r.why and "tiny" in r.why for r in report.rejected)
+    assert report.theory.fusible  # a single pass exists: the reference BLAS loop is one
+    loose = fuse(outs, ins, accuracy="off")
+    assert loose.fused
+    values = extents(ins, outs)
+    (x,) = sample(ins, outs, values, seed=2)
+    for scale, fused_ok in ((1.0, True), (1.0e25, False)):
+        arrays = [(x * scale).astype("float32")]
+        want = [np.sqrt((arrays[0].astype(np.float64) ** 2).sum(axis=1))]
+        assert rel_err(run_llvm(ins, outs, arrays, values), want) < 1e-5
+        err = rel_err(run_llvm(loose.inputs, loose.outputs, arrays, values), want)
+        assert (err < 1e-5) == fused_ok
+
+
+def test_a_budget_too_small_is_reported_not_raised():
+    """A correlation takes six states. With four there is none -- and nothing to raise
+    about on the way to finding that out."""
+    ins, outs = OPERATORS["pearson"].unfused()
+    res = fuse(outs, ins, max_states=4)
+    (report,) = res.chains
+    assert not res.fused and "no set of at most 4 derived states" in report.reason
+    assert report.theory.fusible and "probes:" in res.summary()
+
+
+def test_ops_around_a_chain_are_run_not_analysed():
+    """What reads the fused members may use functions the chain analysis knows nothing of,
+    as long as the reference can evaluate them; otherwise the program is left alone."""
+    X, _, _, P = _softmax()
+    n, m = X.shape
+    squashed = te.compute((n, m), lambda i, j: tir.tanh(P[i, j]), name="squashed")
+    res = fuse(squashed, [X])
+    assert res.fused and res.chains[0].states == ("mx", "den")
+    _same_results([X], [squashed], res)
+
+    odd = te.compute((n, m), lambda i, j: tir.erf(P[i, j]), name="odd")
+    res = fuse(odd, [X])
+    (report,) = res.chains
+    assert not res.fused and "tirx.erf" in report.reason and res.outputs[0].same_as(odd)
+
+
 def test_report_mode_attaches_the_verdict_without_filtering():
     ins, outs = OPERATORS["variance"].unfused()
     res = fuse(outs, ins, max_states=2, accuracy="report")
@@ -296,7 +423,18 @@ def test_reports_name_what_was_derived_and_why_something_was_not():
     assert "not fused" in res.summary()
 
 
-SOURCED = ["logsumexp", "attention", "variance", "moment3", "soft_cross_entropy", "sinkhorn_square"]
+SOURCED = [
+    "logsumexp",
+    "attention",
+    "variance",
+    "moment3",
+    "soft_cross_entropy",
+    "sinkhorn_square",
+    "heat_capacity",
+    "zscore_max",
+    "max_abs_deviation",
+    "contrastive",
+]
 
 
 @pytest.mark.parametrize("name", SOURCED)
