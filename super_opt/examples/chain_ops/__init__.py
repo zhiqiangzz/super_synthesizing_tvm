@@ -29,6 +29,23 @@ Every operator comes in three forms over the same inputs:
     The same function in float64 numpy.
 
 ``unfused`` and ``fused`` return ``(inputs, outputs)`` with symbolic extents.
+
+The operators are grouped by what fusing them takes:
+
+``shift/scale``
+    every state is a tensor of the program, kept relative to a running
+    context (a maximum, a mean) and re-based when that context moves;
+``closure``
+    re-basing leaves behind a state the program never computes (a count, a
+    lower moment);
+``hoist``
+    a context is taken out of the reduction that reads it;
+``extreme``
+    the chain ends in a maximum or a minimum, which is decided by an extreme
+    of the data;
+``negative``
+    not fused: no finite single pass exists, or one exists that the
+    derivation or its checks do not reach.
 """
 
 from __future__ import annotations
@@ -42,7 +59,7 @@ DTYPE = "float32"
 @dataclasses.dataclass(frozen=True)
 class Operator:
     name: str
-    group: str  # "shift/scale", "closure", "hoist" or "negative"
+    group: str  # "shift/scale", "closure", "hoist", "extreme" or "negative"
     doc: str
     unfused: Callable[[], tuple[list, list]]
     reference: Callable[..., tuple]
@@ -52,6 +69,10 @@ class Operator:
     states: int | None = None  # number of reducer states
     reason: str = ""  # part of the reported reason when it is not fusible
     max_states: int = 4
+    # does a finite single pass exist, by the probes (``None``: no chain to probe)?
+    exists: bool | None = True
+    positive: tuple[str, ...] = ()  # inputs that are weights: sampled positive
+    slow: bool = False  # the search takes minutes
 
 
 OPERATORS: dict[str, Operator] = {}
@@ -64,6 +85,16 @@ def register(op: Operator) -> Operator:
 
 
 # importing the operator modules is what fills the registry
-from . import attention, moments, sinkhorn, softmax
+from . import (
+    attention,
+    backward,
+    extremes,
+    linalg,
+    moments,
+    sinkhorn,
+    softmax,
+    statistics,
+    weights,
+)
 
 __all__ = ["DTYPE", "OPERATORS", "Operator", "register"]

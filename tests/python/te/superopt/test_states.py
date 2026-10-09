@@ -21,6 +21,7 @@ import itertools
 from chain_ops import OPERATORS
 
 import tvm.testing
+from tvm import te
 from tvm.te.superopt.reducer.chain import discover_chains
 from tvm.te.superopt.reducer.derive import domains
 from tvm.te.superopt.reducer.states import Pool, _content, _scaled, synthesize
@@ -165,7 +166,7 @@ def test_every_derived_state_comes_out_of_the_program():
         pool = _pool(name)
         by_name = {c.name: c for c in pool.cands}
         for c in pool.cands:
-            assert c.origin in ("member", "context", "extent", "closure", "hoist"), c.name
+            assert c.origin in ("member", "context", "extent", "part", "closure", "hoist"), c.name
             if c.origin == "closure":
                 d = pool.rebaser.decompose(by_name[c.source])
                 coeffs = [pool.rebaser.coeff_state(t) for t in d.all_terms() if t.side == "a"]
@@ -267,6 +268,56 @@ def test_max_of_scaled_scores_rebases():
     assert d is not None and len(d.parts) == 2
     a, b = (lambda k: ir.state_var("a", k)), (lambda k: ir.state_var("b", k))
     assert next(synthesize(pool)).spec.merge[0] is mk_max(a(0), b(0))
+
+
+# ---------------------------------------------------------------------------
+# chains that end in a maximum
+# ---------------------------------------------------------------------------
+def test_largest_of_several_reductions_is_taken_apart():
+    """``max_j |x - mean|`` is the larger of two reductions: each of them is a candidate,
+    and the member itself has nothing to merge."""
+    pool = _pool("max_abs_deviation")
+    whole = next(c for c in pool.cands if c.name == "dmax")
+    assert isinstance(whole.struct, ir.Max) and pool.rebaser.decompose(whole) is None
+    parts = [c for c in pool.cands if c.origin == "part"]
+    assert [c.source for c in parts] == ["dmax", "dmax"] and len(whole.struct.args) == 2
+    assert all(pool.rebaser.decompose(c) is not None for c in parts)  # a shift by the mean
+    first = next(synthesize(pool))
+    assert {c.name for c in parts} <= set(_names(first)) and "dmax" not in _names(first)
+    a, b = (lambda k: ir.state_var("a", k)), (lambda k: ir.state_var("b", k))
+    assert first.spec.merge[_names(first).index("count")] is mk_add(a(1), b(1))
+    # taking the mean out as well leaves the extremes of the data themselves
+    x = _x()
+    assert _by_state(pool, mk_reduce("max", pool.R, 0, x)).origin == "hoist"
+    assert _by_state(pool, mk_reduce("max", pool.R, 0, mk_mul(ir.MINUS_ONE, x))) is not None
+
+
+def test_context_that_cannot_be_negative_leaves_a_maximum():
+    """``max_j (x - mean) / sigma``: ``sigma`` is a square root. What is left is ``max_j x``."""
+    pool = _pool("zscore_max")
+    assert pool.unrebased == ["zmax"] and pool.stuck == []
+    extreme = _by_state(pool, mk_reduce("max", pool.R, 0, _x()))
+    assert extreme is not None and (extreme.origin, extreme.source) == ("hoist", "zmax")
+    assert extreme.depth == 2  # the mean and the deviation were both taken out
+    # Welford's three states and the extreme; the set that keeps ``zmax`` itself as a
+    # state comes first and is turned down later (it divides by the deviation of one element)
+    sols = list(itertools.islice(synthesize(pool), 4))
+    assert _names(sols[0]) == ["mean", "ss", "zmax", "count"]
+    assert ["mean", "ss", "count", extreme.name] in [_names(s) for s in sols]
+
+
+def test_context_of_unknown_sign_stays_under_a_maximum():
+    """``max_j (g x_j)`` with ``g`` a sum of either sign is the largest *or* the smallest
+    ``x``: a single pass exists, but no rule here takes ``g`` out."""
+    n, m = te.var("n"), te.var("m")
+    X = te.placeholder((n, m), name="X")
+    G = te.placeholder((n, m), name="G")
+    j1, j2 = te.reduce_axis((0, m), "j"), te.reduce_axis((0, m), "j")
+    g = te.compute((n,), lambda i: te.sum(G[i, j1], axis=j1), name="g")
+    out = te.compute((n,), lambda i: te.max(g[i] * X[i, j2], axis=j2), name="out")
+    (chain,), _ = discover_chains(out)
+    pool = Pool(chain)
+    assert pool.stuck == ["out"] and list(synthesize(pool)) == []
 
 
 if __name__ == "__main__":

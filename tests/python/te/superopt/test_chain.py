@@ -218,5 +218,26 @@ def test_shadowed_loop_variable_is_reported():
     assert not chains and "shadows" in skip.reason
 
 
+def test_minimum_is_a_reduction_of_the_chain():
+    """``te.min`` is a link like ``te.max``; in the IR it is ``-max`` of the negation."""
+    (chain,), skipped = _chains("minmax_mean")
+    assert not skipped
+    assert [(m.name, m.kind) for m in chain.members] == [
+        ("lo", "min"),
+        ("hi", "max"),
+        ("scaled.ctx0", "value"),
+        ("scaled", "sum"),
+    ]
+    lo = chain.members[0]
+    assert ir.min_args(lo.body) is None and lo.body.args[0] is ir.MINUS_ONE
+    (red,) = [n for n in walk(lo.body) if isinstance(n, ir.Reduce)]
+    assert red.kind == "max" and [m.name for m in chain.reductions] == ["lo", "hi", "scaled"]
+    # the weights of a heat capacity wait for the lowest energy the way a softmax waits
+    # for the highest score
+    (chain,), _ = _chains("heat_capacity")
+    assert [m.name for m in chain.members] == ["lo", "e1s", "Z", "e1", "cs"]
+    assert {n.tensor for n in _pinned(chain.members[2].body)} == {chain.members[0].pid}
+
+
 if __name__ == "__main__":
     tvm.testing.main()

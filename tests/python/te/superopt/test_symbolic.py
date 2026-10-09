@@ -18,12 +18,14 @@
 
 from fractions import Fraction
 
+import pytest
 import te_programs
 
 import tvm.testing
 from tvm import te
+from tvm import tirx as tir
 from tvm.te.superopt.dims import DimTable
-from tvm.te.superopt.symbolic import LowerCtx, ir
+from tvm.te.superopt.symbolic import LowerCtx, Unsupported, ir
 from tvm.te.superopt.symbolic.canonicalize import (
     instantiate,
     mk_add,
@@ -36,6 +38,8 @@ from tvm.te.superopt.symbolic.canonicalize import (
     mk_pow,
     mk_reduce,
     mk_sub,
+    nonneg_alias,
+    nonnegative,
     positive,
     subst_domain,
 )
@@ -167,6 +171,90 @@ def test_lower_attention_naive_equals_flash_closed_form():
     assert sorted(r.kind for r in reds) == ["sum", "sum"]
     assert not any(isinstance(n, ir.Max) for n in _all_nodes(body))
     assert not any(isinstance(n, ir.Reduce) and n.kind == "max" for n in _all_nodes(body))
+
+
+def test_integer_power_is_the_product():
+    """``pow(x, 3)`` and ``x * x * x`` are the same expression; other exponents are not taken."""
+    n = te.var("n")
+    X = te.placeholder((n,), name="X")
+
+    def lowered(f):
+        return ctx.lower(te.compute((n,), lambda i: f(X[i]), name="t")).body
+
+    ctx = LowerCtx()
+    cube = lowered(lambda v: tir.power(v, tir.const(3.0, "float32")))
+    assert cube is lowered(lambda v: v * v * v) and isinstance(cube, ir.Pow)
+    assert cube.exponent == 3
+    inverse = lowered(lambda v: tir.power(v, tir.const(-2.0, "float32")))
+    assert inverse is lowered(lambda v: tir.const(1.0, "float32") / (v * v))
+    assert lowered(lambda v: tir.power(v, tir.const(1.0, "float32"))) is lowered(lambda v: v)
+    # of a sum, at a degree above what a single power is expanded to: still the product
+    one = tir.const(1.0, "float32")
+    fifth = lowered(lambda v: tir.power(v - one, tir.const(5.0, "float32")))
+    assert fifth is lowered(lambda v: (v - one) * (v - one) * (v - one) * (v - one) * (v - one))
+    assert isinstance(fifth, ir.Add) and len(fifth.args) == 6
+    with pytest.raises(Unsupported, match="not an integer constant"):
+        lowered(lambda v: tir.power(v, tir.const(0.5, "float32")))
+    with pytest.raises(Unsupported, match="not an integer constant"):
+        lowered(lambda v: tir.power(v, v))
+
+
+def test_even_root_of_an_even_power_keeps_its_sign_lost():
+    """``sqrt(x²)`` is ``|x|``, not ``x``: the exponents only merge where that is the same."""
+    half = Fraction(1, 2)
+    assert mk_pow(mk_pow(x, 2), half) is not x
+    assert mk_pow(mk_pow(mk_pow(x, 2), half), 2) is mk_pow(x, 2)  # |x|² = x²
+    assert mk_pow(mk_pow(x, 4), half) is mk_pow(x, 2)  # an even result has no sign to lose
+    assert mk_pow(mk_pow(x, half), 2) is x  # defined for x >= 0 only, where it is x
+    assert mk_pow(mk_pow(x, 3), Fraction(1, 3)) is x  # an odd root keeps the sign
+    n = ir.shape_sym("n")
+    assert mk_pow(mk_pow(n, 2), half) is n  # an extent is positive
+
+
+def test_nonnegative_factors_leave_a_maximum():
+    """``max_j c f_j = c max_j f_j`` for ``c >= 0``: a root, an even power, a declared tensor."""
+    axis = DimTable().key(te.var("m"))
+    dom = ir.dfull(axis)
+    f = ir.elem(0, (ir.idx("i0"), ir.bidx(0)))
+    c = ir.elem(1, (ir.idx("i0"),))  # a value of unknown sign
+    root = mk_pow(c, Fraction(1, 2))
+    assert nonnegative(root) and nonnegative(mk_pow(c, 2)) and nonnegative(mk_pow(root, -1))
+    assert not positive(root) and not nonnegative(c) and not nonnegative(mk_neg(root))
+    plain = mk_reduce("max", dom, 0, f)
+    assert mk_reduce("max", dom, 0, mk_mul(root, f)) is mk_mul(root, plain)
+    assert mk_reduce("max", dom, 0, mk_div(f, root)) is mk_div(plain, root)
+    stuck = mk_reduce("max", dom, 0, mk_mul(c, f))  # c < 0 would turn it into a minimum
+    assert isinstance(stuck, ir.Reduce) and stuck.body is mk_mul(c, f)
+    known = nonneg_alias(c)
+    assert nonnegative(known) and known is not c
+    assert mk_reduce("max", dom, 0, mk_mul(known, f)) is mk_mul(known, plain)
+    # and out of an elementwise maximum
+    assert mk_max(mk_mul(root, x), mk_mul(root, y)) is mk_mul(root, mk_max(x, y))
+
+
+def test_minimum_and_absolute_value_are_written_with_max():
+    """``min f = -max(-f)`` and ``|v| = max(v, -v)``: one order operation in the IR."""
+    n, m = te.var("n"), te.var("m")
+    X = te.placeholder((n, m), name="X")
+    j1, j2 = te.reduce_axis((0, m), "j"), te.reduce_axis((0, m), "j")
+    ctx = LowerCtx()
+    lo = ctx.lower(te.compute((n,), lambda i: te.min(X[i, j1], axis=j1), name="lo")).body
+    nmax = te.compute((n,), lambda i: te.max(-X[i, j2], axis=j2), name="nmax")
+    neg = ctx.lower(te.compute((n,), lambda i: -nmax[i], name="neg")).body
+    assert lo is neg and isinstance(lo, ir.Mul) and lo.args[0] is ir.MINUS_ONE
+    (red,) = [a for a in lo.args if isinstance(a, ir.Reduce)]
+    assert red.kind == "max" and red.body is mk_neg(ir.elem(0, (ir.idx("i0"), ir.bidx(0))))
+
+    def lowered(f):
+        return ctx.lower(te.compute((n, m), lambda i, k: f(X[i, k]), name="t")).body
+
+    v = ir.elem(0, (ir.idx("i0"), ir.idx("i1")))
+    assert lowered(tir.abs) is mk_max(v, mk_neg(v))
+    assert lowered(lambda u: tir.min(u, tir.const(0.0, "float32"))) is mk_neg(
+        mk_max(mk_neg(v), ir.ZERO)
+    )
+    assert ir.min_args(mk_neg(mk_max(mk_neg(x), mk_neg(y)))) == [x, y]
+    assert ir.min_args(mk_neg(mk_max(x, y))) is None
 
 
 def test_lower_flash_is_opaque_monoid():

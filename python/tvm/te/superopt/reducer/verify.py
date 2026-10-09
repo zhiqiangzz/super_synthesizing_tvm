@@ -258,20 +258,44 @@ def identity_safe(
     return True
 
 
-def check_laws(merge: tuple[ir.SymExpr, ...], identity: tuple[ir.Const, ...]) -> str | None:
-    """Return the proof method (``"canonical"``/``"case-split"``/``"numeric"``) or ``None``."""
+_RANK = {"canonical": 0, "case-split": 1, "numeric": 2}
+_SYMMETRY: dict[tuple, str | None] = {}  # merge -> how commutativity and associativity hold
+
+
+def identity_law(merge: tuple[ir.SymExpr, ...], identity: tuple[ir.Const, ...]) -> str | None:
+    """``M(a, e) == a``: the proof method, or ``None``."""
+    n = len(merge)
+    method = "canonical"
+    for k in range(n):
+        got = subst(merge[k], {ir.state_var("b", i): identity[i] for i in range(n)})
+        if got is not ir.state_var("a", k):
+            if not equal_modulo_max(got, ir.state_var("a", k)):
+                return None
+            method = "case-split"
+    return method
+
+
+def symmetry_laws(merge: tuple[ir.SymExpr, ...]) -> str | None:
+    """Commutativity and associativity of ``merge``: the proof method, or ``None``.
+
+    Neither depends on the identity element, and associativity is by far the
+    most expensive of the three laws: the answer is kept per merge.
+    """
+    merge = tuple(merge)
+    if merge not in _SYMMETRY:
+        try:
+            _SYMMETRY[merge] = _symmetry_laws(merge)
+        except Unsupported:
+            _SYMMETRY[merge] = None
+    return _SYMMETRY[merge]
+
+
+def _symmetry_laws(merge: tuple[ir.SymExpr, ...]) -> str | None:
     n = len(merge)
     a = [ir.state_var("a", k) for k in range(n)]
     b = [ir.state_var("b", k) for k in range(n)]
     c = [ir.state_var("c", k) for k in range(n)]
     method = "canonical"
-    # identity: M(a, e) == a
-    for k in range(n):
-        got = subst(merge[k], {b[i]: identity[i] for i in range(n)})
-        if got is not a[k]:
-            if not equal_modulo_max(got, a[k]):
-                return None
-            method = "case-split"
     # commutativity: M(a, b) == M(b, a)
     swap = {}
     for i in range(n):
@@ -301,3 +325,14 @@ def check_laws(merge: tuple[ir.SymExpr, ...], identity: tuple[ir.Const, ...]) ->
             if method == "canonical":
                 method = "case-split"
     return method
+
+
+def check_laws(merge: tuple[ir.SymExpr, ...], identity: tuple[ir.Const, ...]) -> str | None:
+    """Return the proof method (``"canonical"``/``"case-split"``/``"numeric"``) or ``None``."""
+    first = identity_law(merge, identity)
+    if first is None:
+        return None
+    second = symmetry_laws(merge)
+    if second is None:
+        return None
+    return max(first, second, key=_RANK.__getitem__)

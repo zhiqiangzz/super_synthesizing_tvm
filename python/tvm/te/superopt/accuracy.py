@@ -28,16 +28,19 @@ static
     Two syntactic properties, each required of a candidate only when the
     original has it. *Bounded exp*: every ``exp`` argument is bounded above
     (``c*x - c*max(.., x, ..)``, a max reduction over the axis ``x`` ranges
-    over, or a constant), in elementwise ops, reducer inputs and merge
-    functions alike. *Positive domains*: every divisor and ``log`` argument
+    over, the mirror image with a minimum, or a constant), in elementwise
+    ops, reducer inputs and merge functions alike. *Positive domains*: every
+    divisor and ``log`` argument
     is provably positive (extents, sums of exponentials, counts), where the
     sign of a reducer state follows its serial fold. A merge dividing by a
     running sum of data of either sign fails the latter.
 differential
     Original and candidate are compiled for LLVM in the working dtype and
     run on the same inputs from a few adversarial families (unit, large
-    offset, wide range); both are measured against a float64 evaluation of
-    the original's own expressions. The candidate fails if it produces a
+    offset, wide range, and -- where the original itself is accurate there --
+    magnitudes at which a sum of squares leaves the floating-point range);
+    both are measured against a float64 evaluation of the original's own
+    expressions. The candidate fails if it produces a
     non-finite value where the original does not, or if it loses more than
     ``log10(factor)`` digits against the better of two yardsticks: the
     original's actual error, and the *inherent* error of the problem at the
@@ -69,6 +72,7 @@ from .symbolic.canonicalize import (
     is_constant,
     map_elems,
     mk_mul,
+    mk_neg,
     positive,
     recanonicalize,
     term_view,
@@ -96,6 +100,18 @@ class AccuracyConfig:
         err(inherent)) + floor_ulps * eps(dtype)``.
     perturbations
         Random one-ulp input perturbations used to estimate the inherent error.
+    positive
+        Names of inputs that are only meaningful when positive (weights,
+        masses), besides those the program itself puts under a ``log``, a
+        ``sqrt`` or a division: they are sampled that way.
+    magnitudes, magnitude_bar
+        Two more families, scaled to the dtype: every input beyond the square
+        root of the largest (``"huge"``) and of the smallest (``"tiny"``)
+        normal number, where a sum of squares overflows or vanishes. They
+        only count where the original is itself accurate to
+        ``magnitude_bar``: a program written to survive such inputs (a norm
+        computed with scaling) has to keep doing so, one that does not is
+        not held to it.
     """
 
     reduce_extent: int = 256
@@ -108,6 +124,9 @@ class AccuracyConfig:
     factor: float = 100.0
     floor_ulps: float = 64.0
     perturbations: int = 2
+    positive: tuple[str, ...] = ()
+    magnitudes: bool = True
+    magnitude_bar: float = 1.0e-3
     seed: int = 0
 
 
@@ -308,6 +327,19 @@ def _dominates(m: ir.SymExpr, x: ir.SymExpr, scope: _Scope, fuel: int = 8) -> bo
         return _dominates(rm, rx, scope, fuel - 1)
     if isinstance(m, ir.Reduce) and m.kind == "max":
         return _over_axis(m.body, m, x, scope)
+    if (
+        isinstance(m, ir.Mul)
+        and len(m.args) == 2
+        and m.args[0] is ir.MINUS_ONE
+        and isinstance(m.args[1], ir.Elem)
+        and m.args[1].tensor <= PSEUDO_BASE
+    ):  # the negation of a stored minimum is a maximum
+        t = m.args[1]
+        d = scope.lower.definition(t.tensor)
+        if d is None:
+            return False
+        imap = {ir.idx(f"i{k}"): i for k, i in enumerate(t.indices)}
+        return _dominates(mk_neg(instantiate(d, imap, scope.depth)), x, scope, fuel - 1)
     if isinstance(m, ir.Elem) and m.tensor <= PSEUDO_BASE:
         d = scope.lower.definition(m.tensor)
         if d is None:
@@ -339,21 +371,51 @@ def bounded_above(arg: ir.SymExpr, scope: _Scope) -> bool:
 
 
 def _bounded_as_written(arg: ir.SymExpr, scope: _Scope) -> bool:
+    """``arg <= C``: every term that can grow is held down by one that dominates it.
+
+    ``Σ c_i x_i - C max(.., x_i, ..)`` with ``Σ c_i <= C`` is at most zero, and so
+    is its mirror image ``C min(.., x_i, ..) - Σ c_i x_i``, which the IR writes
+    with ``min u = -max(-u)`` as subtracted terms only. A dominating term is
+    used up by what it holds down, coefficient for coefficient; whatever is
+    left of a subtracted term has to be non-negative itself.
+    """
     c, terms = term_view(arg)
     if isinstance(c, float) or c > EXP_ARG_LIMIT:
         return c == float("-inf")
     neg = [(core, -coeff) for core, coeff in terms.items() if coeff < 0]
-    used: set[int] = set()
+    left = [coeff for _, coeff in neg]  # of each subtracted term: what is not used up yet
+
+    def absorb(need, holds, skip: int | None = None) -> bool:
+        """Take ``need`` from the subtracted terms that ``holds`` accepts, if they have it."""
+        takers = [n for n in range(len(neg)) if n != skip and left[n] > 0 and holds(neg[n][0])]
+        if sum(left[n] for n in takers) < need:
+            return False
+        for n in takers:
+            take = min(need, left[n])
+            left[n] -= take
+            need -= take
+        return True
+
     for core, coeff in terms.items():
         if coeff <= 0:
             continue
-        for n, (ncore, ncoeff) in enumerate(neg):
-            if n not in used and ncoeff == coeff and _dominates(ncore, core, scope):
-                used.add(n)
-                break
-        else:
+        # x - max(.., x, ..) <= 0, and so is min(.., x, ..) - x
+
+        def holds(m, core=core) -> bool:
+            return _dominates(m, core, scope) or _dominates(mk_neg(core), mk_neg(m), scope)
+
+        if not absorb(coeff, holds):
             return False
-    return all(n in used or _nonneg(core) for n, (core, _) in enumerate(neg))
+    progress = True
+    while progress:  # -u - max(.., -u, ..) <= 0: min(.., u, ..) - u as the IR writes it
+        progress = False
+        for n, (core, _) in enumerate(neg):
+            if left[n] > 0 and not _nonneg(core):
+                x = mk_neg(core)
+                if absorb(left[n], lambda m, x=x: _dominates(m, x, scope), skip=n):
+                    left[n] = Fraction(0)
+                    progress = True
+    return all(left[n] == 0 or _nonneg(core) for n, (core, _) in enumerate(neg))
 
 
 POS, NONNEG, ANY = 2, 1, 0  # sign lattice: > 0, >= 0, unknown
@@ -495,6 +557,24 @@ def static_issues(outputs) -> dict[str, list[str]]:
 # ---------------------------------------------------------------------------
 # differential: float64 reference by interpreting the TE expressions
 # ---------------------------------------------------------------------------
+# Intrinsics the reference can evaluate. The ops around a chain are not analysed,
+# only run, so this covers more than the lowering understands.
+ELEMENTWISE = {
+    "tirx.exp": np.exp,
+    "tirx.log": np.log,
+    "tirx.sqrt": np.sqrt,
+    "tirx.rsqrt": lambda x: 1.0 / np.sqrt(x),
+    "tirx.pow": np.power,
+    "tirx.tanh": np.tanh,
+    "tirx.sigmoid": lambda x: 1.0 / (1.0 + np.exp(-x)),
+    "tirx.fabs": np.abs,
+    "tirx.sin": np.sin,
+    "tirx.cos": np.cos,
+    "tirx.floor": np.floor,
+    "tirx.ceil": np.ceil,
+}
+
+
 class _Reference:
     """Evaluate a TE graph in float64 exactly as written (no rewriting)."""
 
@@ -557,12 +637,9 @@ class _Reference:
             if isinstance(e, cls):
                 return fn(self.ev(e.a, env), self.ev(e.b, env))
         if isinstance(e, Call):
-            unary = {"tirx.exp": np.exp, "tirx.sqrt": np.sqrt, "tirx.log": np.log}
             name = e.op.name
-            if name in unary:
-                return unary[name](self.ev(e.args[0], env))
-            if name == "tirx.rsqrt":
-                return 1.0 / np.sqrt(self.ev(e.args[0], env))
+            if name in ELEMENTWISE:
+                return ELEMENTWISE[name](*(self.ev(a, env) for a in e.args))
             raise Unsupported(f"intrinsic {name}")
         if isinstance(e, tir.ProducerLoad):
             arr = self.tensor(e.producer)
@@ -593,6 +670,8 @@ class _Reference:
                 states = [srcs[0].sum(axis=dims)]
             elif kind == "max":
                 states = [srcs[0].max(axis=dims)]
+            elif kind == "min":
+                states = [srcs[0].min(axis=dims)]
             else:
                 states = self._fold(first.combiner, srcs, shape)
         return [np.asarray(states[int(b.value_index)]).copy() for b in op.body]
@@ -645,11 +724,13 @@ def _var_values(outputs, inputs, config: AccuracyConfig) -> dict[str, int]:
     return {n: (config.reduce_extent if n in reduced else config.other_extent) for n in names}
 
 
-def positive_inputs(outputs, inputs) -> list[bool]:
+def positive_inputs(outputs, inputs, declared=()) -> list[bool]:
     """Per input: is it read under a ``log``, a ``sqrt`` or as a divisor?
 
     Such an input is only meaningful when positive (a weight, a variance); it
     is sampled that way so that the comparison happens on the program's domain.
+    ``declared`` names inputs the caller knows to be positive where the
+    program does not show it (a weight that is only ever summed).
     """
     hits: list = []
 
@@ -667,6 +748,9 @@ def positive_inputs(outputs, inputs) -> list[bool]:
             scan(e.value, inside)
         elif isinstance(e, Call):
             partial = e.op.name in ("tirx.log", "tirx.sqrt", "tirx.rsqrt")
+            if e.op.name == "tirx.pow":  # a negative power divides by its base
+                k = e.args[1]
+                partial = isinstance(k, tir.IntImm | tir.FloatImm) and k.value < 0
             for a in e.args:  # exp maps every real to a positive value
                 scan(a, partial or (inside and e.op.name != "tirx.exp"))
         elif isinstance(e, tir.Reduce):
@@ -676,7 +760,7 @@ def positive_inputs(outputs, inputs) -> list[bool]:
     for op in compute_ops(outputs):
         for body in op.body:
             scan(body, False)
-    return [any(t.op.same_as(h) for h in hits) for t in inputs]
+    return [t.op.name in declared or any(t.op.same_as(h) for h in hits) for t in inputs]
 
 
 def concrete_shape(shape, var_values: dict[str, int]) -> tuple[int, ...]:
@@ -738,17 +822,26 @@ class AccuracyGate:
         self.out_shapes = [tuple(ref.extent(s) for s in o.shape) for o in outputs]
         eps = max(float(np.finfo(d).eps) for d in self.dtypes)
         self.floor = config.floor_ulps * eps
-        positive = positive_inputs(outputs, self.inputs)
+        positive = positive_inputs(outputs, self.inputs, config.positive)
         rng = np.random.default_rng(config.seed)
         signs = np.random.default_rng(config.seed + 1)  # perturbations: data stays fixed
         lib = _compile(self.inputs, outputs)
+        families = [(name, shift, scale, False) for name, shift, scale in config.families]
+        if config.magnitudes:
+            info = np.finfo(self.dtypes[0])
+            families.append(("huge", 0.0, 8.0 * float(np.sqrt(info.max)), True))
+            families.append(("tiny", 0.0, 1.0e-4 * float(np.sqrt(info.tiny)), True))
         # per family: (name, input arrays, float64 reference, original output, original error)
         self.cases = []
-        for name, shift, scale in config.families:
+        for name, shift, scale, magnitude in families:
             arrays = sample_inputs(self.inputs, positive, ref.extent, rng, shift, scale)
-            want = references(outputs, self.inputs, arrays, self.var_values)
+            with np.errstate(all="ignore"):
+                want = references(outputs, self.inputs, arrays, self.var_values)
             if not all(np.all(np.isfinite(w)) for w in want):
                 continue
+            got = _run(lib, arrays, self.out_shapes, self.dtypes)
+            if magnitude and not _rel_err(got, want) <= config.magnitude_bar:
+                continue  # the original does not hold at this magnitude either
             inherent = 0.0
             for _ in range(config.perturbations):
                 moved = [
@@ -758,7 +851,6 @@ class AccuracyGate:
                 ]
                 shifted = references(outputs, self.inputs, moved, self.var_values)
                 inherent = max(inherent, _rel_err(shifted, want))
-            got = _run(lib, arrays, self.out_shapes, self.dtypes)
             self.cases.append((name, arrays, want, got, _rel_err(got, want), inherent))
 
     def check(self, candidates) -> AccuracyReport:

@@ -22,7 +22,14 @@ import tvm.testing
 from tvm import te
 from tvm.te.superopt.dims import DimTable
 from tvm.te.superopt.reducer.derive import derive, domains
-from tvm.te.superopt.reducer.verify import check_laws, identity_safe, numeric_equal
+from tvm.te.superopt.reducer.verify import (
+    _SYMMETRY,
+    check_laws,
+    identity_law,
+    identity_safe,
+    numeric_equal,
+    symmetry_laws,
+)
 from tvm.te.superopt.symbolic import ir
 from tvm.te.superopt.symbolic.canonicalize import (
     mk_add,
@@ -156,6 +163,20 @@ def test_online_softmax_and_welford_meet_the_identity():
     assert identity_safe(spec.merge, spec.identity)
     # a wrong identity is caught here as well as by the laws
     assert not identity_safe(spec.merge, (ir.ONE, ir.ZERO, ir.ZERO))
+
+
+def test_symmetry_is_judged_once_per_merge():
+    """Commutativity and associativity do not depend on the identity element."""
+    a, b = ir.state_var("a", 0), ir.state_var("b", 0)
+    merge = (mk_max(a, b),)
+    _SYMMETRY.pop(merge, None)
+    assert symmetry_laws(merge) == "canonical" and merge in _SYMMETRY
+    assert identity_law(merge, (ir.NEG_INF_C,)) == "canonical"
+    assert identity_law(merge, (ir.ZERO,)) is None  # max(a, 0) is not a
+    assert check_laws(merge, (ir.NEG_INF_C,)) == "canonical"
+    assert check_laws(merge, (ir.ZERO,)) is None
+    lopsided = (mk_sub(a, b),)
+    assert symmetry_laws(lopsided) is None and check_laws(lopsided, (ir.ZERO,)) is None
 
 
 if __name__ == "__main__":

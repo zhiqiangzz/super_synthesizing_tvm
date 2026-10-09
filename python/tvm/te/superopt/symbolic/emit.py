@@ -74,6 +74,12 @@ def to_source(e: ir.SymExpr, env: SourceEnv, hoist: dict[ir.Node, str] | None = 
             out += f" - {n}"
         return f"({out})" if len(pos) + len(neg) > 1 else out
     if isinstance(e, ir.Mul):
+        smallest = ir.min_args(e)
+        if smallest is not None:
+            out = to_source(smallest[0], env, hoist)
+            for a in smallest[1:]:
+                out = f"tir.min({out}, {to_source(a, env, hoist)})"
+            return out
         num, den = [], []
         coeff: ir.Number = Fraction(1)
         for a in e.args:
@@ -128,6 +134,8 @@ def _atom(s: str) -> str:
 def _coeff(a: ir.SymExpr) -> tuple[Fraction, ir.SymExpr]:
     if isinstance(a, ir.Const):
         return a.value, ir.ONE
+    if ir.min_args(a) is not None:  # a minimum is one operand, not minus a maximum
+        return Fraction(1), a
     if isinstance(a, ir.Mul) and isinstance(a.args[0], ir.Const) and not ir.is_inf(a.args[0]):
         rest = a.args[1:]
         core = rest[0] if len(rest) == 1 else ir.raw_mul(rest)
@@ -165,6 +173,14 @@ def shared_subexpressions(
             return
         if not any(isinstance(x, ir.StateVar | ir.Elem) for x in walk(n)):
             return  # a pure constant: printed inline
+        smallest = ir.min_args(n)
+        if smallest is not None:  # -max(-a, -b) is one operation, min(a, b)
+            uses[n] = uses.get(n, 0) + 1
+            if uses[n] == 1:
+                for a in smallest:
+                    visit(a)
+                order.append(n)
+            return
         if isinstance(n, ir.Mul) and isinstance(n.args[0], ir.Const):
             for a in n.args[1:]:  # coefficient wrapper: printed inline as "c * x" / "x - y"
                 visit(a)

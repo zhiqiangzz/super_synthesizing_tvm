@@ -22,7 +22,18 @@ import te_programs
 import tvm.testing
 from tvm import te
 from tvm import tirx as tir
-from tvm.te.superopt.accuracy import AccuracyGate, positive_inputs, references, static_issues
+from tvm.te.superopt.accuracy import (
+    AccuracyConfig,
+    AccuracyGate,
+    _OpLower,
+    _Scope,
+    bounded_above,
+    positive_inputs,
+    references,
+    static_issues,
+)
+from tvm.te.superopt.symbolic import ir
+from tvm.te.superopt.symbolic.canonicalize import mk_add, mk_max, mk_mul, mk_neg, mk_sub
 
 
 # ---------------------------------------------------------------------------
@@ -230,7 +241,9 @@ def test_gate_over_two_outputs():
     X = _xs()
     outs = _logsumexp_inline(X, shifted=True)
     gate = AccuracyGate(outs, [X])
-    assert len(gate.cases) == 3 and gate.required == ["exp", "domain"]
+    # a shifted log-sum-exp holds at every magnitude: the two magnitude families count too
+    assert [c[0] for c in gate.cases] == ["unit", "offset", "wide", "huge", "tiny"]
+    assert gate.required == ["exp", "domain"]
     assert gate.check(outs).ok
     # a wrong second output fails even though the first is exact
     n = X.shape[0]
@@ -246,7 +259,7 @@ def test_inputs_are_sampled_on_the_domain_of_the_program():
     out = _weighted_logsumexp(X, W)
     assert positive_inputs(out, [X, W]) == [False, True]
     gate = AccuracyGate(out, [X, W])
-    assert [c[0] for c in gate.cases] == ["unit", "offset", "wide"]  # no family skipped
+    assert [c[0] for c in gate.cases][:3] == ["unit", "offset", "wide"]  # no family skipped
     assert all(np.all(c[1][1] > 0) for c in gate.cases)
     assert gate.check(out).ok
 
@@ -280,6 +293,83 @@ def test_reference_keeps_reducer_identities_as_written():
     got_mx, got_total = references([mx, total], [X], [data], {"n": 2, "m": 5})
     np.testing.assert_allclose(got_mx, data.max(axis=1), rtol=1e-12)
     np.testing.assert_allclose(got_total, data.astype("float64").sum(axis=1), rtol=1e-12)
+
+
+def _softmin_weights(X):
+    """``lo = min_j x`` and ``Σ exp(-(x - lo))``: the mirror image of a shifted softmax."""
+    n, m = X.shape
+    j1, j2 = te.reduce_axis((0, m), "j"), te.reduce_axis((0, m), "j")
+    lo = te.compute((n,), lambda i: te.min(X[i, j1], axis=j1), name="lo")
+    w = te.compute((n, m), lambda i, k: tir.exp(lo[i] - X[i, k]), name="w")
+    return lo, te.compute((n,), lambda i: te.sum(w[i, j2], axis=j2), name="Z")
+
+
+def test_static_exp_under_a_minimum_shift():
+    X = _xs()
+    assert static_issues(_softmin_weights(X)) == {"exp": [], "domain": []}
+    n, m = X.shape
+    j = te.reduce_axis((0, m), "j")
+    mx = te.compute((n,), lambda i: te.max(X[i, j], axis=j), name="mx")
+    wrong = te.compute((n, m), lambda i, k: tir.exp(mx[i] - X[i, k]), name="wrong")
+    assert static_issues(wrong)["exp"] == ["wrong"]  # max - x is not bounded above
+
+
+def test_one_maximum_bounds_several_terms_of_an_exponent():
+    """``exp(a + 2 b - 3 max(a, b))`` is what two rescalings of a merge multiply out to: the
+    maximum holds every term down, coefficient for coefficient."""
+    lower = _OpLower()
+    scope = _Scope(lower, (), {}, 0)
+    a, b = ir.state_var("a", 0), ir.state_var("b", 0)
+    top = mk_max(a, b)
+    assert bounded_above(mk_sub(mk_add(a, mk_mul(ir.const(2), b)), mk_mul(ir.const(3), top)), scope)
+    assert not bounded_above(
+        mk_sub(mk_add(a, mk_mul(ir.const(3), b)), mk_mul(ir.const(3), top)), scope
+    )
+    # the mirror image, as a minimum is written: 3 min(a, b) - a - 2 b
+    low = mk_neg(mk_max(mk_neg(a), mk_neg(b)))
+    assert bounded_above(mk_sub(mk_sub(mk_mul(ir.const(3), low), a), mk_mul(ir.const(2), b)), scope)
+    assert not bounded_above(mk_sub(a, low), scope)  # a - min(a, b) grows with a
+
+
+def test_magnitude_families_count_where_the_original_holds():
+    """A norm computed with scaling survives inputs whose squares overflow; a plain sum
+    of squares does not, and is not taken for it -- nor held to it when it is the original."""
+    X = _xs()
+    n, m = X.shape
+    j1, j2, j3 = (te.reduce_axis((0, m), "j") for _ in range(3))
+    scale = te.compute((n,), lambda i: te.max(tir.abs(X[i, j1]), axis=j1), name="scale")
+    ssq = te.compute(
+        (n,), lambda i: te.sum((X[i, j2] / scale[i]) * (X[i, j2] / scale[i]), axis=j2), name="ssq"
+    )
+    scaled = te.compute((n,), lambda i: scale[i] * tir.sqrt(ssq[i]), name="scaled")
+    raw = te.compute((n,), lambda i: te.sum(X[i, j3] * X[i, j3], axis=j3), name="raw")
+    plain = te.compute((n,), lambda i: tir.sqrt(raw[i]), name="plain")
+    gate = AccuracyGate(scaled, [X])
+    assert [c[0] for c in gate.cases] == ["unit", "offset", "wide", "huge", "tiny"]
+    report = gate.check(plain)
+    by_family = {f.family: f for f in report.families}
+    assert not report.ok and not by_family["huge"].ok and not by_family["tiny"].ok
+    assert by_family["unit"].ok and by_family["offset"].ok and by_family["wide"].ok
+    # the plain sum as the original: it overflows there itself, the families do not apply
+    loose = AccuracyGate(plain, [X])
+    assert [c[0] for c in loose.cases] == ["unit", "offset", "wide"]
+    off = AccuracyGate(scaled, [X], AccuracyConfig(magnitudes=False))
+    assert [c[0] for c in off.cases] == ["unit", "offset", "wide"] and off.check(plain).ok
+
+
+def test_declared_positive_inputs():
+    """A weight that is only ever summed does not show that it has to be positive."""
+    n, m = te.var("n"), te.var("m")
+    X = te.placeholder((n, m), name="X", dtype="float32")
+    W = te.placeholder((n, m), name="W", dtype="float32")
+    j1, j2 = te.reduce_axis((0, m), "j"), te.reduce_axis((0, m), "j")
+    sw = te.compute((n,), lambda i: te.sum(W[i, j1], axis=j1), name="sw")
+    swx = te.compute((n,), lambda i: te.sum(W[i, j2] * X[i, j2], axis=j2), name="swx")
+    mean = te.compute((n,), lambda i: swx[i] / sw[i], name="mean")
+    assert positive_inputs(mean, [X, W]) == [False, False]
+    assert positive_inputs(mean, [X, W], ("W",)) == [False, True]
+    gate = AccuracyGate(mean, [X, W], AccuracyConfig(positive=("W",)))
+    assert all(np.all(c[1][1] > 0) and np.any(c[1][0] < 0) for c in gate.cases[:1])
 
 
 if __name__ == "__main__":

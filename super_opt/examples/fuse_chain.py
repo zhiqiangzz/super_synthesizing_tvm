@@ -26,10 +26,13 @@ one tuple ``te.comm_reducer`` reduction. For an operator this script shows
   program never computes and where they came from;
 * the unfused program, the hand-written single-pass one and the
   synthesised one side by side: passes over the axis and error against a
-  float64 reference, on centred data and on data with a large offset.
+  float64 reference, on centred data and on data with a large offset;
+* what the probes say about whether a single pass exists at all -- always
+  for a chain that was not fused, for every chain with ``--probes``.
 
-    python super_opt/examples/fuse_chain.py                # every operator
+    python super_opt/examples/fuse_chain.py                # every operator but the slow ones
     python super_opt/examples/fuse_chain.py attention moment3
+    python super_opt/examples/fuse_chain.py --probes zscore_max logit_norm
     python super_opt/examples/fuse_chain.py --list
 """
 
@@ -46,7 +49,7 @@ from harness import Column, label, render_source, render_table
 from rich.console import Console
 from rich.rule import Rule
 
-from tvm.te.superopt import fuse
+from tvm.te.superopt import AccuracyConfig, fuse
 
 OFFSET = 1.0e4  # every input shifted by this much: where expanded formulas cancel
 
@@ -67,6 +70,7 @@ class Outcome:
     fused: bool
     states: str
     derived: str
+    exists: bool | None  # by the probes: is there a finite single pass?
     seconds: float
     as_expected: bool
 
@@ -74,7 +78,7 @@ class Outcome:
 def _measure(name, ins, outs, op: Operator, values, axes, seed: int) -> Form:
     errs = []
     for shift in (0.0, OFFSET):
-        arrays = sample(ins, outs, values, seed, shift=shift)
+        arrays = sample(ins, outs, values, seed, shift=shift, positive=op.positive)
         errs.append(rel_err(run_llvm(ins, outs, arrays, values), op.reference(*arrays)))
     walks = " + ".join(str(passes(outs, extent)) for extent in axes)
     return Form(name, walks, *errs)
@@ -84,7 +88,13 @@ def _show(console: Console, op: Operator, args) -> Outcome:
     console.print(Rule(f"[bold]{op.name}[/]  [dim]({op.group})[/]  {op.doc}"))
     ins, outs = op.unfused()
     start = time.perf_counter()
-    res = fuse(outs, ins, max_states=args.max_states or op.max_states, accuracy=args.accuracy)
+    res = fuse(
+        outs,
+        ins,
+        max_states=args.max_states or op.max_states,
+        accuracy=args.accuracy,
+        accuracy_config=AccuracyConfig(positive=op.positive),
+    )
     seconds = time.perf_counter() - start
 
     written = "\n\n".join("\n".join(c.original()) for c in res.chains)
@@ -95,6 +105,11 @@ def _show(console: Console, op: Operator, args) -> Outcome:
     for c in res.chains:
         if not c.fused:
             console.print(f"[yellow]not fused[/] -- {c.reason}")
+        if args.probes or not c.fused:
+            for v in c.theory.verdicts:
+                console.print(f"  [dim]probes:[/] {v.summary()}")
+            if c.theory.note:
+                console.print(f"  [dim]probes:[/] {c.theory.summary()}")
         if args.verbose:
             for r in c.rejected:
                 console.print(f"  [dim]rejected ({', '.join(r.states)}): {r.why}[/]")
@@ -129,8 +144,11 @@ def _show(console: Console, op: Operator, args) -> Outcome:
     if not op.fusible:
         expected = expected and op.reason in res.summary()
     derived = sorted({name for c in res.chains for name in c.auxiliaries})
+    verdicts = [c.theory.fusible for c in res.chains]
+    exists = None if not verdicts or None in verdicts else all(verdicts)
+    expected = expected and exists == op.exists
     return Outcome(
-        op, res.fused, " + ".join(map(str, states)), ", ".join(derived), seconds, expected
+        op, res.fused, " + ".join(map(str, states)), ", ".join(derived), exists, seconds, expected
     )
 
 
@@ -148,6 +166,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--extent", type=int, default=256, help="reduction extent of the runs")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--tir", action="store_true", help="also print the fused program as TIR")
+    parser.add_argument(
+        "--probes", action="store_true", help="say for every chain whether a single pass exists"
+    )
+    parser.add_argument(
+        "--slow", action="store_true", help="include the operators whose search takes minutes"
+    )
     parser.add_argument("--verbose", action="store_true", help="list the reducers not taken")
     args = parser.parse_args(argv)
     unknown = [n for n in args.operators if n not in OPERATORS]
@@ -173,19 +197,25 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     chosen = [OPERATORS[n] for n in (args.operators or OPERATORS)]
+    if not args.operators and not args.slow:
+        chosen = [op for op in chosen if not op.slow]
     outcomes = [_show(console, op, args) for op in chosen]
     if len(outcomes) > 1:
         console.print(Rule("summary"))
         render_table(
             console,
             title="reduction chains fused",
-            caption="states: per chain; derived: states the program does not compute",
+            caption="states: per chain; derived: states the program does not compute; "
+            "single pass: whether one exists at all, by the probes",
             columns=[
                 label("operator", lambda o: o.op.name),
                 label("group", lambda o: o.op.group),
                 label("fused", lambda o: "[green]yes[/]" if o.fused else "[yellow]no[/]"),
                 Column("states", lambda o: o.states),
                 label("derived", lambda o: o.derived),
+                label(
+                    "single pass", lambda o: {True: "exists", False: "none", None: "-"}[o.exists]
+                ),
                 Column("seconds", lambda o: f"{o.seconds:.2f}"),
                 label("", lambda o: "" if o.as_expected else "[red]unexpected[/]"),
             ],

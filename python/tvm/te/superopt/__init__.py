@@ -29,11 +29,18 @@ program's own tensors restricted to a part of the axis, plus what merging
 two such parts turns out to need (see :mod:`reducer.states`). It performs
 no scheduling and makes no performance claim; that is the job of later
 s_TIR passes.
+
+:func:`judge` answers the question that comes before any derivation: does a
+single pass with finitely many states exist for a chain at all? It probes
+the program (see :mod:`reducer.probe`): a sum that reads an earlier result
+by the rank of its body over elements and contexts, a maximum or minimum by
+whether the element attaining it depends on the context.
 """
 
 from .accuracy import AccuracyConfig, AccuracyReport
 from .dims import DimKey, DimTable
-from .fusion import ChainReport, Fused, fuse
+from .fusion import ChainReport, Fused, fuse, judge
+from .reducer.probe import Theory, Verdict
 from .symbolic import LowerCtx, TensorSem, Unsupported
 
 __all__ = [
@@ -45,6 +52,9 @@ __all__ = [
     "Fused",
     "LowerCtx",
     "TensorSem",
+    "Theory",
     "Unsupported",
+    "Verdict",
     "fuse",
+    "judge",
 ]

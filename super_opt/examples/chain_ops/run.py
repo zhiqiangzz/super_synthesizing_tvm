@@ -38,10 +38,13 @@ def extents(inputs, outputs, reduce: int = 64, other: int = 3) -> dict[str, int]
     return {n: (reduce if n in reduced else other) for n in sorted(names)}
 
 
-def sample(inputs, outputs, values: dict[str, int], seed: int = 0, shift=0.0, scale=1.0):
-    """Random inputs on the domain of the program (positive where it takes a log or divides)."""
+def sample(
+    inputs, outputs, values: dict[str, int], seed: int = 0, shift=0.0, scale=1.0, positive=()
+):
+    """Random inputs on the domain of the program: positive where it takes a log or
+    divides, and for the inputs named in ``positive`` (weights)."""
     rng = np.random.default_rng(seed)
-    positive = positive_inputs(outputs, inputs)
+    positive = positive_inputs(outputs, inputs, positive)
     return sample_inputs(
         inputs, positive, lambda s: concrete_shape([s], values)[0], rng, shift, scale
     )
