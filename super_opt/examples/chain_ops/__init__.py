@@ -44,8 +44,8 @@ The operators are grouped by what fusing them takes:
     the chain ends in a maximum or a minimum, which is decided by an extreme
     of the data;
 ``negative``
-    not fused: no finite single pass exists, or one exists that the
-    derivation or its checks do not reach.
+    not fused: no single pass is known for it, or one is and no reducer for
+    it passes the checks.
 """
 
 from __future__ import annotations
@@ -68,9 +68,9 @@ class Operator:
     fusible: bool = True
     states: int | None = None  # number of reducer states
     reason: str = ""  # part of the reported reason when it is not fusible
-    max_states: int = 4
-    # does a finite single pass exist, by the probes (``None``: no chain to probe)?
-    exists: bool | None = True
+    max_states: int | None = None  # a bound on the reducer other than the judged one
+    # does the theory show a single pass (``None``: no chain is read off the program)?
+    judged: bool | None = True
     positive: tuple[str, ...] = ()  # inputs that are weights: sampled positive
     slow: bool = False  # the search takes minutes
 

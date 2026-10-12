@@ -22,17 +22,17 @@ the moments about it. ``tvm.te.superopt.fuse`` turns each such chain into
 one tuple ``te.comm_reducer`` reduction. For an operator this script shows
 
 * the chain as the program writes it;
+* what the theory says before anything is derived: whether a single pass
+  exists, with how many states, and which reductions they are;
 * the reducer that was synthesised, as TE source, with the states the
   program never computes and where they came from;
 * the unfused program, the hand-written single-pass one and the
   synthesised one side by side: passes over the axis and error against a
-  float64 reference, on centred data and on data with a large offset;
-* what the probes say about whether a single pass exists at all -- always
-  for a chain that was not fused, for every chain with ``--probes``.
+  float64 reference, on centred data and on data with a large offset.
 
     python super_opt/examples/fuse_chain.py                # every operator but the slow ones
     python super_opt/examples/fuse_chain.py attention moment3
-    python super_opt/examples/fuse_chain.py --probes zscore_max logit_norm
+    python super_opt/examples/fuse_chain.py zscore_max logit_norm
     python super_opt/examples/fuse_chain.py --list
 """
 
@@ -47,6 +47,7 @@ from chain_ops import OPERATORS, Operator
 from chain_ops.run import extents, passes, rel_err, run_llvm, sample
 from harness import Column, label, render_source, render_table
 from rich.console import Console
+from rich.markup import escape
 from rich.rule import Rule
 
 from tvm.te.superopt import AccuracyConfig, fuse
@@ -70,7 +71,7 @@ class Outcome:
     fused: bool
     states: str
     derived: str
-    exists: bool | None  # by the probes: is there a finite single pass?
+    judged: str  # by the theory: the states a single pass takes, per chain
     seconds: float
     as_expected: bool
 
@@ -91,7 +92,7 @@ def _show(console: Console, op: Operator, args) -> Outcome:
     res = fuse(
         outs,
         ins,
-        max_states=args.max_states or op.max_states,
+        max_states=args.max_states or op.max_states,  # None: as many as are judged enough
         accuracy=args.accuracy,
         accuracy_config=AccuracyConfig(positive=op.positive),
     )
@@ -103,18 +104,16 @@ def _show(console: Console, op: Operator, args) -> Outcome:
     if res.fused:
         render_source(console, res.source(), "python", "synthesised reducer", f"{seconds:.2f} s")
     for c in res.chains:
-        if not c.fused:
-            console.print(f"[yellow]not fused[/] -- {c.reason}")
-        if args.probes or not c.fused:
-            for v in c.theory.verdicts:
-                console.print(f"  [dim]probes:[/] {v.summary()}")
-            if c.theory.note:
-                console.print(f"  [dim]probes:[/] {c.theory.summary()}")
+        console.print(f"[dim]theory:[/] {escape(c.theory.summary())}")
+        if not c.fused and c.theory.fusible:
+            console.print(f"[yellow]not fused[/] -- {escape(c.reason)}")
+        elif not c.fused:
+            console.print("[yellow]not fused[/]")
         if args.verbose:
             for r in c.rejected:
-                console.print(f"  [dim]rejected ({', '.join(r.states)}): {r.why}[/]")
+                console.print(f"  [dim]rejected ({', '.join(r.states)}): {escape(r.why)}[/]")
     for s in res.skipped:
-        console.print(f"[yellow]not fused[/] ({', '.join(s.members)}) -- {s.reason}")
+        console.print(f"[yellow]not fused[/] ({', '.join(s.members)}) -- {escape(s.reason)}")
     if args.tir and res.fused:
         render_source(console, res.prim_func().script(), "python", "fused program", "TIR")
 
@@ -145,10 +144,12 @@ def _show(console: Console, op: Operator, args) -> Outcome:
         expected = expected and op.reason in res.summary()
     derived = sorted({name for c in res.chains for name in c.auxiliaries})
     verdicts = [c.theory.fusible for c in res.chains]
-    exists = None if not verdicts or None in verdicts else all(verdicts)
-    expected = expected and exists == op.exists
+    expected = expected and (all(verdicts) if verdicts else None) == op.judged
+    judged = " + ".join(
+        "-" if c.theory.states is None else str(c.theory.states) for c in res.chains
+    )
     return Outcome(
-        op, res.fused, " + ".join(map(str, states)), ", ".join(derived), exists, seconds, expected
+        op, res.fused, " + ".join(map(str, states)), ", ".join(derived), judged, seconds, expected
     )
 
 
@@ -166,9 +167,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--extent", type=int, default=256, help="reduction extent of the runs")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--tir", action="store_true", help="also print the fused program as TIR")
-    parser.add_argument(
-        "--probes", action="store_true", help="say for every chain whether a single pass exists"
-    )
     parser.add_argument(
         "--slow", action="store_true", help="include the operators whose search takes minutes"
     )
@@ -205,17 +203,15 @@ def main(argv: list[str] | None = None) -> int:
         render_table(
             console,
             title="reduction chains fused",
-            caption="states: per chain; derived: states the program does not compute; "
-            "single pass: whether one exists at all, by the probes",
+            caption="theory: states that are enough for a single pass (-: none is known); "
+            "states: of the reducer taken; derived: states the program does not compute",
             columns=[
                 label("operator", lambda o: o.op.name),
                 label("group", lambda o: o.op.group),
+                Column("theory", lambda o: o.judged),
                 label("fused", lambda o: "[green]yes[/]" if o.fused else "[yellow]no[/]"),
                 Column("states", lambda o: o.states),
                 label("derived", lambda o: o.derived),
-                label(
-                    "single pass", lambda o: {True: "exists", False: "none", None: "-"}[o.exists]
-                ),
                 Column("seconds", lambda o: f"{o.seconds:.2f}"),
                 label("", lambda o: "" if o.as_expected else "[red]unexpected[/]"),
             ],

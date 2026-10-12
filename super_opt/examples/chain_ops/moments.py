@@ -307,7 +307,6 @@ register(
         _moment_reference(4),
         lambda: _moment_fused(4),
         states=5,
-        max_states=5,
     )
 )
 register(
@@ -318,15 +317,15 @@ register(
         mad_unfused,
         mad_reference,
         fusible=False,
-        reason="dev reads mean from inside its reduction and neither",
-        exists=False,
+        reason="no single pass is known: dev reads mean inside",
+        judged=False,
     )
 )
 register(
     Operator(
         "moment5",
         "negative",
-        "Σ (x - mean)⁵ / n: beyond the polynomial expansion (degree 4)",
+        "Σ (x - mean)⁵ / n: six states are enough, and only as raw power sums",
         lambda: _moment_unfused(5),
         _moment_reference(5),
         fusible=False,
@@ -342,6 +341,6 @@ register(
         cov_matrix_reference,
         fusible=False,
         reason="read at two different indices of C",
-        exists=None,
+        judged=None,
     )
 )

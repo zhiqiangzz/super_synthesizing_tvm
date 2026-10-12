@@ -31,16 +31,18 @@ no scheduling and makes no performance claim; that is the job of later
 s_TIR passes.
 
 :func:`judge` answers the question that comes before any derivation: does a
-single pass with finitely many states exist for a chain at all? It probes
-the program (see :mod:`reducer.probe`): a sum that reads an earlier result
-by the rank of its body over elements and contexts, a maximum or minimum by
-whether the element attaining it depends on the context.
+single pass with finitely many states exist for a chain, and how many are
+enough? The answer is algebra on the program (see :mod:`reducer.theory`):
+one exists where every reduction can be freed of the earlier results it
+reads, a sum by linearity, a maximum or minimum by the functions that grow
+with their argument. :func:`fuse` asks it first and only then looks for a
+reducer.
 """
 
 from .accuracy import AccuracyConfig, AccuracyReport
 from .dims import DimKey, DimTable
 from .fusion import ChainReport, Fused, fuse, judge
-from .reducer.probe import Theory, Verdict
+from .reducer.theory import Judgement
 from .symbolic import LowerCtx, TensorSem, Unsupported
 
 __all__ = [
@@ -50,11 +52,10 @@ __all__ = [
     "DimKey",
     "DimTable",
     "Fused",
+    "Judgement",
     "LowerCtx",
     "TensorSem",
-    "Theory",
     "Unsupported",
-    "Verdict",
     "fuse",
     "judge",
 ]

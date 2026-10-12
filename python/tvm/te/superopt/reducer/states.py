@@ -74,7 +74,15 @@ from ..symbolic.canonicalize import (
 )
 from ..symbolic.realize import node_count
 from .chain import Chain, extent_symbol, partial
-from .derive import ReducerSpec, derive, domains, solve_atoms, spec_key, state_outputs
+from .derive import (
+    ReducerSpec,
+    atoms_in,
+    derive,
+    domains,
+    solve_atoms,
+    spec_key,
+    state_outputs,
+)
 from .rebase import Candidate, Printer, Rebaser, printed_merges, proves
 from .rebase import content as _content
 from .rebase import scaled as _scaled
@@ -100,6 +108,36 @@ class Solution:
         return sum(c.depth for c in self.states)
 
 
+def members_of(chain: Chain, count: bool = True) -> list[Candidate]:
+    """The members of ``chain`` run on a sub-range ``R`` of the axis, producers first.
+
+    ``count`` picks how they run there where they use the extent of the axis
+    as a value (see :func:`chain.partial`).
+    """
+    cands: list[Candidate] = []
+    for m in chain.members:  # producers first: a state only reads earlier ones
+        struct = partial(m.body, chain.axis, count)
+        origin = "member" if m.op is not None else "context"
+        cand = Candidate(m.name, m.kind, origin, struct, struct, m.index, m.pid)
+        cand.state = _defined(struct, cands)
+        cands.append(cand)
+    return cands
+
+
+def _defined(struct: ir.SymExpr, cands: list[Candidate]) -> ir.SymExpr:
+    """``struct`` with every read of a chain member replaced by its definition."""
+    by_pid = {c.pid: c for c in cands if c.pid is not None}
+
+    def actual(n: ir.Elem, depth: int):
+        src = by_pid.get(n.tensor)
+        if src is None:
+            return None
+        imap = {c: n.indices[p] for p, c in enumerate(src.index)}
+        return instantiate(src.state, imap, depth)
+
+    return map_elems(struct, actual)
+
+
 class Pool:
     """The candidates of one chain: its members and what lifting adds to them.
 
@@ -111,12 +149,7 @@ class Pool:
         self.chain = chain
         self.count = count
         _, self.R, _, _ = domains(chain.axis)
-        self.cands: list[Candidate] = []
-        for m in chain.members:  # producers first: a state only reads earlier ones
-            struct = partial(m.body, chain.axis, count)
-            origin = "member" if m.op is not None else "context"
-            self.cands.append(Candidate(m.name, m.kind, origin, struct, struct, m.index, m.pid))
-            self.cands[-1].state = self._state(struct)
+        self.cands: list[Candidate] = members_of(chain, count)
         self.rebaser = Rebaser(self.cands, chain.axis)
         # members reading a context that does not re-base, and of those the ones
         # whose context cannot be hoisted out either
@@ -149,16 +182,7 @@ class Pool:
 
     def _state(self, struct: ir.SymExpr) -> ir.SymExpr:
         """``struct`` with every read of a chain member replaced by its definition."""
-        by_pid = {c.pid: c for c in self.cands if c.pid is not None}
-
-        def actual(n: ir.Elem, depth: int):
-            src = by_pid.get(n.tensor)
-            if src is None:
-                return None
-            imap = {c: n.indices[p] for p, c in enumerate(src.index)}
-            return instantiate(src.state, imap, depth)
-
-        return map_elems(struct, actual)
+        return _defined(struct, self.cands)
 
     def _lift(self) -> None:
         queue = list(self.cands)
@@ -391,6 +415,11 @@ def _written_epilogues(pool: Pool, spec: ReducerSpec, sol) -> tuple[ir.SymExpr, 
     return None if all(a is b for a, b in zip(out, spec.epilogues)) else tuple(out)
 
 
+def _held(state: ir.SymExpr, R: ir.DSym) -> set[ir.SymExpr]:
+    """The reductions over ``R`` a state is made of (the count is known without one)."""
+    return {a for a in atoms_in(state, R) if not isinstance(a, ir.Card)}
+
+
 def _reductions(e: ir.SymExpr) -> list[ir.Reduce]:
     """The reductions of ``e`` that are not inside another one."""
     out: dict[ir.Reduce, None] = {}
@@ -424,12 +453,18 @@ def synthesize(
     last.
     ``seen`` collects the reducers yielded, so that a second pool over the same
     chain does not repeat them.
+
+    A set of states is only handed to :func:`derive` if between them they hold
+    every reduction the required members are functions of: one that no state
+    holds cannot be read back from the reducer.
     """
     pool = source if isinstance(source, Pool) else Pool(source)
     chain = pool.chain
     full, R, _, _ = domains(chain.axis)
     by_pid = pool.rebaser.by_pid
     required = tuple(subst_domain(by_pid[m.pid].state, {R: full}) for m in chain.required)
+    held = {id(c): _held(c.state, R) for c in pool.cands}
+    needed = set().union(*(held[id(by_pid[m.pid])] for m in chain.required))
     seen = set() if seen is None else seen
     for level in range(MAX_HOIST_DEPTH + 1):
         usable = [c for c in pool.cands if c.depth <= level]
@@ -439,6 +474,8 @@ def synthesize(
             found = []
             for chosen in itertools.combinations(usable, size):
                 if max(c.depth for c in chosen) != level:
+                    continue
+                if not needed <= set().union(*(held[id(c)] for c in chosen)):
                     continue
                 states = tuple(c.state for c in chosen)
                 spec = derive(states, required, chain.axis, stats)
@@ -462,4 +499,4 @@ def synthesize(
                 yield sol
 
 
-__all__ = ["Pool", "Solution", "synthesize"]
+__all__ = ["Pool", "Solution", "members_of", "synthesize"]

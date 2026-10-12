@@ -123,6 +123,5 @@ register(
         layernorm_backward_reference,
         layernorm_backward_fused,
         states=5,
-        max_states=5,
     )
 )

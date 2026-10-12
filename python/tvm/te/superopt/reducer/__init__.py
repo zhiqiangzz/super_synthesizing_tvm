@@ -17,7 +17,7 @@
 """From a reduction chain to a tuple ``te.comm_reducer``.
 
 ``chain``   read the chains off a TE graph
-``probe``   whether a finite single pass exists at all, before deriving one
+``theory``  whether a single pass exists and how many states it takes
 ``states``  the candidate states of a chain and the reducers they give
 ``rebase``  merging partial results whose context has moved
 ``derive``  leaf, merge, identity and epilogues from a set of states
@@ -29,27 +29,27 @@
 from .build import Rewriter, build_chain
 from .chain import Chain, Member, Skipped, discover_chains
 from .derive import ReducerSpec, derive
-from .probe import Theory, Verdict, judge
 from .rebase import Candidate
-from .states import Pool, Solution, synthesize
+from .states import Pool, Solution, members_of, synthesize
+from .theory import Judgement, judge
 from .verify import check_laws, identity_safe
 
 __all__ = [
     "Candidate",
     "Chain",
+    "Judgement",
     "Member",
     "Pool",
     "ReducerSpec",
     "Rewriter",
     "Skipped",
     "Solution",
-    "Theory",
-    "Verdict",
     "build_chain",
     "check_laws",
     "derive",
     "discover_chains",
     "identity_safe",
     "judge",
+    "members_of",
     "synthesize",
 ]

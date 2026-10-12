@@ -22,10 +22,20 @@ and returns the same program with every such chain replaced by one tuple
 ``te.comm_reducer`` reduction. Per chain it
 
 1. reads the chain off the graph (:mod:`reducer.chain`);
-2. collects candidate states from the program itself (:mod:`reducer.states`)
-   and derives a reducer from each set of them (:mod:`reducer.derive`);
-3. takes the first reducer that survives the checks below and writes it back
+2. judges it (:mod:`reducer.theory`): whether a single pass exists, which
+   is when every tensor the chain is needed for is a function of reductions
+   that read no earlier result, and how many states are then enough. A
+   chain no single pass is known for is left as it is;
+3. collects candidate states from the program itself (:mod:`reducer.states`)
+   and derives a reducer from each set of at most that many
+   (:mod:`reducer.derive`);
+4. takes the first reducer that survives the checks below and writes it back
    as TE (:mod:`reducer.build`).
+
+The second step is algebra on the program and nothing else: what it says
+exists does exist over the reals. The third and fourth are about floating
+point, where the states the judgement names (plain sums of powers, sums of
+exponentials) are often the wrong ones to keep.
 
 A derived reducer is correct over the reals by construction and its monoid
 laws are verified. The checks are about what that leaves open:
@@ -38,13 +48,8 @@ laws are verified. The checks are about what that leaves open:
 * compiled, it may not be less accurate than the original on adversarial
   inputs (:mod:`accuracy`).
 
-A chain nothing passes for is left as it was, with the reason reported.
-
-Whether a single pass exists at all is a separate question from whether the
-derivation found one. :func:`judge` answers it from the program alone, on
-probes (:mod:`reducer.probe`): the rank of every sum that reads an earlier
-result, the extremes that decide every maximum that does. A chain that is
-not fused carries that verdict next to its reason.
+A chain nothing passes for is left as it was, with the reason reported next
+to the judgement. :func:`judge` gives the judgement alone, deriving nothing.
 """
 
 from __future__ import annotations
@@ -69,10 +74,10 @@ from .accuracy import (
 )
 from .reducer.build import Rewriter, build_chain
 from .reducer.chain import Chain, Skipped, discover_chains
-from .reducer.probe import Theory
-from .reducer.probe import judge as judge_chain
 from .reducer.source import chain_source, describe_members, render
-from .reducer.states import Pool, Solution, synthesize
+from .reducer.states import Pool, Solution, members_of, synthesize
+from .reducer.theory import Judgement
+from .reducer.theory import judge as judge_chain
 from .reducer.verify import identity_safe
 from .symbolic.canonicalize import Unsupported
 
@@ -93,23 +98,16 @@ class Rejected:
 @dataclasses.dataclass
 class ChainReport:
     chain: Chain
+    theory: Judgement  # whether a single pass exists and how many states are enough
     fused: bool = False
     reason: str = ""  # why not, when it is not fused
     solution: Solution | None = None
     accuracy: AccuracyReport | None = None
     rejected: list[Rejected] = dataclasses.field(default_factory=list)
-    _theory: Theory | None = dataclasses.field(default=None, repr=False)
 
     @property
     def axis(self) -> str:
         return self.chain.jname
-
-    @property
-    def theory(self) -> Theory:
-        """Whether a finite single pass exists for this chain, by the probes."""
-        if self._theory is None:
-            self._theory = judge_chain(self.chain)
-        return self._theory
 
     @property
     def members(self) -> tuple[str, ...]:
@@ -206,8 +204,8 @@ class Fused:
         lines = []
         for c in self.chains:
             lines.append(c.summary())
-            if not c.fused:  # found nothing: does anything exist?
-                lines.append(f"  probes: {c.theory.summary()}")
+            if c.theory.fusible:  # otherwise the judgement is the reason
+                lines.append(f"  theory: {c.theory.summary()}")
         lines += [f"{', '.join(s.members)}: not fused -- {s.reason}" for s in self.skipped]
         if not lines:
             lines = ["no reduction chain in the program"]
@@ -252,32 +250,24 @@ class _Agreement:
         return True
 
 
+def _judge(chain: Chain) -> Judgement:
+    return judge_chain(chain, members_of(chain))
+
+
 def _why_not(pool: Pool, report: ChainReport, max_states: int) -> str:
+    """Why a chain that has a single pass was not fused."""
     parts = []
     for name in pool.unrebased:
         cand = next(c for c in pool.cands if c.name == name)
         ctx = ", ".join(pool.rebaser.by_pid[p].name for p in pool.rebaser.contexts(cand))
-        if name in pool.stuck:
-            verdict = report.theory.verdict(name)
-            exists = verdict is not None and verdict.fusible
-            parts.append(
-                f"{name} reads {ctx} from inside its reduction and neither re-basing nor "
-                "hoisting takes it out "
-                + ("(a finite lifting exists by the probes, none was derived)" if exists else "")
-                + ("" if exists else "(no finite lifting found)")
-            )
-        else:
-            parts.append(
-                f"{name} cannot be re-based around {ctx}, and with {ctx} hoisted out no "
-                f"reducer of at most {max_states} states was accepted"
-            )
+        parts.append(f"{name} cannot be re-based around {ctx}, which leaves taking {ctx} out")
     if report.rejected:
         first = report.rejected[0]
         parts.append(
             f"{len(report.rejected)} derived reducer(s) rejected, e.g. "
             f"({', '.join(first.states)}): {first.why}"
         )
-    elif not parts:
+    else:
         need = ", ".join(report.required)
         parts.append(f"no set of at most {max_states} derived states reproduces {need}")
     return "; ".join(parts)
@@ -289,10 +279,15 @@ def _fuse_chain(
     rewriter: Rewriter,
     gate: AccuracyGate | None,
     agree: _Agreement,
-    max_states: int,
+    max_states: int | None,
     accuracy: str,
 ) -> tuple[ChainReport, Rewriter]:
-    report = ChainReport(chain)
+    report = ChainReport(chain, _judge(chain))
+    if not report.theory.fusible:
+        report.reason = report.theory.summary()
+        return report, rewriter
+    if max_states is None:
+        max_states = report.theory.states
     dtype = str(chain.reductions[0].tensor.dtype)
     barred = set(gate.required) if gate is not None and accuracy == "filter" else set()
     pools = [Pool(chain, count) for count in Pool.readings(chain)]
@@ -336,7 +331,7 @@ def fuse(
     outputs,
     inputs,
     *,
-    max_states: int = 4,
+    max_states: int | None = None,
     accuracy: str = "filter",
     accuracy_config: AccuracyConfig | None = None,
 ) -> Fused:
@@ -348,8 +343,9 @@ def fuse(
         The program, by its outputs.
     inputs : list of te.Tensor
         Its placeholders, in the order the generated function takes them.
-    max_states : int
-        Largest reducer considered (number of state tensors).
+    max_states : int, optional
+        Largest reducer considered (number of state tensors). By default as
+        many as the judgement of the chain says are enough.
     accuracy : {"filter", "report", "off"}
         ``"filter"`` only accepts a reducer that is as accurate as the original
         (see :mod:`accuracy`); ``"report"`` accepts the first one that is
@@ -378,7 +374,7 @@ def fuse(
         except Unsupported as err:
             # nothing is rewritten that cannot be checked against the original
             why = f"the program cannot be evaluated to check a rewrite against ({err})"
-            reports = [ChainReport(chain, reason=why) for chain in chains]
+            reports = [ChainReport(chain, _judge(chain), reason=why) for chain in chains]
             chains = []
         for chain in chains:
             report, rewriter = _fuse_chain(
@@ -389,18 +385,21 @@ def fuse(
     return Fused([rewriter.tensor(t) for t in outputs], inputs, reports, skipped, verdict)
 
 
-def judge(outputs) -> list[Theory]:
-    """For every reduction chain behind ``outputs``: does a finite single pass exist?
+def judge(outputs) -> list[Judgement]:
+    """For every reduction chain behind ``outputs``: does a single pass exist, and
+    with how many states?
 
-    Nothing is derived or rewritten. Each chain is probed
-    (:mod:`reducer.probe`): a sum that reads an earlier result is fusible
-    when its body separates into finitely many products of an element part
-    and a context part (its rank), a maximum or minimum when the element
-    attaining it does not depend on the context (an extreme of the data).
+    Nothing is derived or rewritten, and nothing is run: the answer is read
+    off the program by the rules of :mod:`reducer.theory`. A sum lets go of
+    whatever multiplies it and does not move with the axis; a maximum of
+    whatever is added to it, of a factor that cannot be negative and of a
+    function that grows with its argument. Where that frees every reduction
+    of the earlier results it reads, those reductions are the states of a
+    single pass.
     """
     outputs = [outputs] if isinstance(outputs, te.Tensor) else list(outputs)
     chains, _ = discover_chains(outputs)
-    return [judge_chain(chain) for chain in chains]
+    return [_judge(chain) for chain in chains]
 
 
 __all__ = ["ChainReport", "Fused", "Rejected", "fuse", "judge"]
