@@ -359,7 +359,6 @@ register(
         kurtosis_reference,
         kurtosis_fused,
         states=5,
-        max_states=5,
         slow=True,
     )
 )
@@ -372,7 +371,6 @@ register(
         pearson_reference,
         pearson_fused,
         states=6,
-        max_states=6,
     )
 )
 register(

@@ -453,8 +453,8 @@ register(
         logit_norm_unfused,
         logit_norm_reference,
         fusible=False,
-        reason="den reads nrm from inside its reduction and neither",
-        exists=False,
+        reason="no single pass is known: den reads nrm inside",
+        judged=False,
     )
 )
 register(
@@ -465,7 +465,7 @@ register(
         standardised_softmax_unfused,
         standardised_softmax_reference,
         fusible=False,
-        reason="(no finite lifting found)",
-        exists=False,
+        reason="no single pass is known: zden reads sigma inside",
+        judged=False,
     )
 )

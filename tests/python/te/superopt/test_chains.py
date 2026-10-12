@@ -77,19 +77,20 @@ def test_operator_outside_the_method(name):
 
 
 @pytest.mark.parametrize("name", list(OPERATORS))
-def test_probes_say_whether_a_single_pass_exists(name):
-    """Without deriving anything: every fused operator has one, and so do some that are
-    not fused (a fifth moment, a norm with scaling); a mean absolute deviation has none."""
+def test_theory_says_whether_a_single_pass_exists_and_with_how_many_states(name):
+    """Before anything is derived: every fused operator has one, with at least as many
+    states judged enough as the reducer taken has; so do some that are not fused (a
+    fifth moment, a norm with scaling); for a mean absolute deviation none is known."""
     op = OPERATORS[name]
     _, outs = op.unfused()
-    theories = judge(outs)
-    if op.exists is None:
-        assert theories == []  # no chain was read off the program
+    judgements = judge(outs)
+    if op.judged is None:
+        assert judgements == []  # no chain was read off the program
         return
-    assert theories and all(t.fusible is op.exists for t in theories), [
-        t.summary() for t in theories
+    assert judgements and all(j.fusible is op.judged for j in judgements), [
+        j.summary() for j in judgements
     ]
-    assert not op.fusible or op.exists
+    assert not op.fusible or all(j.states >= op.states for j in judgements)
 
 
 def test_registry_covers_every_mechanism():

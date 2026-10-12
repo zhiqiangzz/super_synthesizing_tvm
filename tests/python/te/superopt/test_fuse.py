@@ -324,17 +324,20 @@ def test_function_that_grows_with_its_argument_leaves_a_maximum(body, reducer, s
 
 
 @pytest.mark.parametrize(
-    "body, reducer, why",
+    "body, reducer, inside",
     [
-        (lambda d: d * d, te.min, "no finite lifting found"),  # nearest the mean
-        (lambda d: -(d * d), te.max, "no finite lifting found"),
-        (lambda d: d * d * d + d, te.max, "exists by the probes, none was derived"),
+        (lambda d: d * d, te.min, "- X[i, j]^2"),  # nearest the mean
+        (lambda d: -(d * d), te.max, "- X[i, j]^2"),
+        (lambda d: d * d * d + d, te.max, "X[i, j]^3"),  # grows with x, but is not one power
     ],
 )
-def test_maximum_that_is_no_extreme_is_left_alone(body, reducer, why):
+def test_maximum_that_is_no_extreme_is_left_alone(body, reducer, inside):
     X, out = _centred(body, reducer)
     res = fuse(out, [X])
-    assert not res.fused and why in res.summary() and res.outputs[0].same_as(out)
+    (report,) = res.chains
+    assert not res.fused and not report.theory.fusible and res.outputs[0].same_as(out)
+    assert report.reason.startswith("no single pass is known: out reads mean inside max_j")
+    assert inside in report.reason and not report.rejected  # nothing was looked for
 
 
 def test_epilogue_keeps_the_function_as_the_program_writes_it():
@@ -444,7 +447,7 @@ def test_scaled_norm_is_not_traded_for_a_sum_of_squares():
     (report,) = res.chains
     assert not res.fused and res.outputs[0].same_as(outs[0])
     assert any("huge: inf" in r.why and "tiny" in r.why for r in report.rejected)
-    assert report.theory.fusible  # a single pass exists: the reference BLAS loop is one
+    assert report.theory.states == 3  # a single pass exists: the two extremes and Σ x²
     loose = fuse(outs, ins, accuracy="off")
     assert loose.fused
     values = extents(ins, outs)
@@ -464,7 +467,10 @@ def test_a_budget_too_small_is_reported_not_raised():
     res = fuse(outs, ins, max_states=4)
     (report,) = res.chains
     assert not res.fused and "no set of at most 4 derived states" in report.reason
-    assert report.theory.fusible and "probes:" in res.summary()
+    assert report.theory.states == 6
+    assert "theory: a single pass with 6 state(s) exists" in res.summary()
+    # left to the judgement, the reducer has the six states it takes
+    assert fuse(outs, ins).chains[0].states == ("mean_x", "mean_y", "sxy", "sxx", "syy", "count")
 
 
 def test_ops_around_a_chain_are_run_not_analysed():
@@ -505,7 +511,8 @@ def test_reports_name_what_was_derived_and_why_something_was_not():
     ins, outs = OPERATORS["mean_abs_deviation"].unfused()
     res = fuse(outs, ins)
     (report,) = res.chains
-    assert not report.fused and report.states == () and "no finite lifting" in report.reason
+    assert not report.fused and report.states == ()
+    assert report.reason == report.theory.summary() and "no single pass is known" in report.reason
 
     ins, outs = OPERATORS["cov_matrix"].unfused()
     res = fuse(outs, ins)

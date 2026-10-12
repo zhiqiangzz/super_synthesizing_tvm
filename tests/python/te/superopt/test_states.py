@@ -22,9 +22,10 @@ from chain_ops import OPERATORS
 
 import tvm.testing
 from tvm import te
+from tvm.te.superopt.reducer import states as states_module
 from tvm.te.superopt.reducer.chain import discover_chains
-from tvm.te.superopt.reducer.derive import domains
-from tvm.te.superopt.reducer.states import Pool, _content, _scaled, synthesize
+from tvm.te.superopt.reducer.derive import atoms_in, domains
+from tvm.te.superopt.reducer.states import Pool, _content, _scaled, members_of, synthesize
 from tvm.te.superopt.symbolic import ir
 from tvm.te.superopt.symbolic.canonicalize import (
     mk_add,
@@ -157,6 +158,46 @@ def test_third_and_fourth_moments_lift_the_lower_ones():
     assert {second.origin, third.origin} == {"closure"}
     first = next(synthesize(pool, max_states=5))
     assert len(first.states) == 5 and first.spec.merge_print is not None
+
+
+def test_members_run_on_a_part_of_the_axis_are_the_first_candidates():
+    """What the judgement and the pool both start from: the chain's own tensors over a
+    sub-range, each defined down to the boundary."""
+    chain = _chain("variance")
+    members = members_of(chain)
+    assert [(c.name, c.origin) for c in members] == [
+        ("total_mean", "member"),
+        ("mean", "member"),
+        ("ss", "member"),
+    ]
+    pool = Pool(chain)
+    assert [c.state for c in pool.cands[: len(members)]] == [c.state for c in members]
+    R = pool.R
+    assert set(atoms_in(members[2].state, R)) == {
+        mk_reduce("sum", R, 0, _x()),
+        mk_reduce("sum", R, 0, mk_pow(_x(), 2)),
+        mk_card(R),
+    }
+
+
+def test_only_state_sets_that_hold_every_needed_reduction_are_derived(monkeypatch):
+    """A reduction no state holds cannot be read back from the reducer: a set that
+    lacks one of those the required tensors are functions of is not tried at all."""
+    pool = _pool("variance")
+    R = pool.R
+    needed = {mk_reduce("sum", R, 0, _x()), mk_reduce("sum", R, 0, mk_pow(_x(), 2))}
+    tried = []
+    derive = states_module.derive
+
+    def recording(states, required, axis, stats=None):
+        tried.append(states)
+        return derive(states, required, axis, stats)
+
+    monkeypatch.setattr(states_module, "derive", recording)
+    assert list(synthesize(pool, max_states=3))
+    assert tried and all(needed <= {a for s in states for a in atoms_in(s, R)} for states in tried)
+    subsets = sum(1 for k in (1, 2, 3) for _ in itertools.combinations(range(len(pool.cands)), k))
+    assert len(tried) < subsets  # the count alone, the mean alone, ... were never derived
 
 
 def test_every_derived_state_comes_out_of_the_program():

@@ -32,15 +32,15 @@ value::
     max_j exp(l_j - mean)       =  exp(max_j l_j - mean)
     max_j (x_j - mean)²         =  max(max_j x_j - mean, mean - min_j x_j)²
 
-Three programs mark where this ends. A square under a *minimum* is smallest
-at the element nearest the mean, which is no extreme: no single pass exists.
-A sum of two growing functions, ``(x - mean)³ + (x - mean)``, is still
-largest at the largest element, but it is not one function of one
-reduction, and the derivation does not see it. And a sum of absolute
-deviations from the maximum does not split for an arbitrary context, while
-a maximum is never below its elements, where ``|x - max x|`` is
-``max x - x``: a single pass exists, the derivation does not use that fact
-and leaves the program alone.
+Three programs mark where this ends; for none of them do the rules show a
+single pass. A square under a *minimum* is smallest at the element nearest
+the mean, which is no extreme of the data. A sum of two growing functions,
+``(x - mean)³ + (x - mean)``, is still largest at the largest element, so a
+single pass exists; but it is not one function of one reduction, and the
+rules do not see it. A sum of absolute deviations from the maximum does not
+split for an arbitrary context, while a maximum is never below its
+elements, where ``|x - max x|`` is ``max x - x``: again a single pass
+exists, and the rules, which do not know that, leave the program alone.
 """
 
 from __future__ import annotations
@@ -379,7 +379,6 @@ register(
         papr_reference,
         papr_fused,
         states=5,
-        max_states=5,
     )
 )
 register(
@@ -401,8 +400,8 @@ register(
         min_sq_deviation_unfused,
         min_sq_deviation_reference,
         fusible=False,
-        reason="no finite lifting found",
-        exists=False,
+        reason="no single pass is known: near reads mean inside",
+        judged=False,
     )
 )
 register(
@@ -413,7 +412,8 @@ register(
         monotone_sum_unfused,
         monotone_sum_reference,
         fusible=False,
-        reason="a finite lifting exists by the probes, none was derived",
+        reason="no single pass is known: top reads mean inside",
+        judged=False,
     )
 )
 register(
@@ -424,6 +424,7 @@ register(
         abs_from_max_unfused,
         abs_from_max_reference,
         fusible=False,
-        reason="a finite lifting exists by the probes, none was derived",
+        reason="no single pass is known: gap reads mx inside",
+        judged=False,
     )
 )
