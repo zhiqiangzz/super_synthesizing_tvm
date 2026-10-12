@@ -150,6 +150,7 @@ class ChainReport:
             "context": "computed in place by the program",
             "extent": "the extent of the axis, as far as it has been reduced",
             "part": "one of the reductions {} is the largest of",
+            "inner": "a reduction {} is a function of",
             "closure": "left behind when {} is re-based",
             "hoist": "left when the contexts of {} are taken out of its reduction",
         }

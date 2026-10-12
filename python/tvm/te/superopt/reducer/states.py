@@ -41,7 +41,11 @@ hoisting
 parts
     A member that is the largest of several reductions (``max_j |x - mean|``
     is the larger of ``max_j (x - mean)`` and ``max_j (mean - x)``) has no
-    state of its own to merge: each of those reductions is a candidate.
+    state of its own to merge: each of those reductions is a candidate. So
+    is the reduction left inside a function that was taken out of a maximum
+    because it grows with its argument: ``max_j (x - mean)³`` is the cube of
+    ``max_j (x - mean)``, ``max_j (x - mean)²`` the square of the larger of
+    the two above.
 
 A state set is a subset of the candidates. :func:`derive` decides whether it
 is a reducer; smaller sets come first, then those that hoist less.
@@ -65,12 +69,13 @@ from ..symbolic.canonicalize import (
     mk_mul,
     nonneg_alias,
     nonnegative,
+    subst,
     subst_domain,
 )
 from ..symbolic.realize import node_count
 from .chain import Chain, extent_symbol, partial
-from .derive import ReducerSpec, derive, domains, solve_atoms, spec_key
-from .rebase import Candidate, Printer, Rebaser, printed_merges
+from .derive import ReducerSpec, derive, domains, solve_atoms, spec_key, state_outputs
+from .rebase import Candidate, Printer, Rebaser, printed_merges, proves
 from .rebase import content as _content
 from .rebase import scaled as _scaled
 
@@ -173,16 +178,22 @@ class Pool:
 
     # -- parts -------------------------------------------------------------------
     def _parts(self, cand: Candidate) -> list[Candidate]:
-        """The reductions ``cand`` is the largest (or the smallest) of."""
-        e = cand.struct
-        if isinstance(e, ir.Mul):
+        """The reductions ``cand`` is the largest (or the smallest) of, or a function of."""
+        e, inner = cand.struct, False
+        if cand.kind in ("max", "min"):
+            e, inner = _unwrapped(e)
+        elif isinstance(e, ir.Mul):
             maxes = [f for f in e.args if isinstance(f, ir.Max)]
             if len(maxes) == 1 and all(is_constant(f) for f in e.args if f is not maxes[0]):
                 e = maxes[0]
-        if not isinstance(e, ir.Max):
+        if isinstance(e, ir.Max):
+            args = e.args
+        elif inner and isinstance(e, ir.Reduce):
+            args = (e,)
+        else:
             return []
         out = []
-        for n, struct in enumerate(e.args):
+        for n, struct in enumerate(args):
             if not contains_node(struct, lambda x: isinstance(x, ir.Reduce)):
                 continue
             state = self._state(struct)
@@ -191,7 +202,7 @@ class Pool:
                 Candidate(
                     f"{cand.name}.m{n}",
                     cand.kind,
-                    "part",
+                    "inner" if inner else "part",
                     _scaled(state, by),
                     _scaled(struct, by),
                     cand.index,
@@ -321,6 +332,78 @@ class Pool:
         return coeffs
 
 
+def _unwrapped(e: ir.SymExpr) -> tuple[ir.SymExpr, bool]:
+    """What is left of ``e`` under the functions the canonical rules took out of its
+    maximum (a power, ``exp``, ``log``), and whether there was one.
+
+    A constant factor and terms without a reduction are stepped over as well.
+    """
+    inner = False
+
+    def reduces(x: ir.SymExpr) -> bool:
+        return contains_node(x, lambda n: isinstance(n, ir.Reduce))
+
+    while True:
+        if isinstance(e, ir.Pow):
+            e, inner = e.base, True
+        elif isinstance(e, ir.Exp | ir.Log):
+            e, inner = e.arg, True
+        elif isinstance(e, ir.Mul | ir.Add):
+            held = [a for a in e.args if reduces(a)]
+            if len(held) != 1 or not all(is_constant(a) for a in e.args if a is not held[0]):
+                return e, inner
+            e = held[0]
+        else:
+            return e, inner
+
+
+def _written_epilogues(pool: Pool, spec: ReducerSpec, sol) -> tuple[ir.SymExpr, ...] | None:
+    """The epilogues with a function around a maximum kept as the program writes it.
+
+    Over the states ``max_j x`` and ``mean`` the canonical epilogue of
+    ``max_j (x - mean)³`` is the expanded cube, four large terms that cancel;
+    the cube of ``max_j x - mean`` is what the program computes. It is used
+    where it is the shorter of the two, once it is proven equal to the
+    canonical one; ``None`` when no epilogue changes.
+    """
+    chain = pool.chain
+    full = ir.dfull(chain.axis)
+    try:
+        outputs = state_outputs(spec.states, sol, chain.axis)
+    except Unsupported:
+        return None
+    out = []
+    for m, canonical in zip(chain.required, spec.epilogues):
+        cand = pool.rebaser.by_pid[m.pid]
+        out.append(canonical)
+        if cand.kind not in ("max", "min") or not _unwrapped(cand.struct)[1]:
+            continue
+        try:
+            values = {
+                red: subst(subst_domain(pool._state(red), {pool.R: full}), outputs)
+                for red in _reductions(cand.struct)
+            }
+        except Unsupported:
+            continue
+        written = ir.raw_subst(cand.struct, values)
+        if node_count((written,)) < node_count((canonical,)) and proves(written, canonical):
+            out[-1] = written
+    return None if all(a is b for a, b in zip(out, spec.epilogues)) else tuple(out)
+
+
+def _reductions(e: ir.SymExpr) -> list[ir.Reduce]:
+    """The reductions of ``e`` that are not inside another one."""
+    out: dict[ir.Reduce, None] = {}
+    stack = [e]
+    while stack:
+        n = stack.pop()
+        if isinstance(n, ir.Reduce):
+            out[n] = None
+        else:
+            stack.extend(n.children())
+    return list(out)
+
+
 def synthesize(
     source: Chain | Pool,
     *,
@@ -365,10 +448,14 @@ def synthesize(
                 if key in seen:
                     continue
                 seen.add(key)
-                printer = Printer(pool.rebaser, pool.cands, chosen, spec, solve_atoms(states, R))
+                sol = solve_atoms(states, R)
+                printer = Printer(pool.rebaser, pool.cands, chosen, spec, sol)
                 printed = printed_merges(printer)
                 if printed is not None:
                     spec = dataclasses.replace(spec, merge_print=printed)
+                written = _written_epilogues(pool, spec, sol)
+                if written is not None:
+                    spec = dataclasses.replace(spec, epilogue_print=written)
                 rank = (printed is None, node_count(spec.merge_code), len(found))
                 found.append((rank, Solution(spec, tuple(chosen))))
             for _, sol in sorted(found, key=lambda x: x[0]):

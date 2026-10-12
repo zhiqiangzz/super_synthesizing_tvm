@@ -181,7 +181,7 @@ def chain_source(
 
     # a member that needs a compute of its own keeps its name; the state behind it steps aside
     epilogued = set()
-    for m, expr in zip(chain.required, spec.epilogues):
+    for m, expr in zip(chain.required, spec.epilogue_code):
         whole = m.coords == tuple(range(rank))
         if not (whole and isinstance(expr, ir.Elem) and expr.tensor < 0):
             epilogued.add(identifier(m.name))
@@ -223,7 +223,7 @@ def chain_source(
     lines.append(f'    name="{name}",')
     lines.append(")")
 
-    for m, expr in zip(chain.required, spec.epilogues):
+    for m, expr in zip(chain.required, spec.epilogue_code):
         if identifier(m.name) not in epilogued:
             continue
         own = [iv.var.name for iv in m.op.axis]

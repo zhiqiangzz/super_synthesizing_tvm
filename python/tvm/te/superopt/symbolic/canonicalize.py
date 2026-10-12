@@ -32,8 +32,12 @@ node for the operation, applying (to a fixpoint) the rewrite theory:
   on the bound index, ``Σ_D c = c |D|``;
 * for ``max`` reductions: ``max_j (f + c) = max_j f + c``,
   ``max_j c f = c max_j f`` (``c >= 0``: a positive number, a square root, an
-  even power), ``max_j max(f, g) = max(max_j f, max_j g)``,
-  ``max_j exp(f) = exp(max_j f)``;
+  even power), ``max_j max(f, g) = max(max_j f, max_j g)``, and a function
+  that grows with its argument commutes with the maximum:
+  ``max_j exp(f) = exp(max_j f)``, the same for ``log``, for a root and for
+  an odd power, ``max_j f³ = (max_j f)³``; an even power grows with ``|f|``,
+  ``max_j f² = max(max_j f, max_j -f)²``. A power that has been expanded is
+  recognised again (``x² - 2 x c + c²`` is ``(x - c)²``);
 * domain algebra: ``Σ_{A u B} = Σ_A + Σ_B``, ``max_{A u B} = max(max_A,
   max_B)``, ``Σ_∅ = 0``, ``max_∅ = -inf``.
 
@@ -43,6 +47,7 @@ equality modulo this theory.
 
 from __future__ import annotations
 
+import itertools
 from fractions import Fraction
 
 from . import ir
@@ -503,12 +508,34 @@ def _mk_rmax(domain: Domain, level: int, body: SymExpr) -> SymExpr:
         return mk_max(*[mk_reduce("max", domain, level, a) for a in body.args])
     if isinstance(body, Exp):
         return mk_exp(mk_reduce("max", domain, level, body.arg))
+    if isinstance(body, Log):
+        return mk_log(mk_reduce("max", domain, level, body.arg))
     if isinstance(body, Add):
         dep, free = _partition_terms(body, level)
+        # A power of a sum has terms of its own that do not move with the index
+        # (the c² of (f - c)²), next to those that are added to it: every way of
+        # telling them apart is tried, fewest left outside first.
+        sizes = range(len(free) + 1) if len(free) <= MAX_FREE_TERMS else (0,)
+        for size in sizes:
+            for outside in itertools.combinations(range(len(free)), size):
+                inside = mk_add(*dep, *[t for k, t in enumerate(free) if k not in outside])
+                power = _perfect_power(inside) if isinstance(inside, Add) else None
+                if power is None:
+                    continue
+                out = _rmax_scaled_power(domain, level, *power)
+                if out is not None:
+                    rest = mk_add(*[free[k] for k in outside])
+                    return mk_add(out, shift(rest, level + 1, -1))
         if free:
             out = shift(mk_add(*free), level + 1, -1)
             return mk_add(out, mk_reduce("max", domain, level, mk_add(*dep)))
     coeff, factors, exp_arg = factor_view(body)
+    if exp_arg is None and len(factors) == 1 and isinstance(coeff, Fraction):
+        ((base, p),) = factors.items()
+        if p != 1:
+            out = _rmax_scaled_power(domain, level, coeff, base, p)
+            if out is not None:
+                return out
     inner: list[SymExpr] = []
     outer: list[SymExpr] = []
     if isinstance(coeff, Fraction) and coeff > 0:
@@ -532,6 +559,94 @@ def _mk_rmax(domain: Domain, level: int, body: SymExpr) -> SymExpr:
         outer_shifted = [shift(x, level + 1, -1) for x in outer]
         return mk_mul(*outer_shifted, mk_reduce("max", domain, level, mk_mul(*inner)))
     return ir.raw_reduce("max", domain, level, body)
+
+
+def _rmax_scaled_power(domain: Domain, level: int, k: Fraction, u: SymExpr, p) -> SymExpr | None:
+    """``max_j k uᵖ`` with the maximum taken to ``u``, or ``None`` where it does not go.
+
+    A positive power grows with ``u`` when it is odd or a root (a root is only
+    defined for ``u >= 0``), and with ``|u|`` otherwise. Under a negative ``k``
+    an odd power is the same power of ``-u``; an even one falls with ``|u|``
+    and its maximum is no extreme of ``u``.
+    """
+    p = Fraction(p)
+    if p <= 0 or k == 0:
+        return None
+    odd = p.numerator % 2 == 1 and p.denominator % 2 == 1
+    if k < 0:
+        if not odd:
+            return None
+        k, u = -k, mk_neg(u)
+    grows = odd or p.denominator % 2 == 0 or nonnegative(u)
+    top = mk_reduce("max", domain, level, u)
+    if not grows:
+        top = mk_max(top, mk_reduce("max", domain, level, mk_neg(u)))
+    return mk_mul(const(k), mk_pow(top, p))
+
+
+MAX_POWER = 8  # the highest power of a sum looked for in its expansion
+MAX_FREE_TERMS = 4  # index-free terms of a body tried as part of the power or next to it
+
+
+def _perfect_power(e: Add) -> tuple[Fraction, SymExpr, int] | None:
+    """``(k, u, n)`` with ``e = k uⁿ`` for a sum ``u``, as a product of ``n`` factors
+    ``u`` expands, for the largest such ``n``.
+
+    The terms of ``e`` that are ``n``-th powers on their own give the terms of
+    ``u`` up to a sign under an even ``n``; the candidate is kept only if
+    expanding it gives ``e`` back.
+    """
+    c, terms = term_view(e)
+    if isinstance(c, float):
+        return None
+    for n in range(MAX_POWER, 1, -1):
+        found = [(coeff, _root(core, n)) for core, coeff in terms.items()]
+        found = [(coeff, root) for coeff, root in found if root is not None]
+        if c != 0:
+            found.append((c, ONE))
+        if not 2 <= len(found) <= 5:
+            continue
+        k = found[0][0]
+        roots = []
+        for coeff, root in found:
+            r = _exact_root(abs(coeff / k), n)
+            if r is None or (n % 2 == 0 and coeff / k < 0):
+                continue  # not a power on its own after all: a cross term
+            roots.append(mk_mul(const(r if coeff / k > 0 else -r), root))
+        if len(roots) < 2:
+            continue
+        target = mk_mul(const(1 / k), e)
+        if n % 2:
+            choices = [(1,) * len(roots)]
+        else:  # an even power does not tell the sign of a term: the first is fixed
+            rest = itertools.product((1, -1), repeat=len(roots) - 1)
+            choices = [(1, *flips) for flips in rest]
+        for flips in choices:
+            u = mk_add(*[r if f == 1 else mk_neg(r) for f, r in zip(flips, roots)])
+            if isinstance(u, Add) and _expanded_power(u, n) is target:
+                return k, u, n
+    return None
+
+
+def _expanded_power(u: SymExpr, n: int) -> SymExpr:
+    """``uⁿ`` formed factor by factor, which expands a sum at every degree."""
+    out: SymExpr = ONE
+    for _ in range(n):
+        out = mk_mul(out, u)
+    return out
+
+
+def _root(core: SymExpr, n: int) -> SymExpr | None:
+    """``r`` with ``rⁿ = core`` for a product of ``n``-th powers, else ``None``."""
+    _, factors, exp_arg = factor_view(core)
+    out: list[SymExpr] = []
+    for base, p in factors.items():
+        if p.denominator != 1 or p.numerator % n != 0:
+            return None
+        out.append(mk_pow(base, p / n))
+    if exp_arg is not None:
+        out.append(mk_exp(mk_mul(const(Fraction(1, n)), exp_arg)))
+    return mk_mul(*out) if out else None
 
 
 def mk_card(domain: Domain) -> SymExpr:
