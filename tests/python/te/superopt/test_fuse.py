@@ -29,6 +29,8 @@ from tvm.te.superopt import fuse
 from tvm.te.superopt.accuracy import references
 from tvm.te.superopt.reducer import Pool, Rewriter, build_chain, synthesize
 from tvm.te.superopt.reducer.source import identifier
+from tvm.te.superopt.symbolic import ir
+from tvm.te.superopt.symbolic.canonicalize import recanonicalize
 from tvm.te.superopt.symbolic.lower import compute_ops
 
 
@@ -280,6 +282,94 @@ def test_largest_absolute_deviation_is_two_extremes():
     assert report.fused and [c.origin for c in report.solution.states].count("part") == 2
     assert "is the largest of" in "".join(report.derived())
     _same_results(ins, outs, res)
+
+
+def _centred(body, reducer=te.max, name="out"):
+    """``reducer_j body(x_j - mean)``, the mean being one more pass before it."""
+    n, m = te.var("n"), te.var("m")
+    X = te.placeholder((n, m), name="X")
+    j1, j2 = te.reduce_axis((0, m), "j"), te.reduce_axis((0, m), "j")
+    total = te.compute((n,), lambda i: te.sum(X[i, j1], axis=j1), name="total")
+    mean = te.compute((n,), lambda i: total[i] / m.astype("float32"), name="mean")
+    out = te.compute((n,), lambda i: reducer(body(X[i, j2] - mean[i]), axis=j2), name=name)
+    return X, out
+
+
+@pytest.mark.parametrize(
+    "body, reducer, states",
+    [
+        (lambda d: d * d * d, te.max, 3),  # grows with d: the largest x
+        (lambda d: tir.power(d, tir.const(5.0, "float32")), te.max, 3),
+        (lambda d: tir.exp(d), te.max, 3),
+        (lambda d: tir.exp(d * d * d), te.max, 3),
+        (lambda d: d * d * d, te.min, 3),  # the smallest x
+        (lambda d: -(d * d * d), te.max, 3),
+        (lambda d: d * d, te.max, 4),  # grows with |d|: the largest or the smallest x
+        (lambda d: d * d * d * d, te.max, 4),
+        (lambda d: 2 * d * d + 1, te.max, 4),
+        (lambda d: -(d * d), te.min, 4),  # min -d² = -max d²
+    ],
+)
+def test_function_that_grows_with_its_argument_leaves_a_maximum(body, reducer, states):
+    """``max_j g(x_j - mean) = g(max_j (x_j - mean))`` for a ``g`` that grows; an even
+    power grows with the absolute value and takes both extremes."""
+    X, out = _centred(body, reducer)
+    res = fuse(out, [X])
+    (report,) = res.chains
+    assert report.fused and len(report.states) == states, res.summary()
+    assert {c.origin for c in report.solution.auxiliaries} == {"extent", "inner"}
+    assert "is a function of" in "".join(report.derived())
+    assert passes([out], X.shape[1]) == 2 and passes(res.outputs, X.shape[1]) == 1
+    _same_results([X], [out], res)
+
+
+@pytest.mark.parametrize(
+    "body, reducer, why",
+    [
+        (lambda d: d * d, te.min, "no finite lifting found"),  # nearest the mean
+        (lambda d: -(d * d), te.max, "no finite lifting found"),
+        (lambda d: d * d * d + d, te.max, "exists by the probes, none was derived"),
+    ],
+)
+def test_maximum_that_is_no_extreme_is_left_alone(body, reducer, why):
+    X, out = _centred(body, reducer)
+    res = fuse(out, [X])
+    assert not res.fused and why in res.summary() and res.outputs[0].same_as(out)
+
+
+def test_epilogue_keeps_the_function_as_the_program_writes_it():
+    """``max_j ((x - mean) / sigma)³`` over ``max_j x``, the mean and the deviation: the
+    canonical epilogue is the expanded cube, four large terms that cancel on shifted
+    data. Written as the cube of the standard score it is as accurate as the program."""
+    n, m = te.var("n"), te.var("m")
+    X = te.placeholder((n, m), name="X")
+    count = m.astype("float32")
+    j1, j2, j3 = (te.reduce_axis((0, m), "j") for _ in range(3))
+    total = te.compute((n,), lambda i: te.sum(X[i, j1], axis=j1), name="total")
+    mean = te.compute((n,), lambda i: total[i] / count, name="mean")
+    ss = te.compute(
+        (n,), lambda i: te.sum((X[i, j2] - mean[i]) * (X[i, j2] - mean[i]), axis=j2), name="ss"
+    )
+    sigma = te.compute((n,), lambda i: tir.sqrt(ss[i] / count), name="sigma")
+
+    def cube(i):
+        z = (X[i, j3] - mean[i]) / sigma[i]
+        return te.max(z * z * z, axis=j3)
+
+    out = te.compute((n,), cube, name="out")
+    res = fuse(out, [X])
+    (report,) = res.chains
+    assert report.fused and report.states[:3] == ("mean", "ss", "count"), res.summary()
+    (extreme,) = [c for c in report.solution.states if c.origin == "hoist"]
+    assert "max_j X[i, j]" in "".join(report.derived()) and extreme.source == "out"
+    spec = report.solution.spec
+    assert spec.epilogue_print is not None and spec.epilogue_code is spec.epilogue_print
+    (written,), (canonical,) = spec.epilogue_print, spec.epilogues
+    assert isinstance(written, ir.Pow) and written.exponent == 3
+    assert isinstance(canonical, ir.Add) and recanonicalize(written) is canonical
+    assert passes([out], m) == 3 and passes(res.outputs, m) == 1
+    assert res.accuracy is not None and res.accuracy.ok
+    _same_results([X], [out], res)
 
 
 # ---------------------------------------------------------------------------

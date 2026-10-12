@@ -170,7 +170,7 @@ def build_chain(chain: Chain, spec: ReducerSpec, rewriter: Rewriter) -> list[te.
         names = [iv.var.name for iv in m.op.axis]
         return te.compute(m.tensor.shape, fepilogue, name=m.name, varargs_names=names)
 
-    for m, expr in zip(chain.required, spec.epilogues):
+    for m, expr in zip(chain.required, spec.epilogue_code):
         rewriter.replace(m.tensor, epilogue(m, expr))
     return states
 

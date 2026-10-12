@@ -82,7 +82,7 @@ class Candidate:
     name: str
     # "sum" / "max" / "min": merged by re-basing; "value": a function of other candidates
     kind: str
-    origin: str  # "member", "context", "extent", "part", "closure" or "hoist"
+    origin: str  # "member", "context", "extent", "part", "inner", "closure" or "hoist"
     state: ir.SymExpr  # canonical, down to the boundary tensors
     struct: ir.SymExpr  # the same with reads of chain members kept (pinned) as written
     index: tuple[ir.IndexExpr, ...]  # chain coordinates of its own axes

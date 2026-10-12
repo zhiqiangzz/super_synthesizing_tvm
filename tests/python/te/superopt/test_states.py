@@ -166,7 +166,8 @@ def test_every_derived_state_comes_out_of_the_program():
         pool = _pool(name)
         by_name = {c.name: c for c in pool.cands}
         for c in pool.cands:
-            assert c.origin in ("member", "context", "extent", "part", "closure", "hoist"), c.name
+            origins = ("member", "context", "extent", "part", "inner", "closure", "hoist")
+            assert c.origin in origins, c.name
             if c.origin == "closure":
                 d = pool.rebaser.decompose(by_name[c.source])
                 coeffs = [pool.rebaser.coeff_state(t) for t in d.all_terms() if t.side == "a"]
@@ -290,6 +291,36 @@ def test_largest_of_several_reductions_is_taken_apart():
     x = _x()
     assert _by_state(pool, mk_reduce("max", pool.R, 0, x)).origin == "hoist"
     assert _by_state(pool, mk_reduce("max", pool.R, 0, mk_mul(ir.MINUS_ONE, x))) is not None
+
+
+def test_function_taken_out_of_a_maximum_leaves_its_reduction():
+    """``max_j (x - mean)²`` is the square of the larger of two reductions and
+    ``max_j exp(l - mean)`` the exponential of one: those reductions are the candidates,
+    re-based by a shift like any maximum; the member is formed from them at the end."""
+    pool = _pool("peak_power")
+    whole = next(c for c in pool.cands if c.name == "peak")
+    assert isinstance(whole.struct, ir.Pow) and isinstance(whole.struct.base, ir.Max)
+    assert pool.rebaser.decompose(whole) is None
+    inner = [c for c in pool.cands if c.origin == "inner"]
+    assert [c.source for c in inner] == ["peak", "peak"]
+    assert all(pool.rebaser.decompose(c) is not None for c in inner)
+    first = next(synthesize(pool))
+    assert {c.name for c in inner} <= set(_names(first)) and "peak" not in _names(first)
+    assert first.spec.merge_print is not None and first.spec.epilogue_print is None
+
+    pool = _pool("peak_to_geomean")
+    whole = next(c for c in pool.cands if c.name == "ratio")
+    assert isinstance(whole.struct, ir.Exp)
+    (inner,) = [c for c in pool.cands if c.origin == "inner"]
+    assert inner.source == "ratio" and pool.rebaser.decompose(inner) is not None
+    assert _names(next(synthesize(pool))) == ["mean", "count", inner.name]
+
+
+def test_sum_of_growing_functions_is_not_one_reduction():
+    """``max_j ((x - mean)³ + (x - mean))``: nothing was taken out, nothing is inside."""
+    pool = _pool("monotone_sum")
+    assert not [c for c in pool.cands if c.origin == "inner"] and pool.stuck == ["top"]
+    assert list(synthesize(pool)) == []
 
 
 def test_context_that_cannot_be_negative_leaves_a_maximum():

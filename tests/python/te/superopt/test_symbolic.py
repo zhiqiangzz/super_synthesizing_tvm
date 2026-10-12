@@ -32,6 +32,7 @@ from tvm.te.superopt.symbolic.canonicalize import (
     mk_card,
     mk_div,
     mk_exp,
+    mk_log,
     mk_max,
     mk_mul,
     mk_neg,
@@ -230,6 +231,69 @@ def test_nonnegative_factors_leave_a_maximum():
     assert mk_reduce("max", dom, 0, mk_mul(known, f)) is mk_mul(known, plain)
     # and out of an elementwise maximum
     assert mk_max(mk_mul(root, x), mk_mul(root, y)) is mk_mul(root, mk_max(x, y))
+
+
+_AXIS = ir.dfull(DimTable().key(te.var("m")))
+
+
+def _top(body):
+    return mk_reduce("max", _AXIS, 0, body)
+
+
+def test_growing_functions_leave_a_maximum():
+    """``max_j g(f_j) = g(max_j f_j)`` where ``g`` grows with its argument: an odd power,
+    a root, ``exp``, ``log``. An even power grows with ``|f|``, the larger of ``f`` and
+    ``-f``; under a negative factor it falls with it and has no extreme of ``f`` to go to."""
+    f = ir.elem(0, (ir.idx("i0"), ir.bidx(0)))
+    plain = _top(f)
+    assert _top(mk_pow(f, 3)) is mk_pow(plain, 3)
+    assert _top(mk_pow(f, Fraction(1, 2))) is mk_pow(plain, Fraction(1, 2))
+    assert _top(mk_log(f)) is mk_log(plain)
+    assert _top(mk_exp(mk_pow(f, 3))) is mk_exp(mk_pow(plain, 3))  # one inside the other
+    assert _top(mk_neg(mk_pow(f, 3))) is mk_pow(_top(mk_neg(f)), 3)  # -f³ = (-f)³
+    either = mk_max(plain, _top(mk_neg(f)))
+    assert _top(mk_pow(f, 2)) is mk_pow(either, 2)
+    assert _top(mk_mul(c3, mk_pow(f, 4))) is mk_mul(c3, mk_pow(either, 4))
+    known = nonneg_alias(f)  # nothing to take the absolute value of
+    assert _top(mk_pow(known, 2)) is mk_pow(_top(known), 2)
+    falls = _top(mk_neg(mk_pow(f, 2)))
+    assert isinstance(falls, ir.Reduce) and falls.body is mk_neg(mk_pow(f, 2))
+    # the same reduction as a sum is left alone: a power does not commute with it
+    assert isinstance(mk_reduce("sum", falls.domain, 0, mk_pow(f, 3)), ir.Reduce)
+
+
+def test_expanded_power_under_a_maximum_is_recognised():
+    """A power of a sum is stored expanded; under a maximum it is found again, whatever
+    its degree, and is only taken for one if expanding the root gives it back."""
+    f = ir.elem(0, (ir.idx("i0"), ir.bidx(0)))
+    c = ir.elem(1, (ir.idx("i0"),))
+    d = mk_sub(f, c)
+    plain = mk_sub(_top(f), c)  # max_j (f - c)
+    either = mk_max(plain, mk_add(_top(mk_neg(f)), c))  # max_j |f - c|
+    cube, square = mk_pow(d, 3), mk_pow(d, 2)
+    assert isinstance(cube, ir.Add) and isinstance(square, ir.Add)
+    assert _top(cube) is mk_pow(plain, 3)
+    assert _top(square) is mk_pow(either, 2)
+    assert _top(mk_pow(d, 4)) is mk_pow(either, 4)  # a fourth power, not a square of a square
+    fifth = ir.ONE
+    for _ in range(5):
+        fifth = mk_mul(fifth, d)
+    assert isinstance(fifth, ir.Add) and _top(fifth) is mk_pow(plain, 5)
+    assert _top(mk_mul(c2, square)) is mk_mul(c2, mk_pow(either, 2))
+    assert _top(mk_neg(cube)) is mk_pow(mk_add(_top(mk_neg(f)), c), 3)  # (c - f)³
+    assert _top(mk_add(square, ir.ONE)) is mk_add(mk_pow(either, 2), ir.ONE)
+    # of a quotient: ((f - c) / s)³ with s inside the reduction as well
+    s = ir.elem(2, (ir.idx("i0"),))
+    z = mk_div(d, s)
+    assert _top(mk_pow(z, 3)) is mk_pow(_top(z), 3)
+
+    def reductions(e):
+        return [n for n in _all_nodes(e) if isinstance(n, ir.Reduce)]
+
+    # -(f - c)² falls with |f - c|; a cube plus its root grows with f but is not a power
+    for body in (mk_neg(square), mk_add(cube, d)):
+        (left,) = reductions(_top(body))
+        assert isinstance(left.body, ir.Add) and left.body is not f
 
 
 def test_minimum_and_absolute_value_are_written_with_max():

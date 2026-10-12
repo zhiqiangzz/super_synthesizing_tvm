@@ -76,6 +76,9 @@ class ReducerSpec:
     # The merge as it is evaluated, when it differs from the canonical ``merge``
     # it is proven equal to (see ``rebase``): each side's context re-based.
     merge_print: tuple[ir.SymExpr, ...] | None = None
+    # The epilogues as they are evaluated, when they differ from the canonical
+    # ones: a function taken out of a maximum kept as the program writes it.
+    epilogue_print: tuple[ir.SymExpr, ...] | None = None
 
     @property
     def arity(self) -> int:
@@ -85,6 +88,11 @@ class ReducerSpec:
     def merge_code(self) -> tuple[ir.SymExpr, ...]:
         """The merge to generate code from."""
         return self.merge_print if self.merge_print is not None else self.merge
+
+    @property
+    def epilogue_code(self) -> tuple[ir.SymExpr, ...]:
+        """The epilogues to generate code from."""
+        return self.epilogue_print if self.epilogue_print is not None else self.epilogues
 
     def pretty(self) -> str:
         lines = [f"comm_reduce over ax{self.axis} ({self.proof}):"]
@@ -340,6 +348,19 @@ def out_ref(k: int, closed: ir.SymExpr) -> ir.SymExpr:
     return ir.elem(-(k + 1), tuple(ir.idx(nm) for nm in names))
 
 
+def state_outputs(states, sol, axis: DimKey) -> dict[ir.SymExpr, ir.SymExpr]:
+    """The reductions over the whole axis that ``states`` determine, over the state outputs."""
+    full, R, _, _ = domains(axis)
+    closed = tuple(subst_domain(s, {R: full}) for s in states)
+    refs = {ir.state_var("a", k): out_ref(k, closed[k]) for k in range(len(states))}
+    out = {}
+    for atom, expr in sol.items():
+        atom_full = subst_domain(atom, {R: full})
+        if not is_constant(atom_full):
+            out[atom_full] = subst_domain(subst(expr, refs), {R: full})
+    return out
+
+
 def derive(
     states: tuple[ir.SymExpr, ...],
     required: tuple[ir.SymExpr, ...],
@@ -363,13 +384,8 @@ def derive(
         return None
     n = len(states)
     closed = tuple(subst_domain(s, {R: full}) for s in states)
-    refs = {ir.state_var("a", k): out_ref(k, closed[k]) for k in range(n)}
     try:
-        out_map = {}
-        for atom, expr in sol.items():
-            atom_full = subst_domain(atom, {R: full})
-            if not is_constant(atom_full):
-                out_map[atom_full] = subst_domain(subst(expr, refs), {R: full})
+        out_map = state_outputs(states, sol, axis)
         epilogues = tuple(subst(t, out_map) for t in required)
     except Unsupported:  # the closed form is not defined over these states (0 / 0)
         count(stats, "derive:uncovered")
@@ -416,6 +432,7 @@ __all__ = [
     "singleton",
     "solve_atoms",
     "spec_key",
+    "state_outputs",
     "state_refs",
     "state_vars",
     "swap_sides",
