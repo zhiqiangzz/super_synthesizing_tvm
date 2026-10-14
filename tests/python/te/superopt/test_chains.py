@@ -16,8 +16,6 @@
 # under the License.
 """Every operator of the registry: unfused, fused by hand, and fused by synthesis."""
 
-import os
-
 import pytest
 from chain_ops import OPERATORS
 from chain_ops.run import extents, passes, rel_err, run_llvm, sample
@@ -26,17 +24,10 @@ import tvm.testing
 from tvm.te.superopt import AccuracyConfig, fuse, judge
 
 TOLERANCE = 1.0e-4  # float32 programs against a float64 reference, unit-scale data
-SLOW = pytest.mark.skipif(
-    not os.environ.get("TVM_SUPEROPT_SLOW"), reason="the search takes minutes"
-)
 
 
 def _operators(fusible: bool) -> list:
-    return [
-        pytest.param(name, marks=SLOW) if op.slow else name
-        for name, op in OPERATORS.items()
-        if op.fusible == fusible
-    ]
+    return [name for name, op in OPERATORS.items() if op.fusible == fusible]
 
 
 @pytest.mark.parametrize("name", _operators(True))

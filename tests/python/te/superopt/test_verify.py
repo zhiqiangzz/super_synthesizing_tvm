@@ -14,22 +14,23 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Monoid laws of derived reducers and what they cannot see about floating point."""
+"""Equalities by proof, the laws of derived reducers, and the identity in floating point."""
 
 import itertools
 
 import tvm.testing
 from tvm import te
 from tvm.te.superopt.dims import DimTable
-from tvm.te.superopt.reducer.derive import derive, domains
-from tvm.te.superopt.reducer.verify import (
-    _SYMMETRY,
-    check_laws,
+from tvm.te.superopt.reducer.derive import (
+    derive,
+    domains,
     identity_law,
-    identity_safe,
-    numeric_equal,
-    symmetry_laws,
+    identity_of,
+    invariant_holds,
+    merge_of,
+    solve_atoms,
 )
+from tvm.te.superopt.reducer.verify import identity_safe, prove_equal
 from tvm.te.superopt.symbolic import ir
 from tvm.te.superopt.symbolic.canonicalize import (
     mk_add,
@@ -61,47 +62,89 @@ def _x():
 
 
 # ---------------------------------------------------------------------------
-# laws
+# equality by proof
 # ---------------------------------------------------------------------------
-def test_laws_sum_pair_and_rejections():
-    a0, a1, b0, b1 = _sv("a", 0), _sv("a", 1), _sv("b", 0), _sv("b", 1)
-    assert check_laws((mk_add(a0, b0), mk_add(a1, b1)), (ir.ZERO, ir.ZERO)) == "canonical"
-    assert check_laws((mk_sub(a0, b0),), (ir.ZERO,)) is None  # not commutative
-    assert check_laws((mk_add(a0, b0),), (ir.ONE,)) is None  # wrong identity
-    assert check_laws((mk_max(a0, b0),), (ir.NEG_INF_C,)) == "canonical"
-    assert check_laws((mk_max(a0, b0),), (ir.ZERO,)) is None
-
-
-def test_laws_online_softmax_reference_merge():
-    a0, a1, a2 = (_sv("a", k) for k in range(3))
-    b0, b1, b2 = (_sv("b", k) for k in range(3))
-    m = mk_max(a0, b0)
-    ra, rb = mk_exp(mk_sub(a0, m)), mk_exp(mk_sub(b0, m))
-    merge = (m, mk_add(mk_mul(a1, ra), mk_mul(b1, rb)), mk_add(mk_mul(a2, ra), mk_mul(b2, rb)))
-    assert check_laws(merge, (ir.NEG_INF_C, ir.ZERO, ir.ZERO)) in ("canonical", "case-split")
-    # breaking the rescale breaks associativity
-    bad = (m, mk_add(mk_mul(a1, ra), b1), mk_add(mk_mul(a2, ra), mk_mul(b2, rb)))
-    assert check_laws(bad, (ir.NEG_INF_C, ir.ZERO, ir.ZERO)) is None
-
-
-def test_rational_identities_are_decided_exactly():
-    """A degree-6 identity whose float64 residue is far above any fixed tolerance."""
+def test_rational_identities_are_proven_by_a_common_denominator():
+    """A degree-6 identity the canonical rules do not normalise: SymPy decides it."""
     a, b, c = _sv("a", 0), _sv("b", 0), _sv("c", 0)
     cube = mk_pow(mk_add(a, b, c), 3)
     lhs = mk_div(mk_mul(cube, cube), mk_pow(mk_add(a, b), 2))
     rhs = mk_div(mk_pow(mk_add(a, b, c), 6), mk_pow(mk_add(a, b), 2))
-    assert numeric_equal(lhs, rhs)
+    assert prove_equal(lhs, rhs) in ("canonical", "sympy")
     off = mk_add(rhs, mk_div(ir.const(1), ir.const(10**12)))
-    assert not numeric_equal(lhs, off)
+    assert prove_equal(lhs, off) is None
 
 
-def test_log_arguments_are_sampled_positive():
+def test_welford_merge_written_with_the_merged_mean_is_proven():
+    """The printed form of a Welford merge against Σx² - (Σx)²/n: equal as rational functions."""
+    ca, cb, ma, mb, sa, sb = (_sv(side, k) for k in (2, 0, 1) for side in "ab")
+    m = mk_div(mk_add(mk_mul(ca, ma), mk_mul(cb, mb)), mk_add(ca, cb))
+    printed = mk_add(
+        sa, sb, mk_mul(ca, mk_pow(mk_sub(m, ma), 2)), mk_mul(cb, mk_pow(mk_sub(m, mb), 2))
+    )
+    total = mk_add(mk_mul(ca, ma), mk_mul(cb, mb))
+    canonical = mk_sub(
+        mk_add(sa, sb, mk_mul(ca, mk_pow(ma, 2)), mk_mul(cb, mk_pow(mb, 2))),
+        mk_div(mk_pow(total, 2), mk_add(ca, cb)),
+    )
+    assert printed is not canonical
+    assert prove_equal(printed, canonical) == "sympy"
+
+
+def test_a_maximum_is_split_into_the_cases_of_which_argument_wins():
+    a0, a1, b0, b1 = _sv("a", 0), _sv("a", 1), _sv("b", 0), _sv("b", 1)
+    m = mk_max(a0, b0)
+    written = mk_add(mk_mul(a1, mk_exp(mk_sub(a0, m))), mk_mul(b1, mk_exp(mk_sub(b0, m))))
+    # the same with the larger side written out in each case
+    other = mk_add(
+        mk_mul(a1, mk_exp(mk_sub(a0, mk_max(b0, a0)))), mk_mul(b1, mk_exp(mk_sub(b0, m)))
+    )
+    assert prove_equal(written, other) is not None
+    assert prove_equal(mk_max(a0, b0), a0) is None  # only where a0 wins
+
+
+def test_what_is_not_proven_is_not_equal():
+    """Nothing is sampled: an equality that needs the sign of its variables is refused."""
     a, b = _sv("a", 0), _sv("b", 0)
-    lhs = mk_log(mk_mul(a, b))  # not split by the canonical rules: signs unknown
+    lhs = mk_log(mk_mul(a, b))  # log a + log b only for a, b > 0
     rhs = mk_add(mk_log(a), mk_log(b))
     assert lhs is not rhs
-    assert numeric_equal(lhs, rhs)
-    assert not numeric_equal(lhs, mk_add(rhs, ir.const(1)))
+    assert prove_equal(lhs, rhs) is None
+
+
+# ---------------------------------------------------------------------------
+# laws: from the invariant, the identity from the definitions
+# ---------------------------------------------------------------------------
+def _derived_merge(states, R, axis):
+    _, _, A, B = domains(axis)
+    sol = solve_atoms(states, R)
+    return tuple(merge_of(s, sol, R, A, B) for s in states), A, B
+
+
+def test_laws_rest_on_the_invariant_and_the_identity_law():
+    axis, full, R = _axis()
+    x = _x()
+    states = (
+        mk_reduce("max", R, 0, x),
+        mk_reduce("sum", R, 0, mk_exp(mk_sub(x, mk_reduce("max", R, 0, x)))),
+    )
+    merge, A, B = _derived_merge(states, R, axis)
+    assert invariant_holds(states, merge, R, A, B) is not None
+    identity, how = identity_of(states, merge, R, A, B)
+    assert identity == (ir.NEG_INF_C, ir.ZERO) and how is not None
+    # a merge that is not the derived one breaks the invariant
+    bad = (merge[0], mk_add(_sv("a", 1), _sv("b", 1)))
+    assert invariant_holds(states, bad, R, A, B) is None
+    # and a wrong identity breaks the identity law
+    assert identity_law(states, merge, (ir.ZERO, ir.ZERO), R, A, B) is None
+
+
+def test_a_mean_has_no_value_on_an_empty_part_and_any_identity_will_do():
+    axis, full, R = _axis()
+    n, mean, m2, _ = _moments(R)
+    merge, A, B = _derived_merge((n, mean, m2), R, axis)
+    identity, _ = identity_of((n, mean, m2), merge, R, A, B)
+    assert identity == (ir.ZERO, ir.ZERO, ir.ZERO)
 
 
 def _moments(R):
@@ -163,20 +206,6 @@ def test_online_softmax_and_welford_meet_the_identity():
     assert identity_safe(spec.merge, spec.identity)
     # a wrong identity is caught here as well as by the laws
     assert not identity_safe(spec.merge, (ir.ONE, ir.ZERO, ir.ZERO))
-
-
-def test_symmetry_is_judged_once_per_merge():
-    """Commutativity and associativity do not depend on the identity element."""
-    a, b = ir.state_var("a", 0), ir.state_var("b", 0)
-    merge = (mk_max(a, b),)
-    _SYMMETRY.pop(merge, None)
-    assert symmetry_laws(merge) == "canonical" and merge in _SYMMETRY
-    assert identity_law(merge, (ir.NEG_INF_C,)) == "canonical"
-    assert identity_law(merge, (ir.ZERO,)) is None  # max(a, 0) is not a
-    assert check_laws(merge, (ir.NEG_INF_C,)) == "canonical"
-    assert check_laws(merge, (ir.ZERO,)) is None
-    lopsided = (mk_sub(a, b),)
-    assert symmetry_laws(lopsided) is None and check_laws(lopsided, (ir.ZERO,)) is None
 
 
 if __name__ == "__main__":

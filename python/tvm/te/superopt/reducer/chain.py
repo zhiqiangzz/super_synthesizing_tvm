@@ -111,6 +111,14 @@ class Chain:
     required: list[Member] = dataclasses.field(default_factory=list)
 
     @property
+    def count(self) -> bool:
+        """How the members run on a part where they use the extent as a value
+        (:func:`partial`): as the size of the part, unless the extent is a term
+        of what a reduction adds up (``0.9 y + 0.1 / k``), where it is the
+        constant of the problem."""
+        return not self.lower.extent_in_terms
+
+    @property
     def boundary(self) -> list[te.Tensor]:
         return self.lower.placeholders
 
@@ -170,16 +178,43 @@ class ChainLower(LowerCtx):
         self.contexts: list[tuple[Member, Member]] = []
         self._site: set[ir.IndexExpr] = set()
         self._current: Member | None = None
+        # the extent met inside what a reduction adds up, other than dividing all of it
+        self.extent_in_terms = False
+        self._body: object = None  # the source of the reduction being lowered
 
     def member(self, op) -> Member | None:
         return next((m for m in self.members if m.op is not None and m.op.same_as(op)), None)
 
     def lower_expr(self, e, env, level):
         if isinstance(e, tir.IntImm | tir.FloatImm) and e.value == self._extent:
+            self._note_extent(e, level)
             return self._extent_symbol
+        if isinstance(e, tir.Var) and ir.shape_sym(e.name) is self._extent_symbol:
+            self._note_extent(e, level)
         if level and self._is_context(e, env):
             return self._context(e, env, level)
         return super().lower_expr(e, env, level)
+
+    def lower_reduce(self, e, env, level):
+        saved, self._body = self._body, e.source[e.value_index]
+        try:
+            return super().lower_reduce(e, env, level)
+        finally:
+            self._body = saved
+
+    def _note_extent(self, e, level: int) -> None:
+        """The extent read inside a reduction: a term of it, unless it divides all of it
+        (``Σ_j x / n`` is the mean of what was reduced)."""
+        if not level:
+            return
+        root = self._body
+        if isinstance(root, tir.Div):
+            divisor = root.b
+            while isinstance(divisor, tir.Cast):
+                divisor = divisor.value
+            if divisor.same_as(e):
+                return
+        self.extent_in_terms = True
 
     def _is_context(self, e, env) -> bool:
         """A compound expression that reads a member and no loop variable bound by a reduction."""

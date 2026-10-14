@@ -354,12 +354,11 @@ register(
     Operator(
         "kurtosis",
         "hoist",
-        "Σ ((x - mean) / sqrt(m2))⁴ / n: found, after a search over sets of five states",
+        "Σ ((x - mean) / sqrt(m2))⁴ / n: the deviation taken out, two moments supplemented",
         kurtosis_unfused,
         kurtosis_reference,
         kurtosis_fused,
         states=5,
-        slow=True,
     )
 )
 register(

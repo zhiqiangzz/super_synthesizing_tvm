@@ -243,12 +243,14 @@ register(
 register(
     Operator(
         "normalised_projection",
-        "shift/scale",
-        "Σ (a - r q)² with r = Σ q a / Σ q²",
+        "negative",
+        "Σ (a - r q)² with r = Σ q a / Σ q²: r is 0 / 0 on a part where q is 0, so it is taken "
+        "out, and Σ a² - (Σ q a)² / Σ q² cancels on offset data",
         normalised_projection_unfused,
         normalised_projection_reference,
         normalised_projection_fused,
-        states=3,
+        fusible=False,
+        reason="is refused: REJECTED",
     )
 )
 register(
@@ -281,6 +283,6 @@ register(
         scaled_norm_unfused,
         scaled_norm_reference,
         fusible=False,
-        reason="derived reducer(s) rejected",
+        reason="is refused: REJECTED",
     )
 )

@@ -23,7 +23,7 @@ from chain_ops import OPERATORS
 import tvm.testing
 from tvm import te
 from tvm.te.superopt.dims import DimTable
-from tvm.te.superopt.reducer import Pool, discover_chains
+from tvm.te.superopt.reducer import discover_chains, members_of
 from tvm.te.superopt.reducer.derive import atoms_in, derive, domains
 from tvm.te.superopt.symbolic import ir
 from tvm.te.superopt.symbolic.canonicalize import (
@@ -170,12 +170,12 @@ def test_states_that_leave_the_closed_form_undefined_are_refused():
     them for the reductions divides by zero. That is no reducer, not an error."""
     _, outs = OPERATORS["pearson"].unfused()
     (chain,), _ = discover_chains(outs)
-    pool = Pool(chain, count=False)
+    members = members_of(chain, count=False)
     full, R, _, _ = domains(chain.axis)
-    by_pid = pool.rebaser.by_pid
+    by_pid = {c.pid: c for c in members}
     required = tuple(subst_domain(by_pid[m.pid].state, {R: full}) for m in chain.required)
     stats: dict = {}
-    for chosen in itertools.combinations(pool.cands, 2):
+    for chosen in itertools.combinations(members, 2):
         assert derive(tuple(c.state for c in chosen), required, chain.axis, stats) is None
     assert set(stats) <= {"derive:unsolvable", "derive:uncovered", "derive:missing_context"}
 

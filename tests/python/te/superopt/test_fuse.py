@@ -26,11 +26,20 @@ import tvm.testing
 from tvm import te
 from tvm import tirx as tir
 from tvm.te.superopt import fuse
-from tvm.te.superopt.accuracy import references
-from tvm.te.superopt.reducer import Pool, Rewriter, build_chain, synthesize
+from tvm.te.superopt.accuracy import AccuracyGate, references, spec_issues
+from tvm.te.superopt.reducer import Rewriter, build_chain, discover_chains, members_of
+from tvm.te.superopt.reducer.derive import derive, domains
+from tvm.te.superopt.reducer.domain import TeSigns
 from tvm.te.superopt.reducer.source import identifier
+from tvm.te.superopt.reducer.states import _Chain
 from tvm.te.superopt.symbolic import ir
-from tvm.te.superopt.symbolic.canonicalize import recanonicalize
+from tvm.te.superopt.symbolic.canonicalize import (
+    mk_exp,
+    mk_mul,
+    mk_reduce,
+    subst_domain,
+    walk,
+)
 from tvm.te.superopt.symbolic.lower import compute_ops
 
 
@@ -244,13 +253,15 @@ def test_minimum_is_fused_like_a_maximum():
 
 
 def test_maximum_of_standard_scores_keeps_the_largest_element():
-    """``max_j (x - mean) / sigma``: Welford's states and ``max_j x``; the score at the end."""
+    """``max_j (x - mean) / sigma``: Welford's states and ``max_j (x - mean)`` -- only the
+    deviation, zero on a single element, is taken out; the score is formed at the end."""
     ins, outs = OPERATORS["zscore_max"].unfused()
     res = fuse(outs, ins)
     (report,) = res.chains
-    assert report.fused and report.states[:3] == ("mean", "ss", "count")
+    assert report.fused and report.states == ("mean", "ss", "zmax.h0", "count")
     (extreme,) = [c for c in report.solution.states if c.origin == "hoist"]
-    assert extreme.source == "zmax" and "max_j X[i, j]" in "".join(report.derived())
+    assert extreme.source == "zmax" and extreme.depth == 1  # the mean stays a context
+    assert "mean[i]" in "".join(report.derived())
     assert passes(outs, ins[0].shape[1]) == 3 and passes(res.outputs, ins[0].shape[1]) == 1
     _same_results(ins, outs, res)
 
@@ -341,9 +352,10 @@ def test_maximum_that_is_no_extreme_is_left_alone(body, reducer, inside):
 
 
 def test_epilogue_keeps_the_function_as_the_program_writes_it():
-    """``max_j ((x - mean) / sigma)³`` over ``max_j x``, the mean and the deviation: the
-    canonical epilogue is the expanded cube, four large terms that cancel on shifted
-    data. Written as the cube of the standard score it is as accurate as the program."""
+    """``max_j ((x - mean) / sigma)³``: the cube grows with its argument and is taken out
+    of the maximum, the deviation is taken out of what is left, and the state is
+    ``max_j (x - mean)``. The epilogue is the cube of the score again, as the program
+    computes it -- not the expanded cube over ``max_j x``, four large terms that cancel."""
     n, m = te.var("n"), te.var("m")
     X = te.placeholder((n, m), name="X")
     count = m.astype("float32")
@@ -362,14 +374,12 @@ def test_epilogue_keeps_the_function_as_the_program_writes_it():
     out = te.compute((n,), cube, name="out")
     res = fuse(out, [X])
     (report,) = res.chains
-    assert report.fused and report.states[:3] == ("mean", "ss", "count"), res.summary()
-    (extreme,) = [c for c in report.solution.states if c.origin == "hoist"]
-    assert "max_j X[i, j]" in "".join(report.derived()) and extreme.source == "out"
-    spec = report.solution.spec
-    assert spec.epilogue_print is not None and spec.epilogue_code is spec.epilogue_print
-    (written,), (canonical,) = spec.epilogue_print, spec.epilogues
-    assert isinstance(written, ir.Pow) and written.exponent == 3
-    assert isinstance(canonical, ir.Add) and recanonicalize(written) is canonical
+    assert report.fused and report.states[:2] == ("mean", "ss"), res.summary()
+    (extreme,) = [c for c in report.solution.states if c.origin in ("inner", "hoist")]
+    assert extreme.source.startswith("out") and "mean[i]" in "".join(report.derived())
+    (epilogue,) = report.solution.spec.epilogue_code
+    cubes = [x for x in walk(epilogue) if isinstance(x, ir.Pow) and x.exponent == 3]
+    assert cubes and not isinstance(epilogue, ir.Add)  # one product, nothing to cancel
     assert passes([out], m) == 3 and passes(res.outputs, m) == 1
     assert res.accuracy is not None and res.accuracy.ok
     _same_results([X], [out], res)
@@ -378,65 +388,99 @@ def test_epilogue_keeps_the_function_as_the_program_writes_it():
 # ---------------------------------------------------------------------------
 # the checks a reducer has to pass
 # ---------------------------------------------------------------------------
+def _reducer_of(name: str, states_of):
+    """A reducer built from states chosen by hand (``states_of(world)``), and the program."""
+    ins, outs = OPERATORS[name].unfused()
+    (chain,) = discover_chains(outs)[0]
+    world = _Chain(chain, members_of(chain), TeSigns(outs))
+    full, R, _, _ = domains(chain.axis)
+    required = tuple(subst_domain(world.by_pid[m.pid].state, {R: full}) for m in chain.required)
+    states = states_of(world, R)
+    spec = derive(
+        tuple(c.state if hasattr(c, "state") else c for c in states), required, chain.axis
+    )
+    assert spec is not None
+    trial = Rewriter()
+    build_chain(chain, spec, trial)
+    return ins, outs, spec, [trial.tensor(t) for t in outs]
+
+
 def test_expanded_variance_is_kept_out_by_the_accuracy_gate():
-    """Two states are enough over the reals: Σx and Σx². In float32 they cancel."""
+    """Two states are enough over the reals: Σx and Σx². The selection never proposes
+    them; built by hand they are correct, and in float32 they cancel."""
     ins, outs = OPERATORS["variance"].unfused()
     full = fuse(outs, ins)
     assert full.chains[0].states == ("mean", "ss", "count") and not full.chains[0].rejected
-    small = fuse(outs, ins, max_states=2)
-    (report,) = small.chains
-    assert not small.fused and report.rejected
-    assert all("REJECTED" in r.why and "offset" in r.why for r in report.rejected)
-    assert "rejected" in report.reason and small.outputs[0].same_as(outs[0])
-    # without the gate the same reducer is taken: it is correct, only not accurate
-    loose = fuse(outs, ins, max_states=2, accuracy="off")
-    assert loose.fused and len(loose.chains[0].states) == 2 and loose.accuracy is None
+    capped = fuse(outs, ins, max_states=2)
+    (report,) = capped.chains
+    assert not capped.fused and "are 3, more than the 2 allowed" in report.reason
+    x = ir.elem(0, (ir.idx("i0"), ir.bidx(0)))
+
+    def raw(world, R):
+        return (mk_reduce("sum", R, 0, x), mk_reduce("sum", R, 0, mk_mul(x, x)))
+
+    ins, outs, spec, candidate = _reducer_of("variance", raw)
+    verdict = AccuracyGate(outs, ins).check(candidate)
+    assert not verdict.ok and "offset" in verdict.summary()
     values = extents(ins, outs)
     centred = sample(ins, outs, values, seed=3)
     shifted = sample(ins, outs, values, seed=3, shift=1.0e4)
     for arrays, bound in ((centred, 1e-4), (shifted, None)):
         want = references(outs, ins, arrays, values)
-        err = rel_err(run_llvm(loose.inputs, loose.outputs, arrays, values), want)
+        err = rel_err(run_llvm(ins, candidate, arrays, values), want)
         assert err < bound if bound else err > 1.0  # every digit lost on offset data
 
 
 def test_unshifted_exponentials_are_refused_statically():
-    """Hoisting the maximum out of a softmax leaves ``Σ exp(x)``: smaller, and unbounded."""
+    """Taking the maximum out of a softmax leaves ``Σ exp(x)``: correct, and unbounded."""
+    x = ir.elem(0, (ir.idx("i0"), ir.bidx(0)))
+    q = ir.elem(1, (ir.idx("i0"), ir.bidx(0)))
+
+    def plain(world, R):
+        return (
+            mk_reduce("sum", R, 0, mk_exp(x)),
+            mk_reduce("sum", R, 0, q),
+            mk_reduce("sum", R, 0, mk_mul(q, x)),
+        )
+
+    _, _, spec, _ = _reducer_of("soft_cross_entropy", plain)
+    assert "exp" in spec_issues(spec)
     ins, outs = OPERATORS["soft_cross_entropy"].unfused()
     res = fuse(outs, ins)
-    (report,) = res.chains
-    assert report.fused and len(report.states) == 4
-    reasons = [r.why for r in report.rejected]
-    assert any("exp of an argument that is not bounded above" in w for w in reasons)
-    assert any("not finite against the empty state" in w for w in reasons)
+    assert res.fused and "exp" not in spec_issues(res.chains[0].solution.spec)
 
 
-def test_fewer_contexts_are_taken_out_first():
-    """``-Σ q log p``: taking only ``log den`` out leaves ``Σ q (x - mx)``, which keeps the
-    shift by the maximum; taking the maximum out as well leaves ``Σ q x``, which has to
-    cancel a common offset of the scores against the log-sum-exp."""
+def test_only_the_context_at_fault_is_taken_out():
+    """``-Σ q log p``: ``log den`` is -inf on an empty part and is taken out; the maximum
+    is not at fault and stays, so ``Σ q (x - mx)`` keeps the shift. Taking it out as well
+    leaves ``Σ q x``, which has to cancel a common offset of the scores against the
+    log-sum-exp."""
     op = OPERATORS["soft_cross_entropy"]
     ins, outs = op.unfused()
     res = fuse(outs, ins)
     (report,) = res.chains
+    steps = [st.summary() for st in report.selection.steps if st.action == "hoist"]
+    assert len(steps) == 1 and steps[0].startswith("hoist loss.ctx0 out of loss")
     spec = report.solution.spec
-    shifted = next(k for k, c in enumerate(report.solution.states) if c.depth == 1)
-    assert [c.depth for c in report.solution.states].count(1) == 1
+    world = _Chain(report.chain, members_of(report.chain), TeSigns(outs))
+    shifted = next(
+        k for k, c in enumerate(report.solution.states) if world.rebaser.contexts(c) and c.depth
+    )
     assert spec.leaves[shifted].size == 1 and spec.leaves[shifted].value == 0  # q (x - x)
     values = extents(ins, outs)
     arrays = sample(ins, outs, values, seed=4, shift=1.0e4)
     want = op.reference(*arrays)
     assert rel_err(run_llvm(res.inputs, res.outputs, arrays, values), want) < 1e-5
+
     # the two-context form is correct too, and loses four digits on the same data
-    plain = next(
-        s
-        for s in synthesize(Pool(report.chain))
-        if max(c.depth for c in s.states) == 2 and {"mx", "den"} <= {c.name for c in s.states}
-    )
-    trial = Rewriter()
-    build_chain(report.chain, plain.spec, trial)
-    cancelled = run_llvm(ins, [trial.tensor(t) for t in outs], arrays, values)
-    assert 1e-5 < rel_err(cancelled, want) < 1e-2
+    def both(world, R):
+        loss = next(c for c in world.members if c.name == "loss")
+        out = world.hoisted(loss, frozenset(world.rebaser.contexts(loss)))
+        keep = [c for c in world.members if c.name in ("mx", "den")]
+        return [*keep, *out]
+
+    own, _, _, cancelled = _reducer_of("soft_cross_entropy", both)
+    assert 1e-5 < rel_err(run_llvm(own, cancelled, arrays, values), want) < 1e-2
 
 
 def test_scaled_norm_is_not_traded_for_a_sum_of_squares():
@@ -461,13 +505,12 @@ def test_scaled_norm_is_not_traded_for_a_sum_of_squares():
 
 
 def test_a_budget_too_small_is_reported_not_raised():
-    """A correlation takes six states. With four there is none -- and nothing to raise
-    about on the way to finding that out."""
+    """A correlation takes six states. Capped at four, the chain is left as it is."""
     ins, outs = OPERATORS["pearson"].unfused()
     res = fuse(outs, ins, max_states=4)
     (report,) = res.chains
-    assert not res.fused and "no set of at most 4 derived states" in report.reason
-    assert report.theory.states == 6
+    assert not res.fused and "are 6, more than the 4 allowed" in report.reason
+    assert report.theory.states == 6 and len(report.selection.states) == 6
     assert "theory: a single pass with 6 state(s) exists" in res.summary()
     # left to the judgement, the reducer has the six states it takes
     assert fuse(outs, ins).chains[0].states == ("mean_x", "mean_y", "sxy", "sxx", "syy", "count")
@@ -490,8 +533,11 @@ def test_ops_around_a_chain_are_run_not_analysed():
 
 
 def test_report_mode_attaches_the_verdict_without_filtering():
-    ins, outs = OPERATORS["variance"].unfused()
-    res = fuse(outs, ins, max_states=2, accuracy="report")
+    """The remainder of a normalised projection, with the quotient taken out (it is 0 / 0
+    where q is 0), cancels on offset data: refused by default, attached in report mode."""
+    ins, outs = OPERATORS["normalised_projection"].unfused()
+    assert not fuse(outs, ins).fused
+    res = fuse(outs, ins, accuracy="report")
     assert res.fused and res.accuracy is not None and not res.accuracy.ok
     with pytest.raises(ValueError, match="accuracy must be"):
         fuse(outs, ins, accuracy="strict")

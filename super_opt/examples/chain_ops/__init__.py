@@ -68,11 +68,10 @@ class Operator:
     fusible: bool = True
     states: int | None = None  # number of reducer states
     reason: str = ""  # part of the reported reason when it is not fusible
-    max_states: int | None = None  # a bound on the reducer other than the judged one
+    max_states: int | None = None  # a cap on the number of states (none by default)
     # does the theory show a single pass (``None``: no chain is read off the program)?
     judged: bool | None = True
-    positive: tuple[str, ...] = ()  # inputs that are weights: sampled positive
-    slow: bool = False  # the search takes minutes
+    positive: tuple[str, ...] = ()  # inputs declared positive (weights)
 
 
 OPERATORS: dict[str, Operator] = {}
