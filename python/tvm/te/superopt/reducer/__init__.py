@@ -18,10 +18,11 @@
 
 ``chain``   read the chains off a TE graph
 ``theory``  whether a single pass exists and how many states it takes
-``states``  the candidate states of a chain and the reducers they give
+``states``  choosing the states of a chain: keep, supplement, replace
+``domain``  where a state is defined, by proof
 ``rebase``  merging partial results whose context has moved
 ``derive``  leaf, merge, identity and epilogues from a set of states
-``verify``  the monoid laws, and the identity element in floating point
+``verify``  equalities by proof, and the identity element in floating point
 ``build``   write the reducer back as TE and rebuild the program around it
 ``source``  the same as text
 """
@@ -30,26 +31,27 @@ from .build import Rewriter, build_chain
 from .chain import Chain, Member, Skipped, discover_chains
 from .derive import ReducerSpec, derive
 from .rebase import Candidate
-from .states import Pool, Solution, members_of, synthesize
+from .states import Selection, Solution, Step, members_of, select
 from .theory import Judgement, judge
-from .verify import check_laws, identity_safe
+from .verify import identity_safe, prove_equal
 
 __all__ = [
     "Candidate",
     "Chain",
     "Judgement",
     "Member",
-    "Pool",
     "ReducerSpec",
     "Rewriter",
+    "Selection",
     "Skipped",
     "Solution",
+    "Step",
     "build_chain",
-    "check_laws",
     "derive",
     "discover_chains",
     "identity_safe",
     "judge",
     "members_of",
-    "synthesize",
+    "prove_equal",
+    "select",
 ]

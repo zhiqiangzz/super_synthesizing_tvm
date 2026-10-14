@@ -27,14 +27,18 @@ nothing below is searched:
 * the epilogue of every tensor the program still needs, by writing its closed
   form (``R`` = the whole axis) over the state outputs.
 
-A state set is kept only if every required tensor is covered, every state is
-needed, and the derived merge satisfies the monoid laws.
+A state set is kept only if every required tensor is covered and every state
+is needed. The laws are not tested one by one: the merge satisfies
+``M(I(A), I(B)) = I(A u B)`` by construction (proven, see
+:func:`invariant_holds`), and commutativity and associativity on the states a
+part of the axis can have follow from that of the union. The identity is
+``I(∅)`` read off the definitions (:func:`empty_value`) and the identity law
+is proven on those states as well (:func:`identity_law`).
 """
 
 from __future__ import annotations
 
 import dataclasses
-import itertools
 
 from ..dims import DimKey
 from ..symbolic import ir
@@ -135,7 +139,17 @@ def state_vars(e: ir.Node) -> set[ir.StateVar]:
 # ---------------------------------------------------------------------------
 # solving the partial reductions for the state values
 # ---------------------------------------------------------------------------
-def solve_atoms(states: tuple[ir.SymExpr, ...], R: ir.DSym) -> dict[ir.Reduce, ir.SymExpr] | None:
+@dataclasses.dataclass(frozen=True)
+class Solved:
+    """How an atom was solved for: from which state, dividing by what."""
+
+    state: int
+    divisors: tuple[ir.SymExpr, ...] = ()  # over the state values and other atoms
+
+
+def solve_atoms(
+    states: tuple[ir.SymExpr, ...], R: ir.DSym, trace: dict | None = None
+) -> dict[ir.Reduce, ir.SymExpr] | None:
     """Express partial-reduction atoms as functions of the state values ``a_k``.
 
     A state with a single unknown atom determines it. A state made of several
@@ -143,8 +157,13 @@ def solve_atoms(states: tuple[ir.SymExpr, ...], R: ir.DSym) -> dict[ir.Reduce, i
     does not have to: it is solved for one, the others stay *free*, and the
     state is still usable wherever they cancel -- which the callers check
     (a merge or an epilogue with a partial reduction left in it is refused).
+
+    ``trace`` receives, per atom solved, a :class:`Solved`: the state it was
+    read from and the factors that were divided by to read it. Where one of
+    those is zero the state does not determine the atom.
     """
     sol: dict[ir.Reduce, ir.SymExpr] = {}
+    how: dict[ir.Reduce, Solved] = {}
     done: set[int] = set()
     while len(done) < len(states):
         progress = False
@@ -159,10 +178,12 @@ def solve_atoms(states: tuple[ir.SymExpr, ...], R: ir.DSym) -> dict[ir.Reduce, i
                 continue
             if len(open_atoms) != 1:
                 continue
-            expr = _solve_single(e, open_atoms[0], ir.state_var("a", k))
+            divisors: list[ir.SymExpr] = []
+            expr = _solve_single(e, open_atoms[0], ir.state_var("a", k), divisors)
             if expr is None:
                 continue
             sol[open_atoms[0]] = expr
+            how[open_atoms[0]] = Solved(k, tuple(divisors))
             done.add(k)
             progress = True
         if progress:
@@ -171,16 +192,23 @@ def solve_atoms(states: tuple[ir.SymExpr, ...], R: ir.DSym) -> dict[ir.Reduce, i
         k = next(k for k in range(len(states)) if k not in done)
         e = subst(states[k], sol)
         for alpha in [a for a in atoms_in(e, R) if a not in sol]:
-            expr = _solve_single(e, alpha, ir.state_var("a", k))
+            divisors = []
+            expr = _solve_single(e, alpha, ir.state_var("a", k), divisors)
             if expr is not None:
                 sol[alpha] = expr
+                how[alpha] = Solved(k, tuple(divisors))
                 done.add(k)
                 break
         else:
+            if trace is not None:
+                trace["unsolvable"] = k
             return None
     # Close the solution (later solutions may mention earlier atoms).
     for _ in range(len(sol)):
         sol = {a: subst(v, sol) for a, v in sol.items()}
+    if trace is not None:
+        for atom, h in how.items():
+            trace[atom] = Solved(h.state, tuple(subst(d, sol) for d in h.divisors))
     return sol
 
 
@@ -188,12 +216,18 @@ def _mentions(e: ir.Node, alpha: ir.Node) -> bool:
     return contains_node(e, lambda n: n is alpha)
 
 
-def _solve_single(e: ir.SymExpr, alpha: ir.Reduce, value: ir.SymExpr) -> ir.SymExpr | None:
-    """Solve ``e == value`` for ``alpha`` when ``e`` is linear in ``alpha``."""
+def _solve_single(
+    e: ir.SymExpr, alpha: ir.Reduce, value: ir.SymExpr, divisors: list | None = None
+) -> ir.SymExpr | None:
+    """Solve ``e == value`` for ``alpha`` when ``e`` is linear in ``alpha``.
+
+    What is divided by on the way is appended to ``divisors`` (an exponential,
+    never zero, is not).
+    """
     if e is alpha:
         return value
     if isinstance(e, ir.Log):
-        return _solve_single(e.arg, alpha, mk_exp(value))
+        return _solve_single(e.arg, alpha, mk_exp(value), divisors)
     c, terms = term_view(e)
     hit = None
     for core, coeff in terms.items():
@@ -217,7 +251,10 @@ def _solve_single(e: ir.SymExpr, alpha: ir.Reduce, value: ir.SymExpr) -> ir.SymE
     F = mk_mul(ir.const(fcoeff), *others)
     if _mentions(F, alpha):
         return None
-    return mk_mul(mk_sub(value, rest), mk_pow(mk_mul(ir.const(coeff), F), -1))
+    scale = mk_mul(ir.const(coeff), F)
+    if divisors is not None:  # a factor under a negative power is multiplied by instead
+        divisors.extend(mk_pow(b, p) for b, p in factors.items() if b is not alpha and p > 0)
+    return mk_mul(mk_sub(value, rest), mk_pow(scale, -1))
 
 
 def singleton(state: ir.SymExpr, R: ir.DSym) -> ir.SymExpr:
@@ -255,6 +292,21 @@ def merge_of(state, sol, R, A, B) -> ir.SymExpr | None:
     if atoms_in(m, A) or atoms_in(m, B) or contains_node(m, _is_partial):
         return None
     return m
+
+
+def leftover(state, sol, R, A, B) -> list[ir.SymExpr]:
+    """The partial reductions (over ``R``) ``I(A u B)`` still needs once written over
+    the state values: what the states lack to merge this one."""
+    atom_map = {}
+    for atom, expr in sol.items():
+        atom_map[subst_domain(atom, {R: A})] = subst_domain(expr, {R: A})
+        atom_map[subst_domain(atom, {R: B})] = subst_domain(swap_sides(expr, "a", "b"), {R: B})
+    m = subst(subst_domain(state, {R: ir.dunion(A, B)}), atom_map)
+    out: dict[ir.SymExpr, None] = {}
+    for side in (A, B):
+        for atom in atoms_in(m, side):
+            out[subst_domain(atom, {side: R})] = None
+    return list(out)
 
 
 def _is_partial(x: ir.Node) -> bool:
@@ -302,40 +354,140 @@ def needed_states(merge, refs: set[int]) -> set[int]:
     return needed
 
 
-def identity_and_proof(states, merge, axis: DimKey, R):
-    """``(identity, proof)`` for the first identity satisfying the monoid laws, else ``None``."""
-    options = []
-    for s in states:
+def empty_value(state: ir.SymExpr, R: ir.DSym, struct: ir.SymExpr | None = None) -> ir.Const | None:
+    """``I(∅)``, the value of a state on an empty part, where it is a constant.
+
+    Read off the reduction as the program writes it (``struct``, its contexts
+    still symbols): an empty sum is 0 and an empty maximum -inf whatever they
+    would have been computed against. Then off the definition: an empty count
+    is 0; where that leaves ``0 / 0`` (a mean, ``Σ x / |R|``) the count is kept
+    as an unknown positive number instead, so that the mean of nothing is
+    ``0 / |R| = 0`` and a maximum shifted by it still -inf. ``None`` when no
+    constant comes out.
+    """
+    for e in (struct, state):
+        if e is None:
+            continue
         try:
-            e = subst_domain(s, {R: ir.dempty(axis)})
-        except Unsupported:  # e.g. 0/0 for a normalised output: pick by the identity law
-            e = None
-        if isinstance(e, ir.Const):
-            options.append([e])
-        else:
-            options.append([ir.ZERO, ir.ONE, ir.NEG_INF_C, ir.POS_INF_C])
-    for combo in itertools.product(*options):
-        try:
-            proof = verify.check_laws(merge, combo)
+            e = subst_domain(e, {R: ir.dempty(R.axis)})
         except Unsupported:
-            proof = None
-        if proof is not None:
-            return tuple(combo), proof
-    return None
+            continue
+        if isinstance(e, ir.Const):
+            return e
+
+    def fn(n: ir.Node):
+        if isinstance(n, ir.Reduce) and n.domain is R:
+            return ir.ZERO if n.kind == "sum" else ir.NEG_INF_C
+        return None
+
+    try:
+        e = transform(state, fn)
+    except Unsupported:
+        return None
+    return e if isinstance(e, ir.Const) else None
 
 
-def invariant_holds(states, merge, R, A, B) -> bool:
-    """``M(I(A), I(B)) = I(A u B)`` (true by construction; checked anyway)."""
+def identity_of(states, merge, R, A, B, structs=None) -> tuple[tuple[ir.Const, ...], str] | None:
+    """The identity element and how its law is proven, or ``None``.
+
+    A state with a value on an empty part (:func:`empty_value`) takes it. One
+    without (a weighted mean ``Σ w x / Σ w``) is left as an unknown ``t`` and
+    the law is solved for it: where the merge multiplies ``t`` by an empty
+    weight the law holds whatever ``t`` is, and 0 is taken; where it does not,
+    the law fixes it (it must come out a constant).
+    """
+    structs = structs or (None,) * len(states)
+    values = [empty_value(s, R, st) for s, st in zip(states, structs)]
+    unknown = {ir.atom(f"t{k}"): k for k, v in enumerate(values) if v is None}
+    trial = [ir.atom(f"t{k}") if v is None else v for k, v in enumerate(values)]
+    for _ in range(len(unknown) + 1):
+        residues = identity_residues(states, merge, tuple(trial), R, A, B)
+        if residues is None:
+            return None
+        fixed = False
+        for diff in residues:
+            for t, k in unknown.items():
+                if trial[k] is not t or not contains_node(diff, lambda x, t=t: x is t):
+                    continue
+                v = _solve_single(diff, t, ir.ZERO)
+                if isinstance(v, ir.Const):
+                    trial[k], fixed = v, True
+        if not fixed:
+            break
+    method = identity_law(states, merge, tuple(trial), R, A, B)
+    if method is None:
+        return None
+    return tuple(ir.ZERO if v in unknown else v for v in trial), method
+
+
+def identity_residues(states, merge, identity, R, A, B) -> list[ir.SymExpr] | None:
+    """``M(s, e) - s`` slot by slot (both orders), canonical; ``None`` if undefined."""
+    out = []
+    for mine, other, dom in (("a", "b", A), ("b", "a", B)):
+        env = {}
+        for k, s in enumerate(states):
+            env[ir.state_var(mine, k)] = subst_domain(s, {R: dom})
+            env[ir.state_var(other, k)] = identity[k]
+        for k in range(len(states)):
+            try:
+                out.append(mk_sub(subst(merge[k], env), env[ir.state_var(mine, k)]))
+            except Unsupported:
+                return None
+    return out
+
+
+def identity_law(states, merge, identity, R, A, B) -> str | None:
+    """``M(s, e) = M(e, s) = s`` for every state ``s`` a non-empty part can have:
+    how it is proven, or ``None``.
+
+    ``s`` is written as the definitions over a part (``I(A)``), so the law is
+    asked of reachable states only; a state that is a function of others then
+    agrees with them.
+    """
+    n = len(states)
+    method = "canonical"
+    for mine, other, dom in (("a", "b", A), ("b", "a", B)):
+        env = {}
+        for k, s in enumerate(states):
+            env[ir.state_var(mine, k)] = subst_domain(s, {R: dom})
+            env[ir.state_var(other, k)] = identity[k]
+        for k in range(n):
+            try:
+                got = subst(merge[k], env)
+            except Unsupported:
+                return None
+            how = verify.prove_equal(got, env[ir.state_var(mine, k)])
+            if how is None:
+                return None
+            method = verify.worst(method, how)
+    return method
+
+
+def invariant_holds(states, merge, R, A, B) -> str | None:
+    """``M(I(A), I(B)) = I(A u B)`` as an identity in the reductions over ``A`` and
+    ``B``: how it is proven, or ``None``.
+
+    The merge is built to satisfy it, so it holds canonically unless a ``max``
+    or a common denominator is in the way. Commutativity and associativity of
+    ``M`` on reachable states follow from it, because the union is commutative
+    and associative::
+
+        M(I(A), I(B)) = I(A u B) = I(B u A) = M(I(B), I(A))
+        M(M(I(A), I(B)), I(C)) = I((A u B) u C) = I(A u (B u C)) = M(I(A), M(I(B), I(C)))
+    """
     inv_map = {}
     for k, s in enumerate(states):
         inv_map[ir.state_var("a", k)] = subst_domain(s, {R: A})
         inv_map[ir.state_var("b", k)] = subst_domain(s, {R: B})
+    method = "canonical"
     for k, s in enumerate(states):
         lhs = subst(merge[k], inv_map)
         rhs = subst_domain(s, {R: ir.dunion(A, B)})
-        if lhs is not rhs and not verify.equal_modulo_max(lhs, rhs):
-            return False
-    return True
+        how = verify.prove_equal(lhs, rhs)
+        if how is None:
+            return None
+        method = verify.worst(method, how)
+    return method
 
 
 def out_ref(k: int, closed: ir.SymExpr) -> ir.SymExpr:
@@ -366,6 +518,7 @@ def derive(
     required: tuple[ir.SymExpr, ...],
     axis: DimKey,
     stats: dict | None = None,
+    structs: tuple[ir.SymExpr, ...] | None = None,
 ) -> ReducerSpec | None:
     """The reducer with these ``states``, if it reproduces every ``required`` closed form.
 
@@ -410,24 +563,32 @@ def derive(
     if needed_states(merge, used) != set(range(n)):
         count(stats, "derive:irrelevant_state")
         return None
-    found = identity_and_proof(states, merge, axis, R)
+    first = invariant_holds(states, merge, R, A, B)
+    if first is None:
+        count(stats, "derive:invariant_failed")
+        return None
+    found = identity_of(states, merge, R, A, B, structs)
     if found is None:
         count(stats, "derive:law_failed")
         return None
-    identity, proof = found
-    if not invariant_holds(states, merge, R, A, B):
-        count(stats, "derive:invariant_failed")
+    identity, second = found
+    proof = verify.worst(first, second)
+    try:
+        leaves = tuple(singleton(s, R) for s in states)
+    except Unsupported:  # a state not defined on a single element (0 / 0)
+        count(stats, "derive:undefined_leaf")
         return None
-    leaves = tuple(singleton(s, R) for s in states)
     count(stats, "derive:specs")
     return ReducerSpec(axis, states, leaves, merge, identity, closed, proof, epilogues)
 
 
 __all__ = [
     "ReducerSpec",
+    "Solved",
     "atoms_in",
     "derive",
     "domains",
+    "leftover",
     "merge_of",
     "singleton",
     "solve_atoms",

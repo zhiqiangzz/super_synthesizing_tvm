@@ -30,7 +30,7 @@ one tuple ``te.comm_reducer`` reduction. For an operator this script shows
   synthesised one side by side: passes over the axis and error against a
   float64 reference, on centred data and on data with a large offset.
 
-    python super_opt/examples/fuse_chain.py                # every operator but the slow ones
+    python super_opt/examples/fuse_chain.py                # every operator
     python super_opt/examples/fuse_chain.py attention moment3
     python super_opt/examples/fuse_chain.py zscore_max logit_norm
     python super_opt/examples/fuse_chain.py --list
@@ -92,7 +92,7 @@ def _show(console: Console, op: Operator, args) -> Outcome:
     res = fuse(
         outs,
         ins,
-        max_states=args.max_states or op.max_states,  # None: as many as are judged enough
+        max_states=args.max_states or op.max_states,  # None: no cap
         accuracy=args.accuracy,
         accuracy_config=AccuracyConfig(positive=op.positive),
     )
@@ -105,13 +105,14 @@ def _show(console: Console, op: Operator, args) -> Outcome:
         render_source(console, res.source(), "python", "synthesised reducer", f"{seconds:.2f} s")
     for c in res.chains:
         console.print(f"[dim]theory:[/] {escape(c.theory.summary())}")
+        if c.selection is not None and (args.verbose or not c.fused):
+            for step in c.selection.steps:
+                if step.action != "keep":
+                    console.print(f"  [dim]{escape(step.summary())}[/]")
         if not c.fused and c.theory.fusible:
             console.print(f"[yellow]not fused[/] -- {escape(c.reason)}")
         elif not c.fused:
             console.print("[yellow]not fused[/]")
-        if args.verbose:
-            for r in c.rejected:
-                console.print(f"  [dim]rejected ({', '.join(r.states)}): {escape(r.why)}[/]")
     for s in res.skipped:
         console.print(f"[yellow]not fused[/] ({', '.join(s.members)}) -- {escape(s.reason)}")
     if args.tir and res.fused:
@@ -157,7 +158,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("operators", nargs="*", help="operators to fuse (default: all)")
     parser.add_argument("--list", action="store_true", help="list the operators and exit")
-    parser.add_argument("--max-states", type=int, default=None, help="largest reducer to consider")
+    parser.add_argument("--max-states", type=int, default=None, help="largest reducer to accept")
     parser.add_argument(
         "--accuracy",
         choices=("filter", "report", "off"),
@@ -168,9 +169,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--tir", action="store_true", help="also print the fused program as TIR")
     parser.add_argument(
-        "--slow", action="store_true", help="include the operators whose search takes minutes"
+        "--verbose", action="store_true", help="show how the states were chosen for every chain"
     )
-    parser.add_argument("--verbose", action="store_true", help="list the reducers not taken")
     args = parser.parse_args(argv)
     unknown = [n for n in args.operators if n not in OPERATORS]
     if unknown:
@@ -195,8 +195,6 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     chosen = [OPERATORS[n] for n in (args.operators or OPERATORS)]
-    if not args.operators and not args.slow:
-        chosen = [op for op in chosen if not op.slow]
     outcomes = [_show(console, op, args) for op in chosen]
     if len(outcomes) > 1:
         console.print(Rule("summary"))

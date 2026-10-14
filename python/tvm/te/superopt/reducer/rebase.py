@@ -63,14 +63,13 @@ from ..symbolic.canonicalize import (
     mk_add,
     mk_mul,
     positive,
-    recanonicalize,
     subst,
     subst_domain,
     term_view,
     walk,
 )
 from . import verify
-from .derive import ReducerSpec, domains, swap_sides
+from .derive import domains, swap_sides
 
 SIDE_OFFSET = {"a": -10_000, "b": -20_000}  # a member's id when pinned to one side of a merge
 
@@ -300,11 +299,10 @@ class Rebaser:
 class Printer:
     """The merges of one chosen state set, printed from the decompositions."""
 
-    def __init__(self, rebaser: Rebaser, pool: list[Candidate], chosen, spec: ReducerSpec, sol):
+    def __init__(self, rebaser: Rebaser, pool: list[Candidate], chosen, sol):
         self.rb = rebaser
         self.pool = pool
         self.chosen = list(chosen)
-        self.spec = spec
         self.atom_map = {}
         for atom, expr in sol.items():
             for side, dom in rebaser.sides.items():
@@ -404,11 +402,12 @@ class Printer:
     def _print_key(self, key: ir.SymExpr, corr) -> ir.SymExpr:
         mapping: dict[ir.Node, ir.SymExpr] = {}
         for n in walk(key):
-            if isinstance(n, ir.Pow) and n.base in corr and n.exponent == -1:
+            if isinstance(n, ir.Pow) and n.base in corr and n.exponent < 0:
                 side, pid, mode = corr[n.base]
-                if mode == "scale":  # 1 / rho = k(X) / k(A u B), finite where k(X) = 0
+                if mode == "scale":  # rho^-p = (k(X) / k(A u B))^p, finite where k(X) = 0
                     here, there = self._context(pid, side)
-                    mapping[n] = ir.raw_mul([here, ir.raw_pow(there, -1)])
+                    ratio = ir.raw_mul([here, ir.raw_pow(there, -1)])
+                    mapping[n] = ratio if n.exponent == -1 else ir.raw_pow(ratio, -n.exponent)
         for atom, (side, pid, mode) in corr.items():
             if not contains_node(key, lambda x, atom=atom: x is atom):
                 continue
@@ -478,22 +477,20 @@ def _expand(prints: list[ir.SymExpr]) -> list[ir.SymExpr] | None:
 
 
 def proves(printed: ir.SymExpr, canonical: ir.SymExpr) -> bool:
-    got = recanonicalize(printed)
-    if got is canonical:
-        return True
-    return verify.equal_modulo_max(got, canonical) or verify.numeric_equal(got, canonical)
+    """Is an expression built with the raw constructors proven equal to a canonical one?"""
+    return verify.proves(printed, canonical) is not None
 
 
-def printed_merges(printer: Printer) -> tuple[ir.SymExpr, ...] | None:
+def printed_merges(printer: Printer, merge) -> tuple[ir.SymExpr, ...] | None:
     """The merge of every chosen state as it should be evaluated, if all of them
-    print and are proven equal to the canonical merges."""
+    print and are proven equal to the canonical ``merge``."""
     prints = [printer.print(c) for c in printer.chosen]
     if any(p is None for p in prints):
         return None
     expanded = _expand(prints)
     if expanded is None:
         return None
-    if not all(proves(p, m) for p, m in zip(expanded, printer.spec.merge)):
+    if not all(proves(p, m) for p, m in zip(expanded, merge)):
         return None
     return tuple(expanded)
 

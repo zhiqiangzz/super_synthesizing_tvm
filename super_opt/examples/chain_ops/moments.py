@@ -329,7 +329,7 @@ register(
         lambda: _moment_unfused(5),
         _moment_reference(5),
         fusible=False,
-        reason="s5 cannot be re-based around mean",
+        reason="is refused: REJECTED",
     )
 )
 register(

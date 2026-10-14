@@ -26,19 +26,21 @@ and returns the same program with every such chain replaced by one tuple
    is when every tensor the chain is needed for is a function of reductions
    that read no earlier result, and how many states are then enough. A
    chain no single pass is known for is left as it is;
-3. collects candidate states from the program itself (:mod:`reducer.states`)
-   and derives a reducer from each set of at most that many
-   (:mod:`reducer.derive`);
-4. takes the first reducer that survives the checks below and writes it back
-   as TE (:mod:`reducer.build`).
+3. chooses its states (:mod:`reducer.states`): the results of the program's
+   own loops, supplemented where they cannot be merged and replaced where
+   they are not defined on every part of the axis -- one explicit
+   procedure, decided by proof (:mod:`reducer.domain`), not a search;
+4. derives the reducer of those states (:mod:`reducer.derive`), checks it as
+   below and writes it back as TE (:mod:`reducer.build`).
 
-The second step is algebra on the program and nothing else: what it says
-exists does exist over the reals. The third and fourth are about floating
-point, where the states the judgement names (plain sums of powers, sums of
-exponentials) are often the wrong ones to keep.
+The second and third steps are algebra on the program and nothing else: what
+the second says exists does exist over the reals, and the third keeps the
+program's own arithmetic wherever that is defined. Floating point is the
+business of the fourth.
 
 A derived reducer is correct over the reals by construction and its monoid
-laws are verified. The checks are about what that leaves open:
+laws follow from how it is derived. The checks are about what that leaves
+open, and the chain is left as it is when one of them fails:
 
 * the merge must be finite against the identity element in floating point;
 * it must not take ``exp`` of an unbounded argument, divide by or take the
@@ -74,8 +76,9 @@ from .accuracy import (
 )
 from .reducer.build import Rewriter, build_chain
 from .reducer.chain import Chain, Skipped, discover_chains
+from .reducer.domain import TeSigns
 from .reducer.source import chain_source, describe_members, render
-from .reducer.states import Pool, Solution, members_of, synthesize
+from .reducer.states import Selection, Solution, members_of, select
 from .reducer.theory import Judgement
 from .reducer.theory import judge as judge_chain
 from .reducer.verify import identity_safe
@@ -103,7 +106,8 @@ class ChainReport:
     reason: str = ""  # why not, when it is not fused
     solution: Solution | None = None
     accuracy: AccuracyReport | None = None
-    rejected: list[Rejected] = dataclasses.field(default_factory=list)
+    rejected: list[Rejected] = dataclasses.field(default_factory=list)  # the reducer, if refused
+    selection: Selection | None = None  # how its states were chosen
 
     @property
     def axis(self) -> str:
@@ -254,25 +258,6 @@ def _judge(chain: Chain) -> Judgement:
     return judge_chain(chain, members_of(chain))
 
 
-def _why_not(pool: Pool, report: ChainReport, max_states: int) -> str:
-    """Why a chain that has a single pass was not fused."""
-    parts = []
-    for name in pool.unrebased:
-        cand = next(c for c in pool.cands if c.name == name)
-        ctx = ", ".join(pool.rebaser.by_pid[p].name for p in pool.rebaser.contexts(cand))
-        parts.append(f"{name} cannot be re-based around {ctx}, which leaves taking {ctx} out")
-    if report.rejected:
-        first = report.rejected[0]
-        parts.append(
-            f"{len(report.rejected)} derived reducer(s) rejected, e.g. "
-            f"({', '.join(first.states)}): {first.why}"
-        )
-    else:
-        need = ", ".join(report.required)
-        parts.append(f"no set of at most {max_states} derived states reproduces {need}")
-    return "; ".join(parts)
-
-
 def _fuse_chain(
     chain: Chain,
     outputs: list[te.Tensor],
@@ -281,50 +266,51 @@ def _fuse_chain(
     agree: _Agreement,
     max_states: int | None,
     accuracy: str,
+    signs: TeSigns,
 ) -> tuple[ChainReport, Rewriter]:
     report = ChainReport(chain, _judge(chain))
     if not report.theory.fusible:
         report.reason = report.theory.summary()
         return report, rewriter
-    if max_states is None:
-        max_states = report.theory.states
+    selection = select(chain, members_of(chain), signs)
+    report.selection = selection
+    sol = selection.solution
+    if sol is None:
+        report.reason = f"no state set: {selection.failure}"
+        return report, rewriter
+    spec = sol.spec
+    names = tuple(c.name for c in sol.states)
+    if max_states is not None and len(names) > max_states:
+        report.reason = (
+            f"its states ({', '.join(names)}) are {len(names)}, more than the {max_states} allowed"
+        )
+        return report, rewriter
+
+    def refuse(why: str) -> tuple[ChainReport, Rewriter]:
+        report.rejected.append(Rejected(names, why))
+        report.reason = f"the reducer of ({', '.join(names)}) is refused: {why}"
+        return report, rewriter
+
     dtype = str(chain.reductions[0].tensor.dtype)
+    if not identity_safe(spec.merge_code, spec.identity, dtype):
+        return refuse("its merge is not finite against the empty state in floating point")
     barred = set(gate.required) if gate is not None and accuracy == "filter" else set()
-    pools = [Pool(chain, count) for count in Pool.readings(chain)]
-    seen: set = set()
-    for pool in pools:
-        for sol in synthesize(pool, max_states=max_states, seen=seen):
-            spec = sol.spec
-            names = tuple(c.name for c in sol.states)
-
-            def reject(why: str, names=names) -> None:
-                report.rejected.append(Rejected(names, why))
-
-            if not identity_safe(spec.merge_code, spec.identity, dtype):
-                reject("its merge is not finite against the empty state in floating point")
-                continue
-            issues = sorted(barred & spec_issues(spec))
-            if issues:
-                reject("; ".join(ISSUES[k] for k in issues) + " (the original does not)")
-                continue
-            trial = rewriter.fork()
-            try:
-                build_chain(chain, spec, trial)
-                candidate = [trial.tensor(t) for t in outputs]
-            except (Unsupported, tvm.error.TVMError) as err:
-                reject(f"cannot be written as TE: {err}")
-                continue
-            if not agree(candidate):
-                reject("the rebuilt program differs from the original on small inputs")
-                continue
-            verdict = gate.check(candidate) if gate is not None else None
-            if verdict is not None and not verdict.ok and accuracy == "filter":
-                reject(verdict.summary())
-                continue
-            report.fused, report.solution, report.accuracy = True, sol, verdict
-            return report, trial
-    report.reason = _why_not(pools[0], report, max_states)
-    return report, rewriter
+    issues = sorted(barred & spec_issues(spec))
+    if issues:
+        return refuse("; ".join(ISSUES[k] for k in issues) + " (the original does not)")
+    trial = rewriter.fork()
+    try:
+        build_chain(chain, spec, trial)
+        candidate = [trial.tensor(t) for t in outputs]
+    except (Unsupported, tvm.error.TVMError) as err:
+        return refuse(f"cannot be written as TE: {err}")
+    if not agree(candidate):
+        return refuse("the rebuilt program differs from the original on small inputs")
+    verdict = gate.check(candidate) if gate is not None else None
+    if verdict is not None and not verdict.ok and accuracy == "filter":
+        return refuse(verdict.summary())
+    report.fused, report.solution, report.accuracy = True, sol, verdict
+    return report, trial
 
 
 def fuse(
@@ -344,8 +330,8 @@ def fuse(
     inputs : list of te.Tensor
         Its placeholders, in the order the generated function takes them.
     max_states : int, optional
-        Largest reducer considered (number of state tensors). By default as
-        many as the judgement of the chain says are enough.
+        Largest reducer accepted (number of state tensors); a chain whose
+        states come to more is left as it is. No bound by default.
     accuracy : {"filter", "report", "off"}
         ``"filter"`` only accepts a reducer that is as accurate as the original
         (see :mod:`accuracy`); ``"report"`` accepts the first one that is
@@ -368,6 +354,7 @@ def fuse(
     rewriter = Rewriter()
     if chains:
         config = accuracy_config or AccuracyConfig()
+        signs = TeSigns(outputs, config.positive)
         try:
             gate = AccuracyGate(outputs, inputs, config) if accuracy != "off" else None
             agree = _Agreement(outputs, inputs, config.positive)
@@ -378,7 +365,7 @@ def fuse(
             chains = []
         for chain in chains:
             report, rewriter = _fuse_chain(
-                chain, outputs, rewriter, gate, agree, max_states, accuracy
+                chain, outputs, rewriter, gate, agree, max_states, accuracy, signs
             )
             reports.append(report)
     verdict = next((r.accuracy for r in reversed(reports) if r.fused), None)

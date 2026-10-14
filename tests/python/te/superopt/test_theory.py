@@ -179,7 +179,7 @@ def test_nothing_is_derived_for_a_chain_without_a_known_single_pass():
     assert res.summary().count("no single pass is known") == 1  # said once, as the reason
 
 
-def test_states_judged_enough_bound_the_search():
+def test_states_chosen_are_as_many_as_judged_enough():
     """Six states for a correlation, five for a fourth moment: nobody has to say so."""
     for name in ("pearson", "moment4", "papr"):
         op = OPERATORS[name]
@@ -191,15 +191,16 @@ def test_states_judged_enough_bound_the_search():
 
 
 def test_single_pass_that_exists_and_is_not_taken_is_reported_as_such():
-    """A fifth central moment: six states are enough, and the only reducers derived keep
-    raw power sums, which cancel."""
+    """A fifth central moment: six states are enough, but the fifth power is beyond the
+    expansion, so the mean is taken out and raw power sums are left, which cancel."""
     ins, outs = OPERATORS["moment5"].unfused()
     res = fuse(outs, ins)
     (report,) = res.chains
-    assert not res.fused and report.theory.states == 6 and report.rejected
-    assert "s5 cannot be re-based around mean" in report.reason
-    accuracy = [r for r in report.rejected if "REJECTED" in r.why]
-    assert accuracy and all("offset" in r.why for r in accuracy)  # they cancel on shifted data
+    assert not res.fused and report.theory.states == 6
+    steps = [st.summary() for st in report.selection.steps]
+    assert "hoist mean out of s5: s5: it does not re-base" in steps
+    (refused,) = report.rejected
+    assert "REJECTED" in refused.why and "offset" in refused.why  # they cancel on shifted data
     assert "theory: a single pass with 6 state(s) exists" in res.summary()
 
 

@@ -14,25 +14,28 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Candidate states: the program's own tensors, and what re-basing and hoisting add."""
-
-import itertools
+"""Choosing the states: keep the program's loops, supplement, replace -- one procedure."""
 
 from chain_ops import OPERATORS
 
 import tvm.testing
 from tvm import te
-from tvm.te.superopt.reducer import states as states_module
+from tvm import tirx as tir
 from tvm.te.superopt.reducer.chain import discover_chains
 from tvm.te.superopt.reducer.derive import atoms_in, domains
-from tvm.te.superopt.reducer.states import Pool, _content, _scaled, members_of, synthesize
+from tvm.te.superopt.reducer.domain import TeSigns
+from tvm.te.superopt.reducer.states import (
+    _Chain,
+    _content,
+    _scaled,
+    members_of,
+    select,
+)
 from tvm.te.superopt.symbolic import ir
 from tvm.te.superopt.symbolic.canonicalize import (
     mk_add,
     mk_card,
     mk_div,
-    mk_exp,
-    mk_max,
     mk_mul,
     mk_pow,
     mk_reduce,
@@ -47,122 +50,83 @@ def _chain(name: str, which: int = 0):
     return discover_chains(outs)[0][which]
 
 
-def _pool(name: str, count: bool = True) -> Pool:
-    return Pool(_chain(name), count)
+def _select(name: str, positive=None, which: int = 0):
+    op = OPERATORS[name]
+    _, outs = op.unfused()
+    chain = discover_chains(outs)[0][which]
+    signs = TeSigns(outs, op.positive if positive is None else positive)
+    return select(chain, members_of(chain), signs)
+
+
+def _world(name: str) -> _Chain:
+    chain = _chain(name)
+    return _Chain(chain, members_of(chain), TeSigns([]))
 
 
 def _x(tensor: int = 0):
-    """The first boundary tensor, read along the reduction."""
+    """A boundary tensor, read along the reduction."""
     return ir.elem(tensor, (ir.idx("i0"), ir.bidx(0)))
 
 
-def _by_state(pool: Pool, state: ir.SymExpr):
-    """The candidate that is ``state`` up to a rational factor."""
-    norm = _scaled(state, _content(state))
-    return next((c for c in pool.cands if _scaled(c.state, _content(c.state)) is norm), None)
+def _R(sel) -> ir.DSym:
+    """The part of the axis the selected states are defined on."""
+    for c in sel.states:
+        for n in walk(c.state):
+            if isinstance(n, ir.Reduce | ir.Card) and isinstance(n.domain, ir.DSym):
+                return n.domain
+    raise AssertionError("no state reduces anything")
 
 
-def _names(sol) -> list[str]:
-    return [c.name for c in sol.states]
+def _names(sel) -> list[str]:
+    return [c.name for c in sel.states]
+
+
+def _steps(sel, action: str) -> list[str]:
+    return [st.summary() for st in sel.steps if st.action == action]
+
+
+def _same(a, b) -> bool:
+    """The same state up to a rational factor."""
+    return _scaled(a, _content(a)) is _scaled(b, _content(b))
+
+
+def _ab(n):
+    return ir.state_var("a", n), ir.state_var("b", n)
 
 
 # ---------------------------------------------------------------------------
-# shift / scale: the members themselves are the states
+# keep: the loops of the program
 # ---------------------------------------------------------------------------
-def test_softmax_members_are_the_states_and_the_merge_is_rebased():
-    pool = _pool("softmax")
-    assert [(c.name, c.origin) for c in pool.cands if c.depth == 0] == [
-        ("mx", "member"),
-        ("den", "member"),
-    ]
-    first = next(synthesize(pool))
-    assert _names(first) == ["mx", "den"] and not first.auxiliaries
-    spec = first.spec
+def test_softmax_keeps_its_loops_and_merges_them_by_rebasing():
+    sel = _select("softmax")
+    assert _names(sel) == ["mx", "den"]
+    assert [st.action for st in sel.steps] == ["keep", "keep"]  # nothing else was needed
+    spec = sel.solution.spec
     assert spec.leaves == (_x(), ir.ONE) and spec.identity == (ir.NEG_INF_C, ir.ZERO)
     # printed: each side keeps its own sum and is rescaled by exp(own max - merged max)
-    a, b = (lambda k: ir.state_var("a", k)), (lambda k: ir.state_var("b", k))
-    m = ir.raw_max([a(0), b(0)])
+    (a0, b0), (a1, b1) = _ab(0), _ab(1)
+    m = ir.raw_max([a0, b0])
 
-    def rescaled(s):
-        shift = ir.raw_add([m, ir.raw_mul([ir.MINUS_ONE, s(0)])])
-        return ir.raw_mul([ir.raw_exp(ir.raw_mul([ir.MINUS_ONE, shift])), s(1)])
+    def rescaled(s0, s1):
+        shift = ir.raw_add([m, ir.raw_mul([ir.MINUS_ONE, s0])])
+        return ir.raw_mul([ir.raw_exp(ir.raw_mul([ir.MINUS_ONE, shift])), s1])
 
-    assert spec.merge_print == (m, ir.raw_add([rescaled(a), rescaled(b)]))
+    assert spec.merge_print == (m, ir.raw_add([rescaled(a0, a1), rescaled(b0, b1)]))
     assert recanonicalize(spec.merge_print[1]) is spec.merge[1]
 
 
-def test_attention_normalised_output_scales_by_the_normaliser():
-    """The output re-bases against two contexts at once: shift for the max, scale for the mass."""
-    pool = _pool("attention")
-    out = next(c for c in pool.cands if c.name == "O")
-    d = pool.rebaser.decompose(out)
-    modes = {(pool.rebaser.by_pid[pid].name, mode) for _, _, pid, mode in d.corr}
+def test_attention_keeps_the_normalised_output():
+    """The output re-bases against two contexts at once: shift for the max, scale for the
+    mass; on an empty part the mass is 0 and the scale is printed as ``den_X / den``."""
+    sel = _select("attention")
+    assert _names(sel) == ["row_max", "den", "O"] and sel.solution.spec.merge_print is not None
+    w = _world("attention")
+    out = next(c for c in w.members if c.name == "O")
+    modes = {(w.name(pid), mode) for _, _, pid, mode in w.rebaser.decompose(out).corr}
     assert modes == {("row_max", "shift"), ("den", "scale")}
-    first = next(synthesize(pool))
-    assert _names(first) == ["row_max", "den", "O"] and first.spec.merge_print is not None
-    # the unnormalised accumulator of FlashAttention is there as well, by hoisting the mass
-    acc = next(c for c in pool.cands if c.origin == "hoist" and c.source == "O")
-    assert any(set(_names(s)) >= {"row_max", "den", acc.name} for s in synthesize(pool))
 
 
-# ---------------------------------------------------------------------------
-# closure: states the program never computes
-# ---------------------------------------------------------------------------
-def _moments(R):
-    x, n = _x(), mk_card(R)
-    mean = mk_div(mk_reduce("sum", R, 0, x), n)
-    return n, mean, [mk_reduce("sum", R, 0, mk_pow(mk_sub(x, mean), p)) for p in (2, 3, 4)]
-
-
-def test_variance_needs_the_count_and_gets_welford():
-    pool = _pool("variance")
-    _, R, _, _ = domains(pool.chain.axis)
-    count = _by_state(pool, mk_card(R))
-    assert count is not None and count.origin == "extent"  # the program divides by it
-    first = next(synthesize(pool))
-    assert sorted(_names(first)) == ["count", "mean", "ss"]
-    assert [c.name for c in first.auxiliaries] == ["count"]
-    spec = first.spec
-    k = {c.name: n for n, c in enumerate(first.states)}
-    assert spec.leaves[k["ss"]] is ir.ZERO and spec.leaves[k["count"]] is ir.ONE
-    # the sum of squares is corrected around the merged mean, never expanded into Σx²
-    a, b = (lambda n: ir.state_var("a", n)), (lambda n: ir.state_var("b", n))
-    na, nb, ma, mb = a(k["count"]), b(k["count"]), a(k["mean"]), b(k["mean"])
-    mean = mk_div(mk_add(mk_mul(ma, na), mk_mul(mb, nb)), mk_add(na, nb))
-    want = mk_add(
-        a(k["ss"]),
-        b(k["ss"]),
-        mk_mul(na, mk_pow(mk_sub(mean, ma), 2)),
-        mk_mul(nb, mk_pow(mk_sub(mean, mb), 2)),
-    )
-    assert recanonicalize(spec.merge_print[k["ss"]]) is want
-
-
-def test_third_and_fourth_moments_lift_the_lower_ones():
-    pool = _pool("moment3")
-    _, R, _, _ = domains(pool.chain.axis)
-    n, mean, (m2, m3, m4) = _moments(R)
-    lifted = _by_state(pool, m2)
-    assert lifted is not None and lifted.origin == "closure" and lifted.source == "s3"
-    first = next(synthesize(pool, max_states=4))
-    assert {c.origin for c in first.states} == {"member", "extent", "closure"}
-    assert set(c.state for c in first.states) >= {m3, lifted.state}
-    # without the second moment only raw power sums are left
-    assert all(s.hoists for s in synthesize(pool, max_states=3))
-
-    pool = _pool("moment4")
-    _, R, _, _ = domains(pool.chain.axis)
-    _, _, (m2, m3, _) = _moments(R)
-    second, third = _by_state(pool, m2), _by_state(pool, m3)
-    assert second is not None and third is not None
-    assert {second.origin, third.origin} == {"closure"}
-    first = next(synthesize(pool, max_states=5))
-    assert len(first.states) == 5 and first.spec.merge_print is not None
-
-
-def test_members_run_on_a_part_of_the_axis_are_the_first_candidates():
-    """What the judgement and the pool both start from: the chain's own tensors over a
-    sub-range, each defined down to the boundary."""
+def test_members_run_on_a_part_of_the_axis_are_where_the_states_start():
     chain = _chain("variance")
     members = members_of(chain)
     assert [(c.name, c.origin) for c in members] == [
@@ -170,9 +134,7 @@ def test_members_run_on_a_part_of_the_axis_are_the_first_candidates():
         ("mean", "member"),
         ("ss", "member"),
     ]
-    pool = Pool(chain)
-    assert [c.state for c in pool.cands[: len(members)]] == [c.state for c in members]
-    R = pool.R
+    _, R, _, _ = domains(chain.axis)
     assert set(atoms_in(members[2].state, R)) == {
         mk_reduce("sum", R, 0, _x()),
         mk_reduce("sum", R, 0, mk_pow(_x(), 2)),
@@ -180,216 +142,247 @@ def test_members_run_on_a_part_of_the_axis_are_the_first_candidates():
     }
 
 
-def test_only_state_sets_that_hold_every_needed_reduction_are_derived(monkeypatch):
-    """A reduction no state holds cannot be read back from the reducer: a set that
-    lacks one of those the required tensors are functions of is not tried at all."""
-    pool = _pool("variance")
-    R = pool.R
-    needed = {mk_reduce("sum", R, 0, _x()), mk_reduce("sum", R, 0, mk_pow(_x(), 2))}
-    tried = []
-    derive = states_module.derive
+# ---------------------------------------------------------------------------
+# supplement: what a merge needs
+# ---------------------------------------------------------------------------
+def test_variance_is_supplemented_with_the_count_and_keeps_the_mean():
+    """``ss`` re-based around the mean needs the count. The total and the count would do,
+    but the mean they give is 0 / 0 on an empty part: the mean itself is kept instead."""
+    sel = _select("variance")
+    assert _names(sel) == ["mean", "ss", "count"]
+    (promote,) = _steps(sel, "promote")
+    assert promote.startswith("promote mean in place of total_mean")
+    assert "merged with an empty part it is NaN, through mean there" in promote
+    assert _steps(sel, "supplement") == ["supplement count = Σ_j 1: mean needs Σ_j 1"]
+    # Welford: the squares are corrected around the merged mean, never expanded into Σx²
+    spec = sel.solution.spec
+    (ma, mb), (sa, sb), (na, nb) = _ab(0), _ab(1), _ab(2)
+    mean = mk_div(mk_add(mk_mul(ma, na), mk_mul(mb, nb)), mk_add(na, nb))
+    want = mk_add(
+        sa, sb, mk_mul(na, mk_pow(mk_sub(mean, ma), 2)), mk_mul(nb, mk_pow(mk_sub(mean, mb), 2))
+    )
+    assert recanonicalize(spec.merge_print[1]) is want
+    assert spec.leaves[1] is ir.ZERO and spec.leaves[2] is ir.ONE
 
-    def recording(states, required, axis, stats=None):
-        tried.append(states)
-        return derive(states, required, axis, stats)
 
-    monkeypatch.setattr(states_module, "derive", recording)
-    assert list(synthesize(pool, max_states=3))
-    assert tried and all(needed <= {a for s in states for a in atoms_in(s, R)} for states in tried)
-    subsets = sum(1 for k in (1, 2, 3) for _ in itertools.combinations(range(len(pool.cands)), k))
-    assert len(tried) < subsets  # the count alone, the mean alone, ... were never derived
+def test_higher_moments_are_supplemented_with_the_lower_ones():
+    sel = _select("moment3")
+    R = _R(sel)
+    x, n = _x(), mk_card(R)
+    mean = mk_div(mk_reduce("sum", R, 0, x), n)
+    m2 = mk_reduce("sum", R, 0, mk_pow(mk_sub(x, mean), 2))
+    (lifted,) = [c for c in sel.states if c.origin == "closure"]
+    assert lifted.source == "s3" and _same(lifted.state, m2)
+    assert {c.origin for c in sel.states} == {"member", "extent", "closure"}
+    sel = _select("moment4")
+    assert len(sel.states) == 5 and sel.solution.spec.merge_print is not None
+    assert [c.origin for c in sel.states].count("closure") == 2
 
 
-def test_every_derived_state_comes_out_of_the_program():
-    """No candidate is invented: each is a member (a tensor of the program or a
-    context it computes in place), the extent, or a coefficient of one."""
-    for name in ("softmax", "attention", "moment4", "covariance", "softmax_entropy"):
-        pool = _pool(name)
-        by_name = {c.name: c for c in pool.cands}
-        for c in pool.cands:
-            origins = ("member", "context", "extent", "part", "inner", "closure", "hoist")
-            assert c.origin in origins, c.name
-            if c.origin == "closure":
-                d = pool.rebaser.decompose(by_name[c.source])
-                coeffs = [pool.rebaser.coeff_state(t) for t in d.all_terms() if t.side == "a"]
-                assert any(_scaled(s, _content(s)) is c.state for s in coeffs), (name, c.name)
-            if c.origin == "hoist":
-                parent = by_name[c.source]
-                ctx = pool.rebaser.contexts(parent)
-                found = False
-                for size in range(1, len(ctx) + 1):
-                    for chosen in itertools.combinations(ctx, size):
-                        for struct in pool._coefficients(parent, set(chosen)) or ():
-                            state = pool._state(struct)
-                            found |= _scaled(state, _content(state)) is c.state
-                assert found, (name, c.name)
+def test_a_coefficient_that_is_one_reduction_comes_before_a_compound_one():
+    """``Σ (a - r q)²``: re-basing it around ``r`` leaves ``Σ q²`` and ``2 Σ (r q² - q a)``;
+    the second would have to be divided by ``r`` to read anything back."""
+    sel = _select("projection")
+    assert _names(sel) == ["r", "rem", "rem.r0"]
+    R = _R(sel)
+    q = ir.elem(0, (ir.idx("i0"), ir.bidx(0)))
+    assert _same(sel.states[2].state, mk_reduce("sum", R, 0, mk_pow(q, 2)))
 
 
 # ---------------------------------------------------------------------------
-# hoisting: the context moves to the epilogue
+# replace: a state that is not defined on every part
 # ---------------------------------------------------------------------------
-def test_soft_cross_entropy_hoists_the_log_sum_exp():
-    pool = _pool("soft_cross_entropy")
-    _, R, _, _ = domains(pool.chain.axis)
-    x, q = _x(0), _x(1)
-    sq = _by_state(pool, mk_reduce("sum", R, 0, q))
-    sqx = _by_state(pool, mk_reduce("sum", R, 0, mk_mul(q, x)))
-    # Σq is what shifting log(den) leaves behind; Σqx only appears once the contexts are out
-    assert sq is not None and sqx is not None and (sq.origin, sqx.origin) == ("closure", "hoist")
-    wanted = {"mx", "den", sq.name, sqx.name}
-    sol = next(s for s in synthesize(pool) if set(_names(s)) == wanted)
-    assert sol.spec.merge_print is not None
-    # both are plain sums; the loss is formed at the end: lse * Σq - Σqx
-    k = {c.name: n for n, c in enumerate(sol.states)}
-    a, b = (lambda n: ir.state_var("a", n)), (lambda n: ir.state_var("b", n))
-    for name in (sq.name, sqx.name):
-        assert sol.spec.merge[k[name]] is mk_add(a(k[name]), b(k[name]))
-    (loss,) = sol.spec.epilogues
-    assert isinstance(loss, ir.Add) and not any(isinstance(n, ir.Reduce) for n in walk(loss))
+def test_a_divisor_that_is_zero_on_a_single_element_is_taken_out():
+    """``max_j (x - mean) / sd``: ``sd`` of one element is 0. Only ``sd`` is taken out;
+    the mean stays, re-based by a shift."""
+    sel = _select("zscore_max")
+    assert _names(sel) == ["mean", "ss", "zmax.h0", "count"]
+    (hoist,) = _steps(sel, "hoist")
+    assert hoist == (
+        "hoist sigma out of zmax: zmax: it divides by sigma[i], which is 0 on every single element"
+    )
+    extreme = sel.states[2]
+    assert extreme.kind == "max" and extreme.origin == "hoist" and extreme.depth == 1
+    w = _world("zscore_max")
+    assert [w.name(p) for p in w.rebaser.contexts(extreme)] == ["mean"]
 
 
-def test_entropy_hoists_the_normaliser_and_keeps_the_shift():
-    pool = _pool("softmax_entropy")
-    _, R, _, _ = domains(pool.chain.axis)
-    x = _x()
-    mx = mk_reduce("max", R, 0, x)
-    t = mk_reduce("sum", R, 0, mk_mul(mk_sub(x, mx), mk_exp(mk_sub(x, mx))))
-    cand = _by_state(pool, t)
-    assert cand is not None and cand.origin == "hoist"
-    sol = next(s for s in synthesize(pool) if set(_names(s)) == {"mx", "den", cand.name})
-    assert sol.spec.merge_print is not None
-    k = {c.name: n for n, c in enumerate(sol.states)}
-    assert sol.spec.leaves[k[cand.name]] is ir.ZERO  # (x - x) exp(x - x)
+def test_both_norms_are_taken_out_of_a_cosine_at_once():
+    """The cosine divides by ``‖x‖`` and ``‖y‖``, each 0 where its vector is: the state left
+    is ``Σ x y``, as the hand-written single pass has it."""
+    sel = _select("cosine")
+    (hoist,) = _steps(sel, "hoist")
+    assert hoist.startswith("hoist ny, nx out of cos")
+    assert "which is 0 where X[i, j] is" in hoist and "which is 0 where Y[i, j] is" in hoist
+    R = _R(sel)
+    assert _same(sel.states[2].state, mk_reduce("sum", R, 0, mk_mul(_x(0), _x(1))))
 
 
-def test_states_that_keep_the_programs_own_shape_come_first():
-    """The expanded second moment only shows up once nothing re-based is left."""
-    pool = _pool("variance")
-    sols = list(synthesize(pool))
-    hoisted = [n for n, s in enumerate(sols) if s.hoists]
-    plain = [n for n, s in enumerate(sols) if not s.hoists]
-    assert plain and hoisted and max(plain) < min(hoisted)
-    raw = sols[hoisted[0]]
-    assert len(raw.states) == 2  # Σx and Σx²: smaller, and still later
+def test_a_context_defined_by_a_division_is_checked_through():
+    """``rem`` reads ``r = qa / qq``, and ``qq = Σ q²`` is 0 where ``q`` is."""
+    sel = _select("normalised_projection")
+    (hoist,) = _steps(sel, "hoist")
+    assert hoist == (
+        "hoist r out of rem: rem: it divides by qq[i] (through r), which is 0 where Q[i, j] is"
+    )
+
+
+def test_what_reading_a_reduction_back_divides_by_is_checked():
+    """``out = Σ_j y_j g`` with ``g = Σ_j x_j``: ``Σ y = out / g``, and ``g`` is 0 where
+    ``x`` is. ``out`` is replaced by ``Σ y`` -- the merge of ``(g, out)`` would lose it."""
+    n, m = te.var("n"), te.var("m")
+    X = te.placeholder((n, m), name="X")
+    Y = te.placeholder((n, m), name="Y")
+    j1, j2 = te.reduce_axis((0, m), "j"), te.reduce_axis((0, m), "j")
+    g = te.compute((n,), lambda i: te.sum(X[i, j1], axis=j1), name="g")
+    out = te.compute((n,), lambda i: te.sum(Y[i, j2] * g[i], axis=j2), name="out")
+    (chain,), _ = discover_chains(out)
+    sel = select(chain, members_of(chain), TeSigns(out))
+    (hoist,) = _steps(sel, "hoist")
+    assert hoist.startswith("hoist g out of out: out: reading Σ_j Y[i, j] back from it divides")
+    assert hoist.endswith("which is 0 where X[i, j] is")
+    _, R, _, _ = domains(chain.axis)
+    assert _same(sel.states[1].state, mk_reduce("sum", R, 0, _x(1)))
+
+
+def test_a_context_that_is_infinite_on_an_empty_part_is_taken_out():
+    """``Σ q (lse - x)``: on an empty part ``log den`` is ``-inf`` and the merge adds
+    ``Σ q · (lse - lse_empty)`` = ``0 · inf``. The maximum's shift stays: on an empty
+    part it is the lowest float, and ``exp`` of minus that is 0."""
+    sel = _select("soft_cross_entropy")
+    (hoist,) = _steps(sel, "hoist")
+    assert hoist.startswith("hoist loss.ctx0 out of loss: loss: merged with an empty part")
+    R = _R(sel)
+    sums = {c.name: c for c in sel.states if c.origin == "hoist"}
+    assert any(_same(c.state, mk_reduce("sum", R, 0, _x(1))) for c in sums.values())  # Σq
+    (loss,) = sel.solution.spec.epilogues
+    assert not any(isinstance(n, ir.Reduce) for n in walk(loss))
+
+
+def test_entropy_takes_the_log_of_the_normaliser_out_and_keeps_the_shift():
+    sel = _select("softmax_entropy")
+    assert _names(sel) == ["mx", "den", "H.h0"]
+    (hoist,) = _steps(sel, "hoist")
+    assert hoist.startswith("hoist H.ctx0 out of H")
+    w = _world("softmax_entropy")
+    kept = {w.name(p) for p in w.rebaser.contexts(sel.states[2])}
+    assert kept == {"mx", "den"}
+
+
+def test_a_scale_that_is_undefined_on_an_empty_part_is_taken_out():
+    """LayerNorm's backward: ``sgx`` divides by ``sd = sqrt(ss / n + eps)``, positive on
+    every non-empty part, but ``0 / 0`` on an empty one. A factor moves out of a sum
+    at no cost; the mean, a shift, is kept as a state instead."""
+    sel = _select("layernorm_backward")
+    assert _names(sel) == ["sg", "mean", "ss", "sgx.h0", "count"]
+    hoist = _steps(sel, "hoist")
+    assert hoist == [
+        "hoist sigma out of sgx: sgx: merged with an empty part it is NaN, through sigma there"
+    ]
+    assert _steps(sel, "promote")[0].startswith("promote mean in place of total")
+
+
+def test_a_maximum_of_reductions_is_taken_apart():
+    """``max_j |x - mean|`` is the larger of two reductions, each a shift by the mean."""
+    sel = _select("max_abs_deviation")
+    assert _steps(sel, "parts") == [
+        "parts dmax: no reduction it is made of can be read back from it"
+    ]
+    assert _names(sel) == ["mean", "dmax.m0", "dmax.m1", "count"]
+    assert all(c.origin == "part" and c.source == "dmax" for c in sel.states[1:3])
+    a, b = _ab(3)
+    assert sel.solution.spec.merge[3] is mk_add(a, b)
+
+
+def test_a_function_taken_out_of_a_maximum_leaves_its_reduction():
+    sel = _select("peak_power")
+    assert [c.origin for c in sel.states[1:3]] == ["inner", "inner"]
+    assert sel.solution.spec.epilogue_print is None
+    sel = _select("peak_to_geomean")
+    assert _names(sel) == ["mean", "ratio.m0", "count"] and sel.states[1].origin == "inner"
+
+
+def test_the_fifth_moment_is_beyond_the_expansion():
+    """``Σ (x - mean)⁵`` does not re-base (powers are expanded up to the fourth): its
+    context is taken out, which leaves raw power sums."""
+    sel = _select("moment5")
+    assert _steps(sel, "hoist") == ["hoist mean out of s5: s5: it does not re-base"]
+    assert all(c.origin != "closure" for c in sel.states)
+
+
+def test_declared_positive_weights_keep_the_weighted_mean():
+    """``mean = Σ w x / Σ w``: with ``w`` declared positive the weight sum is never 0 and
+    the mean is kept; without, it may be, and the mean has to be taken out."""
+    sel = _select("weighted_variance")
+    assert _names(sel) == ["mean", "sw", "ss"] and not _steps(sel, "hoist")
+    sel = _select("weighted_variance", positive=())
+    (hoist,) = _steps(sel, "hoist")
+    assert hoist.endswith("it divides by sw[i] (through mean), which is 0 where W[i, j] is")
+
+
+def test_only_a_multiple_of_a_loop_result_is_promoted():
+    """``Σ (log x - log mean)``: ``log mean`` is 0 / 0 on an empty part like the mean, but
+    as a state it would merge through ``exp`` of its own values. It is taken out instead."""
+    n, m = te.var("n"), te.var("m")
+    X = te.placeholder((n, m), name="X")
+    j1, j2 = te.reduce_axis((0, m), "j"), te.reduce_axis((0, m), "j")
+    total = te.compute((n,), lambda i: te.sum(X[i, j1], axis=j1), name="total")
+    mean = te.compute((n,), lambda i: total[i] / m.astype("float32"), name="mean")
+    out = te.compute(
+        (n,), lambda i: te.sum(tir.log(X[i, j2]) - tir.log(mean[i]), axis=j2), name="out"
+    )
+    (chain,), _ = discover_chains(out)
+    sel = select(chain, members_of(chain), TeSigns(out))
+    assert not _steps(sel, "promote") and _steps(sel, "hoist")
+    assert sel.solution is not None
 
 
 # ---------------------------------------------------------------------------
 # the extent as a count or as a constant
 # ---------------------------------------------------------------------------
-def test_label_smoothing_reads_the_extent_as_a_constant():
-    chain = _chain("label_smoothing")
-    assert Pool.readings(chain) == [True, False]
-    assert Pool.readings(_chain("softmax")) == [True]  # the extent is never used as a value
-    # a/K as a/|R| would make the smoothed labels depend on the sub-range
-    assert list(itertools.islice(synthesize(Pool(chain, count=True)), 1)) == []
-    pool = Pool(chain, count=False)
-    sols = [s for s in synthesize(pool) if {"mx", "den"} <= set(_names(s))]
-    assert sols and len(sols[0].states) == 4 and sols[0].spec.merge_print is not None
+def test_the_extent_is_a_count_unless_it_is_a_term_of_what_is_added_up():
+    assert _chain("variance").count  # mean = total / n: the mean of what was reduced
+    assert _chain("softmax").count  # never used as a value
+    assert not _chain("label_smoothing").count  # 0.9 y + 0.1 / k: a constant of the problem
+    sel = _select("label_smoothing")
+    assert len(sel.states) == 4 and sel.solution.spec.merge_print is not None
 
 
 # ---------------------------------------------------------------------------
-# no finite lifting
+# the procedure as a whole
 # ---------------------------------------------------------------------------
-def test_context_under_an_absolute_value_is_stuck():
-    pool = _pool("mean_abs_deviation")
-    assert pool.stuck == ["dev"] and pool.unrebased == ["dev"]
-    assert list(synthesize(pool)) == []
+def test_every_state_comes_out_of_the_program():
+    """No state is invented: a loop of the program, a context it computes, the count, or
+    taken from the expansion of one of those."""
+    origins = ("member", "context", "extent", "part", "inner", "closure", "hoist", "trivial")
+    for name in ("softmax", "attention", "moment4", "covariance", "softmax_entropy", "kurtosis"):
+        sel = _select(name)
+        assert sel.solution is not None, name
+        loops = {m.name for m in _chain(name).members}
+        for c in sel.states:
+            assert c.origin in origins, (name, c.name)
+            if c.origin in ("part", "inner", "closure", "hoist"):
+                assert c.source.split(".")[0] in loops, (name, c.name)
 
 
-def test_fifth_moment_is_beyond_the_expansion():
-    pool = _pool("moment5")
-    assert pool.unrebased == ["s5"] and pool.stuck == []  # hoisting still applies ...
-    assert list(itertools.islice(synthesize(pool, max_states=4), 1)) == []  # ... with 5 raw sums
+def test_the_selection_is_the_same_whatever_ran_before():
+    """Orders are structural, so the states do not depend on what the process built first."""
+    names = ["kurtosis", "attention", "zscore_max", "projection"]
+    first = {n: (_names(_select(n)), [s.summary() for s in _select(n).steps]) for n in names}
+    again = {
+        n: (_names(_select(n)), [s.summary() for s in _select(n).steps]) for n in reversed(names)
+    }
+    assert first == again
 
 
-def test_max_of_scaled_scores_rebases():
-    """``c * max(x)``: the positive factor does not hide the max from the decomposition."""
-    pool = _pool("attention")
-    row_max = pool.cands[0]
-    d = pool.rebaser.decompose(row_max)
-    assert d is not None and len(d.parts) == 2
-    a, b = (lambda k: ir.state_var("a", k)), (lambda k: ir.state_var("b", k))
-    assert next(synthesize(pool)).spec.merge[0] is mk_max(a(0), b(0))
+def test_kurtosis_takes_well_under_a_second():
+    """The procedure derives a handful of reducers, not every subset of the candidates."""
+    import time
 
-
-# ---------------------------------------------------------------------------
-# chains that end in a maximum
-# ---------------------------------------------------------------------------
-def test_largest_of_several_reductions_is_taken_apart():
-    """``max_j |x - mean|`` is the larger of two reductions: each of them is a candidate,
-    and the member itself has nothing to merge."""
-    pool = _pool("max_abs_deviation")
-    whole = next(c for c in pool.cands if c.name == "dmax")
-    assert isinstance(whole.struct, ir.Max) and pool.rebaser.decompose(whole) is None
-    parts = [c for c in pool.cands if c.origin == "part"]
-    assert [c.source for c in parts] == ["dmax", "dmax"] and len(whole.struct.args) == 2
-    assert all(pool.rebaser.decompose(c) is not None for c in parts)  # a shift by the mean
-    first = next(synthesize(pool))
-    assert {c.name for c in parts} <= set(_names(first)) and "dmax" not in _names(first)
-    a, b = (lambda k: ir.state_var("a", k)), (lambda k: ir.state_var("b", k))
-    assert first.spec.merge[_names(first).index("count")] is mk_add(a(1), b(1))
-    # taking the mean out as well leaves the extremes of the data themselves
-    x = _x()
-    assert _by_state(pool, mk_reduce("max", pool.R, 0, x)).origin == "hoist"
-    assert _by_state(pool, mk_reduce("max", pool.R, 0, mk_mul(ir.MINUS_ONE, x))) is not None
-
-
-def test_function_taken_out_of_a_maximum_leaves_its_reduction():
-    """``max_j (x - mean)²`` is the square of the larger of two reductions and
-    ``max_j exp(l - mean)`` the exponential of one: those reductions are the candidates,
-    re-based by a shift like any maximum; the member is formed from them at the end."""
-    pool = _pool("peak_power")
-    whole = next(c for c in pool.cands if c.name == "peak")
-    assert isinstance(whole.struct, ir.Pow) and isinstance(whole.struct.base, ir.Max)
-    assert pool.rebaser.decompose(whole) is None
-    inner = [c for c in pool.cands if c.origin == "inner"]
-    assert [c.source for c in inner] == ["peak", "peak"]
-    assert all(pool.rebaser.decompose(c) is not None for c in inner)
-    first = next(synthesize(pool))
-    assert {c.name for c in inner} <= set(_names(first)) and "peak" not in _names(first)
-    assert first.spec.merge_print is not None and first.spec.epilogue_print is None
-
-    pool = _pool("peak_to_geomean")
-    whole = next(c for c in pool.cands if c.name == "ratio")
-    assert isinstance(whole.struct, ir.Exp)
-    (inner,) = [c for c in pool.cands if c.origin == "inner"]
-    assert inner.source == "ratio" and pool.rebaser.decompose(inner) is not None
-    assert _names(next(synthesize(pool))) == ["mean", "count", inner.name]
-
-
-def test_sum_of_growing_functions_is_not_one_reduction():
-    """``max_j ((x - mean)³ + (x - mean))``: nothing was taken out, nothing is inside."""
-    pool = _pool("monotone_sum")
-    assert not [c for c in pool.cands if c.origin == "inner"] and pool.stuck == ["top"]
-    assert list(synthesize(pool)) == []
-
-
-def test_context_that_cannot_be_negative_leaves_a_maximum():
-    """``max_j (x - mean) / sigma``: ``sigma`` is a square root. What is left is ``max_j x``."""
-    pool = _pool("zscore_max")
-    assert pool.unrebased == ["zmax"] and pool.stuck == []
-    extreme = _by_state(pool, mk_reduce("max", pool.R, 0, _x()))
-    assert extreme is not None and (extreme.origin, extreme.source) == ("hoist", "zmax")
-    assert extreme.depth == 2  # the mean and the deviation were both taken out
-    # Welford's three states and the extreme; the set that keeps ``zmax`` itself as a
-    # state comes first and is turned down later (it divides by the deviation of one element)
-    sols = list(itertools.islice(synthesize(pool), 4))
-    assert _names(sols[0]) == ["mean", "ss", "zmax", "count"]
-    assert ["mean", "ss", "count", extreme.name] in [_names(s) for s in sols]
-
-
-def test_context_of_unknown_sign_stays_under_a_maximum():
-    """``max_j (g x_j)`` with ``g`` a sum of either sign is the largest *or* the smallest
-    ``x``: a single pass exists, but no rule here takes ``g`` out."""
-    n, m = te.var("n"), te.var("m")
-    X = te.placeholder((n, m), name="X")
-    G = te.placeholder((n, m), name="G")
-    j1, j2 = te.reduce_axis((0, m), "j"), te.reduce_axis((0, m), "j")
-    g = te.compute((n,), lambda i: te.sum(G[i, j1], axis=j1), name="g")
-    out = te.compute((n,), lambda i: te.max(g[i] * X[i, j2], axis=j2), name="out")
-    (chain,), _ = discover_chains(out)
-    pool = Pool(chain)
-    assert pool.stuck == ["out"] and list(synthesize(pool)) == []
+    start = time.perf_counter()
+    sel = _select("kurtosis")
+    assert sel.solution is not None and len(sel.states) == 5
+    assert time.perf_counter() - start < 30
 
 
 if __name__ == "__main__":

@@ -278,6 +278,8 @@ def mk_pow(base: SymExpr, exponent) -> SymExpr:
                 return ZERO
             return const(v**p.numerator)
         if v == 0:
+            if p < 0:
+                raise Unsupported("division by zero")
             return ZERO
         if v == 1:
             return ONE
@@ -511,6 +513,10 @@ def _mk_rmax(domain: Domain, level: int, body: SymExpr) -> SymExpr:
     if isinstance(body, Log):
         return mk_log(mk_reduce("max", domain, level, body.arg))
     if isinstance(body, Add):
+        common = _common_factor(body, level)
+        if common is not None:  # max_j c f_j = c max_j f_j for c >= 0 that does not move
+            rest = mk_add(*[mk_mul(t, mk_pow(common, Fraction(-1))) for t in body.args])
+            return mk_mul(shift(common, level + 1, -1), mk_reduce("max", domain, level, rest))
         dep, free = _partition_terms(body, level)
         # A power of a sum has terms of its own that do not move with the index
         # (the c² of (f - c)²), next to those that are added to it: every way of
@@ -559,6 +565,20 @@ def _mk_rmax(domain: Domain, level: int, body: SymExpr) -> SymExpr:
         outer_shifted = [shift(x, level + 1, -1) for x in outer]
         return mk_mul(*outer_shifted, mk_reduce("max", domain, level, mk_mul(*inner)))
     return ir.raw_reduce("max", domain, level, body)
+
+
+def _common_factor(body: Add, level: int) -> SymExpr | None:
+    """The factors every term of ``body`` has, that do not move with the index and
+    cannot be negative (``1/s`` in ``x/s - m/s`` with ``m`` still moving)."""
+    views = [factor_view(t) for t in body.args]
+    shared = []
+    for base, p in views[0][1].items():
+        f = mk_pow(base, p)
+        if f.uses_level(level) or not nonnegative(f):
+            continue
+        if all(v[1].get(base) == p for v in views[1:]):
+            shared.append(f)
+    return mk_mul(*shared) if shared else None
 
 
 def _rmax_scaled_power(domain: Domain, level: int, k: Fraction, u: SymExpr, p) -> SymExpr | None:
