@@ -36,6 +36,7 @@ from tvm.te.superopt.symbolic.canonicalize import (
     mk_add,
     mk_card,
     mk_div,
+    mk_exp,
     mk_mul,
     mk_pow,
     mk_reduce,
@@ -92,6 +93,11 @@ def _same(a, b) -> bool:
 
 def _ab(n):
     return ir.state_var("a", n), ir.state_var("b", n)
+
+
+def _rows():
+    n, m = te.var("n"), te.var("m")
+    return te.placeholder((n, m), name="X"), n, m
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +183,21 @@ def test_higher_moments_are_supplemented_with_the_lower_ones():
     sel = _select("moment4")
     assert len(sel.states) == 5 and sel.solution.spec.merge_print is not None
     assert [c.origin for c in sel.states].count("closure") == 2
+
+
+def test_the_fifth_moment_takes_the_second_third_and_fourth():
+    """``Σ (x - mean)⁵`` re-bases by a shift like the lower moments (a power of a sum is
+    expanded by the size of the result, not by its degree): nothing is taken out, and
+    the moments below it are supplemented."""
+    sel = _select("moment5")
+    assert _names(sel) == ["mean", "s5", "count", "s5.r0", "s5.r1", "s5.r2"]
+    assert not _steps(sel, "hoist") and sel.solution.spec.merge_print is not None
+    R = _R(sel)
+    x, n = _x(), mk_card(R)
+    mean = mk_div(mk_reduce("sum", R, 0, x), n)
+    for c, k in zip(sel.states[3:], (2, 3, 4)):
+        assert c.origin == "closure" and c.source == "s5"
+        assert _same(c.state, mk_reduce("sum", R, 0, mk_pow(mk_sub(x, mean), k)))
 
 
 def test_a_coefficient_that_is_one_reduction_comes_before_a_compound_one():
@@ -302,12 +323,130 @@ def test_a_function_taken_out_of_a_maximum_leaves_its_reduction():
     assert _names(sel) == ["mean", "ratio.m0", "count"] and sel.states[1].origin == "inner"
 
 
-def test_the_fifth_moment_is_beyond_the_expansion():
-    """``Σ (x - mean)⁵`` does not re-base (powers are expanded up to the fourth): its
-    context is taken out, which leaves raw power sums."""
-    sel = _select("moment5")
-    assert _steps(sel, "hoist") == ["hoist mean out of s5: s5: it does not re-base"]
-    assert all(c.origin != "closure" for c in sel.states)
+def test_a_sum_whose_parts_move_differently_is_kept_as_its_parts():
+    """``Σ (x - mean)² + exp(x - mx)``: re-based, the first part moves with ``1, δ, δ²``,
+    the second with ``e^{-ε}``, and no coefficient is the whole sum. Each part re-bases
+    by itself and is kept; taking the contexts out instead leaves ``Σ exp(x)``."""
+    X, n, m = _rows()
+    j1, j2, j3 = (te.reduce_axis((0, m), "j") for _ in range(3))
+    total = te.compute((n,), lambda i: te.sum(X[i, j1], axis=j1), name="total")
+    mean = te.compute((n,), lambda i: total[i] / m.astype("float32"), name="mean")
+    mx = te.compute((n,), lambda i: te.max(X[i, j2], axis=j2), name="mx")
+    energy = te.compute(
+        (n,),
+        lambda i: te.sum(
+            (X[i, j3] - mean[i]) * (X[i, j3] - mean[i]) + tir.exp(X[i, j3] - mx[i]), axis=j3
+        ),
+        name="energy",
+    )
+    (chain,), _ = discover_chains([energy])
+    sel = select(chain, members_of(chain), TeSigns([energy]))
+    assert _names(sel) == ["mean", "mx", "energy.p0", "energy.p1", "count"]
+    assert not _steps(sel, "hoist") and sel.solution.spec.merge_print is not None
+    (split,) = _steps(sel, "split")
+    assert split.startswith("split energy into ")
+    assert split.endswith(": it does not re-base; each of these does")
+    R, x = _R(sel), _x()
+    centred = mk_sub(x, mk_div(mk_reduce("sum", R, 0, x), mk_card(R)))
+    shifted = mk_sub(x, mk_reduce("max", R, 0, x))
+    want = [mk_reduce("sum", R, 0, mk_pow(centred, 2)), mk_reduce("sum", R, 0, mk_exp(shifted))]
+    pieces = sel.states[2:4]
+    assert all(any(_same(c.state, s) for c in pieces) for s in want)
+    assert all(c.origin == "piece" and c.source == "energy" for c in pieces)
+
+
+def test_two_rates_of_one_context_are_two_states():
+    """``Σ exp(x - mx) + exp(2 (x - mx))``: one context, whose correction weighs the two
+    parts by ``e^{-δ}`` and ``e^{-2δ}``. A polynomial of the shift is one rate: ``Σ (x -
+    mean)² + (x - mean)`` re-bases whole."""
+    X, n, m = _rows()
+    j1, j2 = (te.reduce_axis((0, m), "j") for _ in range(2))
+    mx = te.compute((n,), lambda i: te.max(X[i, j1], axis=j1), name="mx")
+    two = tir.const(2.0, "float32")
+    out = te.compute(
+        (n,),
+        lambda i: te.sum(tir.exp(X[i, j2] - mx[i]) + tir.exp((X[i, j2] - mx[i]) * two), axis=j2),
+        name="out",
+    )
+    (chain,), _ = discover_chains([out])
+    sel = select(chain, members_of(chain), TeSigns([out]))
+    assert _names(sel) == ["mx", "out.p0", "out.p1"] and len(_steps(sel, "split")) == 1
+
+    X, n, m = _rows()
+    j1, j2 = (te.reduce_axis((0, m), "j") for _ in range(2))
+    total = te.compute((n,), lambda i: te.sum(X[i, j1], axis=j1), name="total")
+    mean = te.compute((n,), lambda i: total[i] / m.astype("float32"), name="mean")
+    poly = te.compute(
+        (n,),
+        lambda i: te.sum(
+            (X[i, j2] - mean[i]) * (X[i, j2] - mean[i]) + (X[i, j2] - mean[i]), axis=j2
+        ),
+        name="poly",
+    )
+    (chain,), _ = discover_chains([poly])
+    sel = select(chain, members_of(chain), TeSigns([poly]))
+    assert _names(sel) == ["mean", "poly", "count"] and not _steps(sel, "split")
+
+
+def test_each_context_takes_the_correction_its_dependence_fits():
+    """Context by context, the others held fixed: ``exp(x - mx)`` fits a shift, ``v / den``
+    a scale; ``(x - mean)²`` fits both and re-bases whole only under a shift. ``Σ y g``
+    re-bases whole under both, with one coefficient under a scale and two under a shift."""
+    w = _world("attention")
+    out = next(c for c in w.members if c.name == "O")
+    chosen, neither = w.rebaser.modes(out)
+    assert {w.name(p): mode for p, mode in chosen.items()} == {"row_max": "shift", "den": "scale"}
+    assert not neither
+    w = _world("variance")
+    ss = next(c for c in w.members if c.name == "ss")
+    assert list(w.rebaser.modes(ss)[0].values()) == ["shift"]
+
+    X, n, m = _rows()
+    Y = te.placeholder((n, m), name="Y")
+    j1, j2 = (te.reduce_axis((0, m), "j") for _ in range(2))
+    g = te.compute((n,), lambda i: te.sum(X[i, j1], axis=j1), name="g")
+    out = te.compute((n,), lambda i: te.sum(Y[i, j2] * g[i], axis=j2), name="out")
+    (chain,), _ = discover_chains(out)
+    w = _Chain(chain, members_of(chain), TeSigns(out))
+    c = next(c for c in w.members if c.name == "out")
+    assert list(w.rebaser.modes(c)[0].values()) == ["scale"]
+    assert [mode for *_, mode in w.rebaser.decompose(c).corr] == ["scale", "scale"]  # both sides
+
+
+def test_only_the_context_no_correction_fits_is_taken_out():
+    """``max_j (x - mean) / sd`` with ``sd = sqrt(ss / n + eps)``, never 0: the maximum
+    moves with a shift of ``mean``, with neither a shift nor a scale of ``sd``. Only
+    ``sd`` is taken out, and the maximum of ``x - mean`` is kept."""
+    X, n, m = _rows()
+    j1, j2, j3 = (te.reduce_axis((0, m), "j") for _ in range(3))
+    count = m.astype("float32")
+    total = te.compute((n,), lambda i: te.sum(X[i, j1], axis=j1), name="total")
+    mean = te.compute((n,), lambda i: total[i] / count, name="mean")
+    ss = te.compute(
+        (n,), lambda i: te.sum((X[i, j2] - mean[i]) * (X[i, j2] - mean[i]), axis=j2), name="ss"
+    )
+    eps = tir.const(1e-5, "float32")
+    sd = te.compute((n,), lambda i: tir.sqrt(ss[i] / count + eps), name="sd")
+    zmax = te.compute((n,), lambda i: te.max((X[i, j3] - mean[i]) / sd[i], axis=j3), name="zmax")
+    (chain,), _ = discover_chains([zmax])
+    members = members_of(chain)
+    sel = select(chain, members, TeSigns([zmax]))
+    assert _names(sel) == ["mean", "ss", "zmax.h0", "count"]
+    (hoist,) = _steps(sel, "hoist")
+    assert hoist == (
+        "hoist sd out of zmax: zmax: it does not re-base: "
+        "neither a shift nor a scale of sd leaves its reduction"
+    )
+    w = _Chain(chain, members, TeSigns([zmax]))
+    assert [w.name(p) for p in w.rebaser.contexts(sel.states[2])] == ["mean"]
+    # where taking it out alone does not leave the reduction, every context goes with it
+    sel = _select("standardised_softmax")
+    (hoist,) = _steps(sel, "hoist")
+    assert hoist.startswith("hoist sigma, mean out of zden")
+    assert hoist.endswith(
+        "neither a shift nor a scale of sigma leaves its reduction; "
+        "sigma alone does not leave the reduction"
+    )
 
 
 def test_declared_positive_weights_keep_the_weighted_mean():
@@ -354,14 +493,24 @@ def test_the_extent_is_a_count_unless_it_is_a_term_of_what_is_added_up():
 def test_every_state_comes_out_of_the_program():
     """No state is invented: a loop of the program, a context it computes, the count, or
     taken from the expansion of one of those."""
-    origins = ("member", "context", "extent", "part", "inner", "closure", "hoist", "trivial")
+    origins = (
+        "member",
+        "context",
+        "extent",
+        "part",
+        "inner",
+        "piece",
+        "closure",
+        "hoist",
+        "trivial",
+    )
     for name in ("softmax", "attention", "moment4", "covariance", "softmax_entropy", "kurtosis"):
         sel = _select(name)
         assert sel.solution is not None, name
         loops = {m.name for m in _chain(name).members}
         for c in sel.states:
             assert c.origin in origins, (name, c.name)
-            if c.origin in ("part", "inner", "closure", "hoist"):
+            if c.origin in ("part", "inner", "piece", "closure", "hoist"):
                 assert c.source.split(".")[0] in loops, (name, c.name)
 
 

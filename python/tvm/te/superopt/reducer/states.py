@@ -60,12 +60,17 @@ replace
       becomes a state, whose value on an empty part the identity law is
       free to choose, and replaces the result it was computed from;
     * a state that does not re-base is replaced by the reductions it is the
-      maximum of (``max |x - mean|``), or failing that has its contexts all
-      taken out.
+      maximum of (``max |x - mean|``), or by the pieces it is the sum of
+      when each re-bases by itself and the whole does not (``Σ (x - mean)² +
+      exp(x - mx)``: the two move under different corrections, ``1`` and
+      ``e^{-δ}``), or failing both has taken out the contexts it moves with
+      under neither a shift nor a scale (each tried alone: ``sd`` in ``max (x
+      - mean) / sd``, not ``mean``) -- all of them when no one is to blame, or
+      it does not leave the reduction alone.
 
 Every replacement comes out of the replaced state's own expansion. What is
 decided -- per loop of the program: kept, which contexts taken out, taken
-apart; per context: promoted -- only ever grows, and the states are rebuilt
+apart, split; per context: promoted -- only ever grows, and the states are rebuilt
 from it each round: the procedure ends, with one state set, whose reducer
 is then derived (:mod:`derive`).
 """
@@ -141,7 +146,7 @@ class Solution:
 class Step:
     """One decision of :func:`select` and why it was taken."""
 
-    action: str  # "keep", "supplement", "promote", "hoist", "parts" or "drop"
+    action: str  # "keep", "supplement", "promote", "hoist", "parts", "split" or "drop"
     subject: str
     reason: str
 
@@ -373,6 +378,29 @@ class _Chain:
             )
         return out
 
+    def pieces(self, cand: Candidate) -> list[Candidate]:
+        """The parts of a sum that re-base each by itself where the sum does not."""
+        terms = self.rebaser.split(cand)
+        if terms is None:
+            return []
+        out = []
+        for t in sorted(terms, key=lambda t: _order(self.rebaser.coeff_struct(t))):
+            state = self.rebaser.coeff_state(t)
+            by = _content(state)
+            out.append(
+                Candidate(
+                    f"{cand.name}.p{len(out)}",
+                    cand.kind,
+                    "piece",
+                    _scaled(state, by),
+                    _scaled(self.rebaser.coeff_struct(t), by),
+                    cand.index,
+                    depth=cand.depth,
+                    source=cand.name,
+                )
+            )
+        return out
+
     def coefficients(self, cand: Candidate) -> list[Candidate]:
         """What re-basing ``cand`` leaves behind: the coefficients of its corrections,
         one reduction before a compound one."""
@@ -474,12 +502,14 @@ class _Decisions:
 
     hoisted: dict[int, frozenset[int]] = dataclasses.field(default_factory=dict)  # loop: contexts
     parts: set[int] = dataclasses.field(default_factory=set)  # loops taken apart
+    split: set[int] = dataclasses.field(default_factory=set)  # loops kept as their pieces
     promoted: dict[int, int] = dataclasses.field(default_factory=dict)  # context: loop replaced
 
     def key(self):
         return (
             tuple(sorted((k, tuple(sorted(v))) for k, v in self.hoisted.items())),
             tuple(sorted(self.parts)),
+            tuple(sorted(self.split)),
             tuple(sorted(self.promoted.items())),
         )
 
@@ -530,6 +560,8 @@ class _Select:
                 got = self.w.hoisted(loop, self.dec.hoisted[loop.pid])
                 if got is None:
                     return f"the contexts of {loop.name} do not leave its reduction"
+            if loop.pid in self.dec.split:  # what is left is kept as its pieces where it has them
+                got = [p for c in got for p in (self.w.pieces(c) or [c])]
             if loop.pid in self.dec.parts:  # what is left is taken apart where it can be
                 got = [p for c in got for p in (self.w.parts(c) or [c])]
             out.extend(got)
@@ -638,11 +670,10 @@ class _Select:
             k = trace.get("unsolvable")
             if k is not None:
                 why = "no reduction it is made of can be read back from it"
-                return states[k], [_Fault("structure", frozenset(), why)]
+                return states[k], self._structure(states[k], why)
             stuck = trace.get("stuck")
             if stuck is not None:
-                why = "its merge needs what no state provides"
-                return stuck, [_Fault("structure", frozenset(), why)]
+                return stuck, self._structure(stuck, "its merge needs what no state provides")
             return None
         signs = self._state_signs(states)
         for k, c in enumerate(states):
@@ -650,7 +681,7 @@ class _Select:
             if found:
                 return c, found
             if c.kind != "value" and w.rebaser.contexts(c) and w.rebaser.decompose(c) is None:
-                return c, [_Fault("structure", frozenset(), "it does not re-base")]
+                return c, self._structure(c, "it does not re-base")
         printer = Printer(w.rebaser, list(states), states, sol)
         identity = [_empty_value(c, w) for c in states]
         state_signs = {k: w.state_sign(c) for k, c in enumerate(states)}
@@ -659,6 +690,16 @@ class _Select:
             if found:
                 return c, found
         return None
+
+    def _structure(self, c: Candidate, why: str) -> list[_Fault]:
+        """``c`` cannot be merged; blamed on the contexts no correction leaves its
+        reduction for (``|x - mean|``), when there are any."""
+        w = self.w
+        neither = w.rebaser.modes(c)[1] if c.kind != "value" else ()
+        if neither:
+            names = ", ".join(w.name(p) for p in neither)
+            why = f"{why}: neither a shift nor a scale of {names} leaves its reduction"
+        return [_Fault("structure", frozenset(neither), why)]
 
     def _state_signs(self, states) -> domain.Signs:
         w = self.w
@@ -754,11 +795,17 @@ class _Select:
         reason = "; ".join(f.reason for f in chosen)
         every = frozenset(w.rebaser.contexts(loop))
         if kind == "structure":
+            pieces = w.pieces(c) if loop.pid not in self.dec.split else []
             if loop.pid not in self.dec.parts and w.parts(c):
                 self.dec.parts.add(loop.pid)
                 self.note("parts", c.name, reason)
+            elif pieces:
+                self.dec.split.add(loop.pid)
+                into = ", ".join(w.render(p.struct) for p in pieces)
+                self.note("split", f"{c.name} into {into}", f"{reason}; each of these does")
             else:
-                self._hoist(loop, every, c, reason)
+                blamed = frozenset().union(*(f.contexts for f in chosen))
+                self._hoist(loop, blamed or every, c, reason)
         elif kind == "empty":
             f = chosen[0]
             modes = _modes(w, c)
@@ -789,7 +836,11 @@ class _Select:
         if not want:
             return
         if w.hoisted(loop, want) is None:  # these do not leave on their own: all of them do
-            want = frozenset(w.rebaser.contexts(loop))
+            every = frozenset(w.rebaser.contexts(loop))
+            if every != want:
+                asked = ", ".join(w.name(p) for p in sorted(want - have))
+                reason = f"{reason}; {asked} alone does not leave the reduction"
+            want = every
         if want != have:
             self.dec.hoisted[loop.pid] = want
             names = ", ".join(w.name(p) for p in sorted(want))
@@ -974,8 +1025,7 @@ def _distinct(cands: list[Candidate]) -> list[Candidate]:
 
 
 def _modes(w: _Chain, c: Candidate) -> dict[int, str]:
-    d = w.rebaser.decompose(c)
-    return {} if d is None else {pid: mode for _, _, pid, mode in d.corr}
+    return w.rebaser.modes(c)[0]
 
 
 def _empty_value(c: Candidate, w: _Chain) -> ir.Const:

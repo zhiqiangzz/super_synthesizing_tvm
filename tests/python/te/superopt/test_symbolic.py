@@ -66,6 +66,16 @@ def test_canon_distributes_products_over_sums():
     assert mk_mul(z, mk_sub(x, y)) is mk_sub(mk_mul(z, x), mk_mul(z, y))
 
 
+def test_power_of_a_sum_is_expanded_by_the_size_of_the_result():
+    """``(x - y)⁷`` has 8 monomials and is expanded at any degree; a sum of ten terms to
+    the fourth power has 715 and is kept as a power."""
+    seventh = mk_pow(mk_sub(x, y), 7)
+    assert isinstance(seventh, ir.Add) and len(seventh.args) == 8
+    assert mk_mul(*[mk_sub(x, y)] * 7) is seventh
+    wide = mk_add(*[ir.atom(f"t{k}") for k in range(10)])
+    assert isinstance(mk_pow(wide, 4), ir.Pow) and isinstance(mk_pow(wide, 2), ir.Add)
+
+
 def test_canon_exp_merge():
     assert mk_mul(mk_exp(x), mk_exp(y)) is mk_exp(mk_add(x, y))
     assert mk_pow(mk_exp(x), -1) is mk_exp(mk_neg(x))
@@ -189,7 +199,7 @@ def test_integer_power_is_the_product():
     inverse = lowered(lambda v: tir.power(v, tir.const(-2.0, "float32")))
     assert inverse is lowered(lambda v: tir.const(1.0, "float32") / (v * v))
     assert lowered(lambda v: tir.power(v, tir.const(1.0, "float32"))) is lowered(lambda v: v)
-    # of a sum, at a degree above what a single power is expanded to: still the product
+    # of a sum: expanded, like the product
     one = tir.const(1.0, "float32")
     fifth = lowered(lambda v: tir.power(v - one, tir.const(5.0, "float32")))
     assert fifth is lowered(lambda v: (v - one) * (v - one) * (v - one) * (v - one) * (v - one))
