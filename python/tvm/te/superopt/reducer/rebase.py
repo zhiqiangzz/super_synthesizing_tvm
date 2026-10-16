@@ -33,6 +33,12 @@ reduction of each side::
     Σ_A exp(x - mx_A - δ_A)   = exp(-δ_A) · den(A)
     Σ_A (x - mean_A - δ_A)²   = ss(A) - 2 δ_A · Σ_A (x - mean_A) + δ_A² · |A|
 
+Which of the two a context takes is decided by how the candidate depends on
+it, context by context: the correction leaves the reduction exactly when the
+dependence is a sum of exponentials times polynomials (shift) or of powers
+times polynomials of the log (scale) -- the functions whose shifts (scalings)
+span a finite space. A context that neither fits is reported as such.
+
 What is left under each power of the correction is a *coefficient*: a
 reduction over one side with that side's own context. A coefficient is the
 candidate's own value on that side, zero, or something else -- and that
@@ -50,7 +56,6 @@ proven equal to the canonical one before it is used.
 from __future__ import annotations
 
 import dataclasses
-import itertools
 
 from ..dims import DimKey
 from ..symbolic import ir
@@ -81,7 +86,7 @@ class Candidate:
     name: str
     # "sum" / "max" / "min": merged by re-basing; "value": a function of other candidates
     kind: str
-    origin: str  # "member", "context", "extent", "part", "inner", "closure" or "hoist"
+    origin: str  # "member", "context", "extent", "part", "inner", "piece", "closure" or "hoist"
     state: ir.SymExpr  # canonical, down to the boundary tensors
     struct: ir.SymExpr  # the same with reads of chain members kept (pinned) as written
     index: tuple[ir.IndexExpr, ...]  # chain coordinates of its own axes
@@ -151,7 +156,9 @@ class Rebaser:
         self.by_pid = {c.pid: c for c in members if c.pid is not None}
         _, self.R, a, b = domains(axis)
         self.sides = {"a": a, "b": b}
-        self._memo: dict[int, Decomposition | None] = {}
+        self._modes: dict = {}
+        self._memo: dict = {}
+        self._whole: dict = {}
 
     # -- reading definitions ---------------------------------------------------
     def pinned(self, n: ir.Node) -> bool:
@@ -209,23 +216,114 @@ class Rebaser:
         return subst_domain(map_elems(term.coeff, unpin), {self.sides[term.side]: self.R})
 
     # -- decomposition -----------------------------------------------------------
-    def decompose(self, cand: Candidate) -> Decomposition | None:
-        """The first admissible re-basing of ``cand``: every correction leaves its
-        partial reduction, and the correction-free part is ``cand`` itself on
-        each side. Additive corrections are tried before multiplicative ones."""
-        key = id(cand)
+    @staticmethod
+    def _key(cand: Candidate):
+        return (cand.kind, cand.struct, cand.state)  # candidates are rebuilt, their nodes shared
+
+    def modes(self, cand: Candidate) -> tuple[dict[int, str], tuple[int, ...]]:
+        """How each context of ``cand`` is corrected, and the contexts none fits.
+
+        Each context is tried alone, the others held fixed. A shift fits when
+        ``cand`` depends on the context through exponentials times polynomials of
+        it (``(x - mean)²``, ``exp(x - mx)``), a scale when through powers times
+        polynomials of its log (``v / den``): exactly then every correction leaves
+        the reduction, with finitely many coefficients. Where both fit: the one
+        under which ``cand`` re-bases whole (one coefficient is ``cand`` itself),
+        then the one with fewer coefficients -- fewer states to keep --, then the
+        shift.
+        """
+        key = self._key(cand)
+        if key not in self._modes:
+            chosen, neither = {}, []
+            for pid in self.contexts(cand):
+                fits = []
+                for order, mode in enumerate(("shift", "scale")):
+                    try:
+                        d = self._rebased(cand, {pid: mode})
+                        rest = None if d is None else self._at_rest(d)
+                    except Unsupported:
+                        d = None
+                    if d is not None:
+                        size = sum(1 for t in d.all_terms() if t.side == "a")
+                        whole = rest is not None and len(rest) == 1
+                        fits.append((not whole, size, order, mode))
+                if fits:
+                    chosen[pid] = min(fits)[-1]
+                else:
+                    neither.append(pid)
+            self._modes[key] = (chosen, tuple(neither))
+        return self._modes[key]
+
+    def rebased(self, cand: Candidate) -> Decomposition | None:
+        """``cand`` re-based under the corrections :meth:`modes` chooses; ``None`` when
+        a context has none, or the corrections do not leave the reductions together."""
+        key = self._key(cand)
         if key not in self._memo:
             self._memo[key] = None
-            contexts = self.contexts(cand)
-            for modes in itertools.product(("shift", "scale"), repeat=len(contexts)):
+            chosen, neither = self.modes(cand)
+            if not neither:
                 try:
-                    d = self._rebased(cand, dict(zip(contexts, modes)))
+                    self._memo[key] = self._rebased(cand, chosen)
                 except Unsupported:
-                    d = None
-                if d is not None and self._admissible(cand, d):
-                    self._memo[key] = d
-                    break
+                    pass
         return self._memo[key]
+
+    def decompose(self, cand: Candidate) -> Decomposition | None:
+        """The re-basing of ``cand`` when it is admissible: some coefficient is
+        ``cand`` itself on each side, the corrections only weigh it."""
+        key = self._key(cand)
+        if key not in self._whole:
+            d = self.rebased(cand)
+            self._whole[key] = d if d is not None and self._admissible(cand, d) else None
+        return self._whole[key]
+
+    def split(self, cand: Candidate) -> tuple[Term, ...] | None:
+        """The pieces of a sum that does not re-base as a whole but piece by piece.
+
+        ``Σ (x - mean)² + exp(x - mx)`` re-based is ``ss(A) - 2 δ Σ_A (x - mean_A)
+        + δ² |A| + e^{-ε} den(A)``: no coefficient is the sum itself, the corrections
+        ``1`` and ``e^{-ε}`` weigh its two parts differently. A correction is an
+        exponential (a power, for a scale) times a polynomial of the shift (of its
+        log); the coefficients of the pure ones -- those that are not 0 where the
+        correction is none, ``δ = 0``, ``r = 1`` -- are the parts of the sum that each
+        move under one rate of their own, and add up to the sum. Each of them
+        re-bases by itself. ``None`` when the sum re-bases whole or not at all.
+        """
+        if cand.kind != "sum" or self.decompose(cand) is not None:
+            return None
+        d = self.rebased(cand)
+        if d is None or d.parts:
+            return None
+        try:
+            return self._pieces(cand, d)
+        except Unsupported:
+            return None
+
+    def _pieces(self, cand: Candidate, d: Decomposition) -> tuple[Term, ...] | None:
+        rest = self._at_rest(d)
+        if rest is None or len(rest) < 2:
+            return None
+        if mk_add(*[mk_mul(w, self.coeff_state(t)) for t, w in rest]) is not cand.state:
+            return None
+        return tuple(t for t, _ in rest)
+
+    @staticmethod
+    def _at_rest(d: Decomposition) -> list[tuple[Term, ir.SymExpr]] | None:
+        """The terms of side ``a`` whose correction is not 0 where there is none
+        (``δ = 0``, ``r = 1``), with its value there; ``None`` when one is not a
+        constant. Their coefficients so weighed add up to the candidate."""
+        none = {atom: ir.ZERO if mode == "shift" else ir.ONE for atom, _, _, mode in d.corr}
+        out = []
+        for t in d.all_terms():
+            if t.side != "a":
+                continue
+            weight = subst(t.key, none)
+            if weight is ir.ZERO:
+                continue
+            if not is_constant(weight):
+                return None
+            out.append((t, weight))
+        return out
 
     def _admissible(self, cand: Candidate, d: Decomposition) -> bool:
         """Some coefficient is the candidate itself (a minimum is ``-max`` of its negation)."""
@@ -251,10 +349,12 @@ class Rebaser:
             side = self.side_of(depth_domain.get(depth))
             if side is None:
                 raise Unsupported("context outside a partial reduction")
-            mode = modes[n.tensor]
+            mode = modes.get(n.tensor)
+            if mode is None:  # held fixed, a value of the row: another context is tried
+                return ir.elem(n.tensor, n.indices[:-1])
+            pinned = ir.elem(n.tensor + SIDE_OFFSET[side], n.indices)
             atom = ir.atom(f"{'d' if mode == 'shift' else 'r'}{side}{-n.tensor}")
             corr[atom] = (side, n.tensor, mode)
-            pinned = ir.elem(n.tensor + SIDE_OFFSET[side], n.indices)
             return mk_add(pinned, atom) if mode == "shift" else mk_mul(pinned, atom)
 
         merged = subst_domain(cand.struct, {self.R: union})

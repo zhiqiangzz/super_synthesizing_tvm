@@ -136,7 +136,7 @@ def _eval(e: ir.SymExpr, env: dict[ir.Node, object], limits=None):
     elif isinstance(e, ir.Pow):
         base = _eval(e.base, env, limits)
         p = e.exponent
-        if p.denominator == 1 and abs(p.numerator) <= 4:  # as generated: repeated products
+        if p.denominator == 1:  # as generated: repeated products
             out = base
             for _ in range(abs(p.numerator) - 1):
                 out = out * base

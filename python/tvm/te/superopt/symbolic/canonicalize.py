@@ -48,6 +48,7 @@ equality modulo this theory.
 from __future__ import annotations
 
 import itertools
+import math
 from fractions import Fraction
 
 from . import ir
@@ -302,7 +303,7 @@ def mk_pow(base: SymExpr, exponent) -> SymExpr:
         return ir.raw_pow(base, p)
     if isinstance(base, Mul):
         return mk_mul(*[mk_pow(a, p) for a in base.args])
-    if isinstance(base, Add) and p.denominator == 1 and 2 <= p <= 4:
+    if isinstance(base, Add) and p.denominator == 1 and p >= 2 and _expandable(base, p):
         # Polynomial normal form: expand (a + b)^n term by term (never through
         # mk_mul(base, base), which would collect the factor back into a Pow).
         out: SymExpr = base
@@ -313,6 +314,20 @@ def mk_pow(base: SymExpr, exponent) -> SymExpr:
     if isinstance(base, Exp):
         return mk_exp(mk_mul(const(p), base.arg))
     return ir.raw_pow(base, p)
+
+
+MAX_EXPANDED_TERMS = 128  # monomials a power of a sum may expand into
+
+
+def _expandable(base: Add, p: Fraction) -> bool:
+    """Does ``base^p`` expand into at most ``MAX_EXPANDED_TERMS`` monomials?
+
+    A sum of ``k`` terms to the ``n``-th power has at most ``C(n + k - 1, k - 1)``
+    distinct monomials. The bound is on the size of the result, not on the
+    degree: ``(x - m)⁵`` expands (6 terms), a sum of ten terms to the fourth
+    power does not (715).
+    """
+    return math.comb(int(p) + len(base.args) - 1, len(base.args) - 1) <= MAX_EXPANDED_TERMS
 
 
 def _exact_root(v: Fraction, n: int) -> Fraction | None:

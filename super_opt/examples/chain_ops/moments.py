@@ -86,6 +86,21 @@ def pebay(order: int):
                 + tir.const(4.0, DTYPE) * d * (na * b[3] - nb * a[3]) / n
             )
             out.append(m4)
+        if order >= 5:
+            m5 = (
+                a[5]
+                + b[5]
+                + d * d * d * d * d * na * nb * (na - nb) * (na * na + nb * nb) / (n * n * n * n)
+                + tir.const(10.0, DTYPE)
+                * d
+                * d
+                * d
+                * (na * na * na * b[2] - nb * nb * nb * a[2])
+                / (n * n * n)
+                + tir.const(10.0, DTYPE) * d * d * (nb * nb * a[3] + na * na * b[3]) / (n * n)
+                + tir.const(5.0, DTYPE) * d * (na * b[4] - nb * a[4]) / n
+            )
+            out.append(m5)
         return tuple(out)
 
     return te.comm_reducer(merge, _zeros(order + 1), name="pebay")
@@ -311,6 +326,17 @@ register(
 )
 register(
     Operator(
+        "moment5",
+        "closure",
+        "Σ (x - mean)⁵ / n: needs the second, the third and the fourth",
+        lambda: _moment_unfused(5),
+        _moment_reference(5),
+        lambda: _moment_fused(5),
+        states=6,
+    )
+)
+register(
+    Operator(
         "mean_abs_deviation",
         "negative",
         "Σ |x - mean| / n",
@@ -319,17 +345,6 @@ register(
         fusible=False,
         reason="no single pass is known: dev reads mean inside",
         judged=False,
-    )
-)
-register(
-    Operator(
-        "moment5",
-        "negative",
-        "Σ (x - mean)⁵ / n: six states are enough, and only as raw power sums",
-        lambda: _moment_unfused(5),
-        _moment_reference(5),
-        fusible=False,
-        reason="is refused: REJECTED",
     )
 )
 register(

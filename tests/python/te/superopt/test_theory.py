@@ -191,17 +191,20 @@ def test_states_chosen_are_as_many_as_judged_enough():
 
 
 def test_single_pass_that_exists_and_is_not_taken_is_reported_as_such():
-    """A fifth central moment: six states are enough, but the fifth power is beyond the
-    expansion, so the mean is taken out and raw power sums are left, which cancel."""
-    ins, outs = OPERATORS["moment5"].unfused()
+    """``Σ (a - r q)²`` with ``r = Σ q a / Σ q²``: three states are enough, but ``r`` is
+    0 / 0 on a part where ``q`` is 0, so it is taken out and raw sums are left, which cancel."""
+    ins, outs = OPERATORS["normalised_projection"].unfused()
     res = fuse(outs, ins)
     (report,) = res.chains
-    assert not res.fused and report.theory.states == 6
+    assert not res.fused and report.theory.states == 3
     steps = [st.summary() for st in report.selection.steps]
-    assert "hoist mean out of s5: s5: it does not re-base" in steps
+    assert (
+        "hoist r out of rem: rem: it divides by qq[i] (through r), which is 0 where Q[i, j] is"
+        in steps
+    )
     (refused,) = report.rejected
     assert "REJECTED" in refused.why and "offset" in refused.why  # they cancel on shifted data
-    assert "theory: a single pass with 6 state(s) exists" in res.summary()
+    assert "theory: a single pass with 3 state(s) exists" in res.summary()
 
 
 if __name__ == "__main__":
