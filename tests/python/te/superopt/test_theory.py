@@ -150,11 +150,16 @@ def test_maximum_whose_context_stays_inside_has_no_single_pass_that_is_known():
 
 def test_not_known_is_not_the_same_as_impossible():
     """``Σ |x - max x|`` is ``n max x - Σ x`` because a maximum is never below its
-    elements, and ``max ((x - mean)³ + (x - mean))`` is attained at the largest ``x``.
-    Both have a single pass; the rules see neither and say so in those words."""
-    for name in ("abs_from_max", "monotone_sum"):
-        judgement = _judged(name)
-        assert not judgement.fusible and judgement.summary().startswith("no single pass is known")
+    elements: a single pass exists, the rules do not see it and say so in those words."""
+    judgement = _judged("abs_from_max")
+    assert not judgement.fusible and judgement.summary().startswith("no single pass is known")
+
+
+def test_a_polynomial_that_never_falls_is_taken_at_the_largest_element():
+    """``max ((x - mean)³ + (x - mean))``: ``u³ + u`` never falls, its derivative ``3 u² + 1``
+    has no real root, so it is attained at the largest ``x``."""
+    judgement = _judged("monotone_sum")
+    assert judgement.fusible and judgement.states == 3
 
 
 # ---------------------------------------------------------------------------

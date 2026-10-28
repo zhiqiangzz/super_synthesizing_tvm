@@ -43,6 +43,7 @@ from tvm.te.superopt.symbolic.canonicalize import (
     nonnegative,
     positive,
     subst_domain,
+    walk,
 )
 
 x, y, z = ir.atom("x"), ir.atom("y"), ir.atom("z")
@@ -297,13 +298,31 @@ def test_expanded_power_under_a_maximum_is_recognised():
     z = mk_div(d, s)
     assert _top(mk_pow(z, 3)) is mk_pow(_top(z), 3)
 
-    def reductions(e):
-        return [n for n in _all_nodes(e) if isinstance(n, ir.Reduce)]
+    # -(f - c)² falls with |f - c|: no extreme of f to go to
+    (left,) = [n for n in _all_nodes(_top(mk_neg(square))) if isinstance(n, ir.Reduce)]
+    assert isinstance(left.body, ir.Add) and left.body is not f
 
-    # -(f - c)² falls with |f - c|; a cube plus its root grows with f but is not a power
-    for body in (mk_neg(square), mk_add(cube, d)):
-        (left,) = reductions(_top(body))
-        assert isinstance(left.body, ir.Add) and left.body is not f
+
+def test_a_polynomial_that_keeps_one_direction_leaves_a_maximum():
+    """``max_j h(f_j - c)``, ``h`` a polynomial with constant coefficients: taken at the
+    largest ``f`` where ``h`` never falls (``d³ + d``, a cube plus its root, no power), at
+    the smallest where it never rises (``-d³ - 2 d``), left in the reduction where it does
+    both (``d³ - d``). Decided exactly, a double root of ``h'`` included (``d³ - 3 d² +
+    3 d = (d - 1)³ + 1``)."""
+    f = ir.elem(0, (ir.idx("i0"), ir.bidx(0)))
+    c = ir.elem(1, (ir.idx("i0"),))
+    d = mk_sub(f, c)
+    top = mk_sub(_top(f), c)  # max_j (f - c)
+    low = mk_sub(mk_neg(_top(mk_neg(f))), c)  # min_j (f - c)
+    cube = mk_pow(d, 3)
+    assert _top(mk_add(cube, d)) is mk_add(mk_pow(top, 3), top)
+    falls = mk_neg(mk_add(cube, mk_mul(c2, d)))
+    assert _top(falls) is mk_neg(mk_add(mk_pow(low, 3), mk_mul(c2, low)))
+    both = _top(mk_sub(cube, d))
+    assert _top(f) not in set(walk(both))
+    double = mk_add(cube, mk_mul(ir.const(-3), mk_pow(d, 2)), mk_mul(c3, d))
+    want = mk_add(mk_pow(top, 3), mk_mul(ir.const(-3), mk_pow(top, 2)), mk_mul(c3, top))
+    assert _top(double) is want
 
 
 def test_minimum_and_absolute_value_are_written_with_max():

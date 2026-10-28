@@ -46,11 +46,15 @@ something else is what the reducer is missing: a state the program never
 computes (the count, a lower moment). Collecting them is the lifting
 (:mod:`states`); nothing here assumes what they look like.
 
-The canonical merge of a derived reducer is an equivalence judge, not a
-recipe: it cancels the max shift of a softmax and expands a centred moment
-into raw power sums. The merge printed from a decomposition instead keeps
-every partial value as the state it is and only adds the corrections. It is
-proven equal to the canonical one before it is used.
+The canonical merge of a derived reducer keeps each context as its merged
+value (:meth:`Printer.kept`): a context that is a factor folds into each
+side's own (``e^{mx_A - mx}``) instead of cancelling against another
+context's. It is still an equivalence judge, not a recipe: a context that
+enters through several terms is no factor, and a centred moment is written
+over raw power sums around the merged mean. The merge printed from a
+decomposition instead keeps every partial value as the state it is and only
+adds the corrections. It is proven equal to the canonical one, both reading
+the merged contexts, before it is used.
 """
 
 from __future__ import annotations
@@ -68,13 +72,14 @@ from ..symbolic.canonicalize import (
     mk_add,
     mk_mul,
     positive,
+    recanonicalize,
     subst,
     subst_domain,
     term_view,
     walk,
 )
 from . import verify
-from .derive import domains, swap_sides
+from .derive import closed_merges, domains, reads_merged, swap_sides
 
 SIDE_OFFSET = {"a": -10_000, "b": -20_000}  # a member's id when pinned to one side of a merge
 
@@ -445,18 +450,20 @@ class Printer:
         self.merged[key] = out
         return out
 
-    def _value(self, cand: Candidate) -> ir.SymExpr | None:
-        """A function of other candidates: the same function of their merged values."""
+    def _value(self, cand: Candidate, merged=None) -> ir.SymExpr | None:
+        """A function of other candidates: the same function of their merged values
+        (``merged``, :meth:`merged_value` by default)."""
+        merged = merged or self.merged_value
         mapping: dict[ir.Node, ir.SymExpr] = {}
         for n in walk(cand.struct):
             if isinstance(n, ir.Elem) and n.tensor in self.rb.by_pid:
                 src = self.rb.by_pid[n.tensor]
                 if tuple(n.indices) != src.index:
                     return None  # read at other indices: not a state of this reducer
-                v = self.merged_value(src)
+                v = merged(src)
             elif isinstance(n, ir.Card) and n.domain is self.rb.R:
                 count = next((c for c in self.pool if c.state is n), None)
-                v = self.merged_value(count) if count is not None else None
+                v = merged(count) if count is not None else None
             elif isinstance(n, ir.Reduce):
                 return None  # a value must be a plain function of other tensors
             else:
@@ -525,6 +532,55 @@ class Printer:
             raise Unsupported(f"context {cand.name} is not expressible in the states")
         return here, there
 
+    # -- the canonical merge: contexts kept ----------------------------------------
+    def kept(self, cand: Candidate) -> ir.SymExpr | None:
+        """``I(A u B)`` with each context left as its merged value, canonical, over
+        ``a_k``, ``b_k`` and ``m_k``.
+
+        The definition over the union, a context read as the merged slot ``m_k``
+        (or the function of merged slots it is), each side's partial reductions
+        read off that side's states. A context that is a factor folds into each
+        side's own: ``e^{-m} · e^{mx_A} = e^{mx_A - m}``; written over the partial
+        reductions instead, ``den(A u B)`` carries the same ``e^{-m}`` as the
+        numerator of ``O`` and the two cancel before they can fold. A context
+        that enters through several terms stays one symbol among them
+        (``Σ x² - 2 m Σ x + |R| m²``). ``None`` where a context is no merged
+        slot nor a function of merged slots, or a partial reduction is left (a
+        factor a maximum does not let out without its sign).
+        """
+        if cand.kind == "value":
+            v = self._value(cand, self._kept_context)
+            return None if v is None else recanonicalize(v)
+        rb = self.rb
+
+        def merged(n: ir.Elem, depth: int):
+            if not rb.pinned(n):
+                return None
+            v = self._kept_context(rb.by_pid[n.tensor])
+            if v is None:
+                raise Unsupported(f"context {rb.by_pid[n.tensor].name} is no merged slot")
+            return v
+
+        union = ir.dunion(rb.sides["a"], rb.sides["b"])
+        try:
+            e = map_elems(subst_domain(cand.struct, {rb.R: union}), merged)
+            e = subst(e, self.atom_map)
+        except Unsupported:
+            return None
+        return None if contains_node(e, _is_partial) else e
+
+    def _kept_context(self, cand: Candidate) -> ir.SymExpr | None:
+        """A context as :meth:`kept` reads it: the merged slot ``m_k``, or the function
+        of merged slots a value is. A reduction that is no slot has no merge of its
+        own for the canonical merge to read."""
+        k = self.slot(cand)
+        if k is not None:
+            return ir.state_var("m", k)
+        if cand.kind == "value":
+            v = self._value(cand, self._kept_context)
+            return None if v is None else recanonicalize(v)
+        return None
+
 
 def _monomial(v: ir.SymExpr) -> bool:
     """A constant times a product of positive integer powers of state variables."""
@@ -583,15 +639,23 @@ def proves(printed: ir.SymExpr, canonical: ir.SymExpr) -> bool:
 
 def printed_merges(printer: Printer, merge) -> tuple[ir.SymExpr, ...] | None:
     """The merge of every chosen state as it should be evaluated, if all of them
-    print and are proven equal to the canonical ``merge``."""
+    print and are proven equal to the canonical ``merge``.
+
+    Slot by slot, with the merged contexts ``m_k`` as symbols where the
+    canonical merge keeps them -- both read the same merged slots, so equal
+    there they are equal once those are filled in -- and over the two sides
+    alone where it does not.
+    """
     prints = [printer.print(c) for c in printer.chosen]
     if any(p is None for p in prints):
         return None
     expanded = _expand(prints)
-    if expanded is None:
+    closed = closed_merges(merge)
+    if expanded is None or closed is None:
         return None
-    if not all(proves(p, m) for p, m in zip(expanded, merge)):
-        return None
+    for p, e, m, c in zip(prints, expanded, merge, closed):
+        if not (proves(p, m) if reads_merged(m) else proves(e, c)):
+            return None
     return tuple(expanded)
 
 

@@ -26,20 +26,19 @@ knowing the context::
     max_j |x_j - mean|          =  max(max_j x_j - mean, mean - min_j x_j)
 
 The same holds under a function that grows with its argument, which commutes
-with the maximum, and under an even power, which grows with the absolute
-value::
+with the maximum -- among them a polynomial of ``x - mean`` with constant
+coefficients that never falls, decided exactly -- and under an even power,
+which grows with the absolute value::
 
     max_j exp(l_j - mean)       =  exp(max_j l_j - mean)
+    max_j (d_j³ + d_j)          =  d³ + d,  d = max_j x_j - mean
     max_j (x_j - mean)²         =  max(max_j x_j - mean, mean - min_j x_j)²
 
-Three programs mark where this ends; for none of them do the rules show a
-single pass. A square under a *minimum* is smallest at the element nearest
-the mean, which is no extreme of the data. A sum of two growing functions,
-``(x - mean)³ + (x - mean)``, is still largest at the largest element, so a
-single pass exists; but it is not one function of one reduction, and the
-rules do not see it. A sum of absolute deviations from the maximum does not
-split for an arbitrary context, while a maximum is never below its
-elements, where ``|x - max x|`` is ``max x - x``: again a single pass
+Two programs mark where this ends; for neither do the rules show a single
+pass. A square under a *minimum* is smallest at the element nearest the
+mean, which is no extreme of the data. A sum of absolute deviations from the
+maximum does not split for an arbitrary context, while a maximum is never
+below its elements, where ``|x - max x|`` is ``max x - x``: a single pass
 exists, and the rules, which do not know that, leave the program alone.
 """
 
@@ -285,7 +284,7 @@ def peak_to_geomean_reference(logs):
 
 
 # ---------------------------------------------------------------------------
-# where it ends: a square under a minimum, a sum of growing functions
+# where it ends: a square under a minimum
 # ---------------------------------------------------------------------------
 def min_sq_deviation_unfused():
     X = _rows()
@@ -302,6 +301,9 @@ def min_sq_deviation_reference(x):
     return (((x - x.mean(axis=1, keepdims=True)) ** 2).min(axis=1),)
 
 
+# ---------------------------------------------------------------------------
+# a polynomial of the deviation that never falls: largest at the largest element
+# ---------------------------------------------------------------------------
 def monotone_sum_unfused():
     X = _rows()
     n, m = X.shape
@@ -313,6 +315,19 @@ def monotone_sum_unfused():
         return te.max(d * d * d + d, axis=j)
 
     return [X], [te.compute((n,), body, name="top")]
+
+
+def monotone_sum_fused():
+    """The sum and the largest element: ``d³ + d`` grows with ``d``, the largest x wins."""
+    X = _rows()
+    n, m = X.shape
+    total, hi, _ = _sum_and_range(X)
+
+    def top(i):
+        d = hi[i] - total[i] / m.astype(DTYPE)
+        return d * d * d + d
+
+    return [X], [te.compute((n,), top, name="top")]
 
 
 def monotone_sum_reference(x):
@@ -407,13 +422,12 @@ register(
 register(
     Operator(
         "monotone_sum",
-        "negative",
-        "max ((x - mean)³ + (x - mean)): largest at the largest x, but not one function",
+        "extreme",
+        "max ((x - mean)³ + (x - mean)): a polynomial that never falls, the largest x wins",
         monotone_sum_unfused,
         monotone_sum_reference,
-        fusible=False,
-        reason="no single pass is known: top reads mean inside",
-        judged=False,
+        monotone_sum_fused,
+        states=3,
     )
 )
 register(

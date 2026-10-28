@@ -22,12 +22,13 @@ import tvm.testing
 from tvm import te
 from tvm import tirx as tir
 from tvm.te.superopt.reducer.chain import discover_chains
-from tvm.te.superopt.reducer.derive import atoms_in, domains
+from tvm.te.superopt.reducer.derive import atoms_in, closed_merges, domains
 from tvm.te.superopt.reducer.domain import TeSigns
 from tvm.te.superopt.reducer.states import (
     _Chain,
     _content,
     _scaled,
+    _Select,
     members_of,
     select,
 )
@@ -118,7 +119,12 @@ def test_softmax_keeps_its_loops_and_merges_them_by_rebasing():
         return ir.raw_mul([ir.raw_exp(ir.raw_mul([ir.MINUS_ONE, shift])), s1])
 
     assert spec.merge_print == (m, ir.raw_add([rescaled(a0, a1), rescaled(b0, b1)]))
-    assert recanonicalize(spec.merge_print[1]) is spec.merge[1]
+    # canonical: the merged max read as the merged slot m0, the same once it is filled in
+    m0 = ir.state_var("m", 0)
+    assert spec.merge[1] is mk_add(
+        mk_mul(a1, mk_exp(mk_sub(a0, m0))), mk_mul(b1, mk_exp(mk_sub(b0, m0)))
+    )
+    assert recanonicalize(spec.merge_print[1]) is closed_merges(spec.merge)[1]
 
 
 def test_attention_keeps_the_normalised_output():
@@ -130,6 +136,21 @@ def test_attention_keeps_the_normalised_output():
     out = next(c for c in w.members if c.name == "O")
     modes = {(w.name(pid), mode) for _, _, pid, mode in w.rebaser.decompose(out).corr}
     assert modes == {("row_max", "shift"), ("den", "scale")}
+
+
+def test_attention_canonical_merge_keeps_its_contexts():
+    """``O`` reads ``row_max`` and ``den`` as their merged slots ``m0``, ``m1``: the max
+    shift folds into each side's own instead of cancelling against the mass's, so the
+    merge never reads ``exp(a0)`` bare -- written over the partial reductions it would."""
+    spec = _select("attention").solution.spec
+    (a0, b0), (a1, b1), (a2, b2) = _ab(0), _ab(1), _ab(2)
+    m0, m1 = ir.state_var("m", 0), ir.state_var("m", 1)
+
+    def side(s0, s1, s2):
+        return mk_mul(s1, s2, mk_pow(m1, -1), mk_exp(mk_sub(s0, m0)))
+
+    assert spec.merge[2] is mk_add(side(a0, a1, a2), side(b0, b1, b2))
+    assert not {mk_exp(a0), mk_exp(b0)} & set(walk(closed_merges(spec.merge)[2]))
 
 
 def test_members_run_on_a_part_of_the_axis_are_where_the_states_start():
@@ -169,6 +190,11 @@ def test_variance_is_supplemented_with_the_count_and_keeps_the_mean():
     )
     assert recanonicalize(spec.merge_print[1]) is want
     assert spec.leaves[1] is ir.ZERO and spec.leaves[2] is ir.ONE
+    # canonical: the merged mean m0 kept, ss written over each side's power sums around it
+    m0 = ir.state_var("m", 0)
+    power_sums = mk_add(sa, mk_mul(na, mk_pow(ma, 2)), sb, mk_mul(nb, mk_pow(mb, 2)))
+    first = mk_mul(ir.const(-2), m0, mk_add(mk_mul(ma, na), mk_mul(mb, nb)))
+    assert spec.merge[1] is mk_add(power_sums, first, mk_mul(mk_add(na, nb), mk_pow(m0, 2)))
 
 
 def test_higher_moments_are_supplemented_with_the_lower_ones():
@@ -323,22 +349,27 @@ def test_a_function_taken_out_of_a_maximum_leaves_its_reduction():
     assert _names(sel) == ["mean", "ratio.m0", "count"] and sel.states[1].origin == "inner"
 
 
-def test_a_sum_whose_parts_move_differently_is_kept_as_its_parts():
-    """``Σ (x - mean)² + exp(x - mx)``: re-based, the first part moves with ``1, δ, δ²``,
-    the second with ``e^{-ε}``, and no coefficient is the whole sum. Each part re-bases
-    by itself and is kept; taking the contexts out instead leaves ``Σ exp(x)``."""
+def _energy():
+    """``Σ (x - mean)² + exp(x - mx)``: a sum whose two parts move under different corrections."""
     X, n, m = _rows()
     j1, j2, j3 = (te.reduce_axis((0, m), "j") for _ in range(3))
     total = te.compute((n,), lambda i: te.sum(X[i, j1], axis=j1), name="total")
     mean = te.compute((n,), lambda i: total[i] / m.astype("float32"), name="mean")
     mx = te.compute((n,), lambda i: te.max(X[i, j2], axis=j2), name="mx")
-    energy = te.compute(
+    return te.compute(
         (n,),
         lambda i: te.sum(
             (X[i, j3] - mean[i]) * (X[i, j3] - mean[i]) + tir.exp(X[i, j3] - mx[i]), axis=j3
         ),
         name="energy",
     )
+
+
+def test_a_sum_whose_parts_move_differently_is_kept_as_its_parts():
+    """``Σ (x - mean)² + exp(x - mx)``: re-based, the first part moves with ``1, δ, δ²``,
+    the second with ``e^{-ε}``, and no coefficient is the whole sum. Each part re-bases
+    by itself and is kept; taking the contexts out instead leaves ``Σ exp(x)``."""
+    energy = _energy()
     (chain,), _ = discover_chains([energy])
     sel = select(chain, members_of(chain), TeSigns([energy]))
     assert _names(sel) == ["mean", "mx", "energy.p0", "energy.p1", "count"]
@@ -353,6 +384,19 @@ def test_a_sum_whose_parts_move_differently_is_kept_as_its_parts():
     pieces = sel.states[2:4]
     assert all(any(_same(c.state, s) for c in pieces) for s in want)
     assert all(c.origin == "piece" and c.source == "energy" for c in pieces)
+
+
+def test_a_state_that_does_not_re_base_gets_nothing_supplemented():
+    """Read off as it is, ``energy`` needs the count and ``Σ exp(x)``. It does not re-base,
+    so neither is added: it is split first, and its piece ``Σ exp(x - mx)`` holds what the
+    raw sum would have."""
+    energy = _energy()
+    (chain,), _ = discover_chains([energy])
+    sel = _Select(_Chain(chain, members_of(chain), TeSigns([energy])))
+    states, sol, trace = sel.supplement(sel.base())
+    assert [c.name for c in states] == ["total", "mx", "energy"] and sol is None
+    c, (fault,) = sel.faults(states, sol, trace)
+    assert (c.name, fault.kind, fault.reason) == ("energy", "structure", "it does not re-base")
 
 
 def test_two_rates_of_one_context_are_two_states():

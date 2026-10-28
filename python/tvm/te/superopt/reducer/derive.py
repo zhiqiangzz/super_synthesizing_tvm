@@ -23,17 +23,21 @@ nothing below is searched:
 * ``leaf = I({j})`` and ``identity = I(∅)``;
 * the merge, by writing ``I(A u B)`` over the partial reductions of ``A`` and
   ``B`` (``Σ_{A u B} = Σ_A + Σ_B``) and solving those for the state values
-  ``I(A)``, ``I(B)``;
+  ``I(A)``, ``I(B)``. Where the caller gives it (``rebase.Printer.kept``), each
+  context is kept as its merged value ``m_k`` instead of being written over
+  the partial reductions too: the merge reads the merged contexts, evaluated
+  first (:func:`closed_merges`);
 * the epilogue of every tensor the program still needs, by writing its closed
   form (``R`` = the whole axis) over the state outputs.
 
 A state set is kept only if every required tensor is covered and every state
 is needed. The laws are not tested one by one: the merge satisfies
 ``M(I(A), I(B)) = I(A u B)`` by construction (proven, see
-:func:`invariant_holds`), and commutativity and associativity on the states a
-part of the axis can have follow from that of the union. The identity is
-``I(∅)`` read off the definitions (:func:`empty_value`) and the identity law
-is proven on those states as well (:func:`identity_law`).
+:func:`invariant_holds`, and :func:`psi_inverts` for the contexts kept), and
+commutativity and associativity on the states a part of the axis can have
+follow from that of the union. The identity is ``I(∅)`` read off the
+definitions (:func:`empty_value`) and the identity law is proven on those
+states as well (:func:`identity_law`).
 """
 
 from __future__ import annotations
@@ -70,7 +74,8 @@ class ReducerSpec:
     axis: DimKey
     states: tuple[ir.SymExpr, ...]  # I_k(R), canonical, over DSym(axis, "R")
     leaves: tuple[ir.SymExpr, ...]  # I_k({j}) at binder depth 1 (BIdx(0) is j)
-    merge: tuple[ir.SymExpr, ...]  # over StateVar a_k / b_k
+    # over StateVar a_k / b_k, and m_k (slot k merged) where a context is kept
+    merge: tuple[ir.SymExpr, ...]
     identity: tuple[ir.Const, ...]
     closed: tuple[ir.SymExpr, ...]  # I_k(full axis)
     proof: str
@@ -90,8 +95,8 @@ class ReducerSpec:
 
     @property
     def merge_code(self) -> tuple[ir.SymExpr, ...]:
-        """The merge to generate code from."""
-        return self.merge_print if self.merge_print is not None else self.merge
+        """The merge to generate code from, over the two sides alone."""
+        return self.merge_print if self.merge_print is not None else closed_merges(self.merge)
 
     @property
     def epilogue_code(self) -> tuple[ir.SymExpr, ...]:
@@ -318,8 +323,8 @@ def spec_key(spec: ReducerSpec):
     order = sorted(range(spec.arity), key=lambda k: (spec.leaves[k].uid, spec.merge[k].uid))
     ren = {}
     for new, old in enumerate(order):
-        ren[ir.state_var("a", old)] = ir.state_var("a", new)
-        ren[ir.state_var("b", old)] = ir.state_var("b", new)
+        for side in "abm":
+            ren[ir.state_var(side, old)] = ir.state_var(side, new)
     return tuple((spec.leaves[k], subst(spec.merge[k], ren), spec.identity[k]) for k in order)
 
 
@@ -490,6 +495,60 @@ def invariant_holds(states, merge, R, A, B) -> str | None:
     return method
 
 
+def closed_merges(merge) -> tuple[ir.SymExpr, ...] | None:
+    """``merge`` over the two sides alone: each merged context ``m_k`` it reads
+    replaced by slot ``k``'s own merge, recursively. ``None`` if slots read each
+    other in a cycle."""
+    done: dict[int, ir.SymExpr] = {}
+
+    def get(k: int, busy: frozenset[int]) -> ir.SymExpr | None:
+        if k in done:
+            return done[k]
+        if k in busy:
+            return None
+        mapping = {}
+        for r in {n for n in walk(merge[k]) if isinstance(n, ir.StateVar) and n.side == "m"}:
+            v = get(r.k, busy | {k})
+            if v is None:
+                return None
+            mapping[r] = v
+        done[k] = subst(merge[k], mapping)
+        return done[k]
+
+    out = tuple(get(k, frozenset()) for k in range(len(merge)))
+    return None if any(x is None for x in out) else out
+
+
+def reads_merged(e: ir.Node) -> bool:
+    """Does ``e`` read a merged context ``m_k``?"""
+    return any(isinstance(n, ir.StateVar) and n.side == "m" for n in walk(e))
+
+
+def psi_inverts(states, sol, R, A) -> str | None:
+    """``Ψ(I(A))`` is the reduction over ``A`` itself, for every reduction solved for:
+    how it is proven, or ``None``.
+
+    What a merge with its contexts kept rests on, besides its construction: it
+    is the definition over the union with each context read as its merged value
+    and each side's reductions as ``Ψ`` of that side's states. Where ``Ψ``
+    returns the reductions of a part from the states the part has, it is
+    ``I(A u B)`` once the contexts' own merges are -- slot by slot in the order
+    the chain reads them.
+    """
+    env = {ir.state_var("a", k): subst_domain(s, {R: A}) for k, s in enumerate(states)}
+    method = "canonical"
+    for atom, expr in sol.items():
+        try:
+            got = subst_domain(subst(expr, env), {R: A})
+        except Unsupported:
+            return None
+        how = verify.prove_equal(got, subst_domain(atom, {R: A}))
+        if how is None:
+            return None
+        method = verify.worst(method, how)
+    return method
+
+
 def out_ref(k: int, closed: ir.SymExpr) -> ir.SymExpr:
     """How an epilogue reads state ``k``: the pseudo element ``T-(k+1)`` at the
     state's own coordinates, or the closed form itself when that reads no data
@@ -519,12 +578,16 @@ def derive(
     axis: DimKey,
     stats: dict | None = None,
     structs: tuple[ir.SymExpr, ...] | None = None,
+    kept: tuple[ir.SymExpr | None, ...] | None = None,
 ) -> ReducerSpec | None:
     """The reducer with these ``states``, if it reproduces every ``required`` closed form.
 
     ``states`` are canonical partial definitions over ``DSym(axis, "R")``;
     ``required`` the closed forms (over the whole axis) of the tensors the rest
-    of the program reads.
+    of the program reads. ``kept``, one per state or ``None``, is its merge with
+    the contexts kept as merged values (``m_k``): the merge wherever given, when
+    ``Ψ`` inverts the states (:func:`psi_inverts`) and the identity law holds;
+    the merge written over the partial reductions otherwise.
     """
     full, R, A, B = domains(axis)
     states = tuple(states)
@@ -567,7 +630,17 @@ def derive(
     if first is None:
         count(stats, "derive:invariant_failed")
         return None
-    found = identity_of(states, merge, R, A, B, structs)
+    found = None
+    if kept is not None and any(k is not None for k in kept):
+        swapped = tuple(m if k is None else k for m, k in zip(merge, kept))
+        flat = closed_merges(swapped)
+        how = None if flat is None else psi_inverts(states, sol, R, A)
+        if how is not None:
+            found = identity_of(states, flat, R, A, B, structs)
+            if found is not None:
+                merge, first = swapped, verify.worst(first, how)
+    if found is None:
+        found = identity_of(states, merge, R, A, B, structs)
     if found is None:
         count(stats, "derive:law_failed")
         return None
@@ -586,10 +659,13 @@ __all__ = [
     "ReducerSpec",
     "Solved",
     "atoms_in",
+    "closed_merges",
     "derive",
     "domains",
     "leftover",
     "merge_of",
+    "psi_inverts",
+    "reads_merged",
     "singleton",
     "solve_atoms",
     "spec_key",
