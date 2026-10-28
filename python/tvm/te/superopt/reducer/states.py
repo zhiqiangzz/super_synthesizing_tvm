@@ -31,7 +31,10 @@ supplement
     is added: the count first, then a coefficient of the state's own
     re-based expansion (``Σ (x - mean)²`` in a third moment), one reduction
     before a compound one. Only when the expansion offers none is the
-    missing reduction itself added.
+    missing reduction itself added. A state that does not re-base gets
+    nothing: it is replaced first (below), and what its replacements need
+    is asked again -- else ``Σ exp(x)`` would stand in for the ``Σ exp(x -
+    mx)`` one of its pieces is.
 check
     Every state must be defined on every part of the axis and determine
     what is read back from it (decided by :mod:`domain`, by proof):
@@ -203,9 +206,11 @@ def _defined(struct: ir.SymExpr, cands: list[Candidate]) -> ir.SymExpr:
 
 def _unwrapped(e: ir.SymExpr) -> tuple[ir.SymExpr, bool]:
     """What is left of ``e`` under the functions the canonical rules took out of its
-    maximum (a power, ``exp``, ``log``), and whether there was one.
+    maximum (a power, ``exp``, ``log``, a polynomial), and whether there was one.
 
-    A constant factor and terms without a reduction are stepped over as well.
+    A constant factor and terms without a reduction are stepped over as well;
+    terms that all hold one and the same reduction (``r³ + r``) are a function
+    of it.
     """
     inner = False
 
@@ -219,9 +224,15 @@ def _unwrapped(e: ir.SymExpr) -> tuple[ir.SymExpr, bool]:
             e, inner = e.arg, True
         elif isinstance(e, ir.Mul | ir.Add):
             held = [a for a in e.args if reduces(a)]
-            if len(held) != 1 or not all(is_constant(a) for a in e.args if a is not held[0]):
+            if not held or not all(is_constant(a) for a in e.args if a not in held):
                 return e, inner
-            e = held[0]
+            if len(held) == 1:
+                e = held[0]
+                continue
+            within = {r for a in held for r in _reductions(a)}
+            if len(within) != 1:
+                return e, inner
+            (e,), inner = within, True
         else:
             return e, inner
 
@@ -588,7 +599,11 @@ class _Select:
 
     # -- supplement ---------------------------------------------------------------------
     def supplement(self, states: list[Candidate]):
-        """Add what the merges need until every state merges: ``(states, sol, trace)``."""
+        """Add what the merges need until every state merges: ``(states, sol, trace)``.
+
+        Nothing is added for a state that does not re-base: it is handed to the
+        check as it is (``trace["unrebased"]``), to be replaced first.
+        """
         w = self.w
         required = [w.by_pid[m.pid] for m in w.chain.required]
         for _ in range(MAX_SUPPLEMENTS):
@@ -603,6 +618,8 @@ class _Select:
             if need is None:
                 return states, sol, trace
             owner, missing = need
+            if any(owner is c for c in states) and not self._rebases(owner):
+                return states, None, {"unrebased": owner}
             new = self._what_to_add(owner, missing, states, sol)
             if new is None:
                 return states, None, {"stuck": owner}
@@ -671,6 +688,9 @@ class _Select:
             if k is not None:
                 why = "no reduction it is made of can be read back from it"
                 return states[k], self._structure(states[k], why)
+            unrebased = trace.get("unrebased")
+            if unrebased is not None:
+                return unrebased, self._structure(unrebased, "it does not re-base")
             stuck = trace.get("stuck")
             if stuck is not None:
                 return stuck, self._structure(stuck, "its merge needs what no state provides")
@@ -680,7 +700,7 @@ class _Select:
             found = self._nonempty(c, k, states, trace, signs)
             if found:
                 return c, found
-            if c.kind != "value" and w.rebaser.contexts(c) and w.rebaser.decompose(c) is None:
+            if not self._rebases(c):
                 return c, self._structure(c, "it does not re-base")
         printer = Printer(w.rebaser, list(states), states, sol)
         identity = [_empty_value(c, w) for c in states]
@@ -690,6 +710,11 @@ class _Select:
             if found:
                 return c, found
         return None
+
+    def _rebases(self, c: Candidate) -> bool:
+        """Does ``c`` merge by re-basing -- or need not: a value, or no context read?"""
+        w = self.w
+        return c.kind == "value" or not w.rebaser.contexts(c) or w.rebaser.decompose(c) is not None
 
     def _structure(self, c: Candidate, why: str) -> list[_Fault]:
         """``c`` cannot be merged; blamed on the contexts no correction leaves its
@@ -911,12 +936,19 @@ class _Select:
                     self.note("drop", c.name, "nothing reads it once the others are kept")
             states = [c for k, c in enumerate(states) if k in keep]
         sts = tuple(c.state for c in states)
-        spec = derive(sts, required, w.chain.axis, structs=tuple(c.struct for c in states))
+        sol = solve_atoms(sts, w.R)
+        printer = None if sol is None else Printer(w.rebaser, list(states), states, sol)
+        spec = derive(
+            sts,
+            required,
+            w.chain.axis,
+            structs=tuple(c.struct for c in states),
+            kept=None if printer is None else tuple(printer.kept(c) for c in states),
+        )
         if spec is None:
             why = "no reducer with its laws proven is derived from these states"
             return Selection(tuple(states), self.trace, None, why)
-        sol = solve_atoms(sts, w.R)
-        printed = printed_merges(Printer(w.rebaser, list(states), states, sol), spec.merge)
+        printed = printed_merges(printer, spec.merge)
         if printed is not None:
             spec = dataclasses.replace(spec, merge_print=printed)
         written = _written_epilogues(w, spec, sol)

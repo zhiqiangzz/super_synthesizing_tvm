@@ -37,7 +37,10 @@ node for the operation, applying (to a fixpoint) the rewrite theory:
   ``max_j exp(f) = exp(max_j f)``, the same for ``log``, for a root and for
   an odd power, ``max_j f³ = (max_j f)³``; an even power grows with ``|f|``,
   ``max_j f² = max(max_j f, max_j -f)²``. A power that has been expanded is
-  recognised again (``x² - 2 x c + c²`` is ``(x - c)²``);
+  recognised again (``x² - 2 x c + c²`` is ``(x - c)²``), and so is a
+  polynomial with constant coefficients of one shifted factor that never falls
+  (``max_j ((x - c)³ + (x - c)) = (max_j x - c)³ + (max_j x - c)``) or never
+  rises (taken at the minimum), decided exactly;
 * domain algebra: ``Σ_{A u B} = Σ_A + Σ_B``, ``max_{A u B} = max(max_A,
   max_B)``, ``Σ_∅ = 0``, ``max_∅ = -inf``.
 
@@ -547,6 +550,9 @@ def _mk_rmax(domain: Domain, level: int, body: SymExpr) -> SymExpr:
                 if out is not None:
                     rest = mk_add(*[free[k] for k in outside])
                     return mk_add(out, shift(rest, level + 1, -1))
+        out = _rmax_polynomial(domain, level, body)
+        if out is not None:
+            return out
         if free:
             out = shift(mk_add(*free), level + 1, -1)
             return mk_add(out, mk_reduce("max", domain, level, mk_add(*dep)))
@@ -621,6 +627,106 @@ def _rmax_scaled_power(domain: Domain, level: int, k: Fraction, u: SymExpr, p) -
 
 MAX_POWER = 8  # the highest power of a sum looked for in its expansion
 MAX_FREE_TERMS = 4  # index-free terms of a body tried as part of the power or next to it
+
+
+def _rmax_polynomial(domain: Domain, level: int, body: Add) -> SymExpr | None:
+    """``max_j h(u_j) = h(max_j u_j)`` for a polynomial ``h`` with constant
+    coefficients that never falls, ``h(min_j u_j)`` for one that never rises.
+
+    The body is read as a polynomial in one factor ``x`` that moves with the
+    index, whatever its coefficients are; ``u = x + b`` takes the shift ``b``
+    that removes the second-highest power (a Taylor shift), and ``h`` is the
+    body in ``u``: ``(x - m)³ + (x - m)`` is ``u³ + u`` at ``u = x - m``. That
+    the coefficients of ``h`` come out constant is decided by these rules,
+    whether ``h`` keeps one direction exactly (:func:`_direction`). ``None``
+    when no factor gives such an ``h``.
+    """
+    c, terms = term_view(body)
+    if isinstance(c, float):
+        return None
+    views = [(coeff, factor_view(core)) for core, coeff in terms.items()]
+    tops = {
+        base
+        for _, (_, factors, _) in views
+        for base, p in factors.items()
+        if p.denominator == 1 and p >= 2 and base.uses_level(level)
+    }
+    for x in sorted(tops):
+        a = _coefficients_in(x, c, views)
+        if a is None:
+            continue
+        n, lead = max(a), a[max(a)]
+        if n > MAX_POWER or not isinstance(lead, Const) or isinstance(lead.value, float):
+            continue
+        b = mk_mul(const(1 / (n * lead.value)), a.get(n - 1, ZERO))
+        h = [
+            mk_add(
+                *[
+                    mk_mul(const(math.comb(i, k)), a[i], mk_pow(mk_neg(b), i - k))
+                    for i in a
+                    if i >= k
+                ]
+            )
+            for k in range(n + 1)
+        ]
+        if h[0].uses_level(level) or not all(
+            isinstance(v, Const) and not isinstance(v.value, float) for v in h[1:]
+        ):
+            continue
+        way = _direction([v.value for v in h[1:]])
+        if way == 0:
+            continue
+        u = mk_add(x, b)
+        if way > 0:
+            top = mk_reduce("max", domain, level, u)
+        else:  # the minimum of u
+            top = mk_neg(mk_reduce("max", domain, level, mk_neg(u)))
+        return mk_add(
+            shift(h[0], level + 1, -1), *[mk_mul(h[k], mk_pow(top, k)) for k in range(1, n + 1)]
+        )
+    return None
+
+
+def _coefficients_in(x: SymExpr, c, views) -> dict[int, SymExpr] | None:
+    """The body as ``Σ_k a_k xᵏ``, ``{k: a_k}``; ``None`` where ``x`` is under anything
+    but a non-negative integer power."""
+    out: dict[int, list[SymExpr]] = {0: [const(c)]}
+    for coeff, (fcoeff, factors, exp_arg) in views:
+        p = factors.get(x, Fraction(0))
+        if p.denominator != 1 or p < 0:
+            return None
+        rest = [mk_pow(base, q) for base, q in factors.items() if base is not x]
+        if exp_arg is not None:
+            rest.append(mk_exp(exp_arg))
+        if any(contains_node(f, lambda n: n is x) for f in rest):
+            return None
+        out.setdefault(int(p), []).append(mk_mul(const(coeff), const(fcoeff), *rest))
+    return {k: mk_add(*v) for k, v in out.items()}
+
+
+def _direction(h: list[Fraction]) -> int:
+    """``1`` where ``Σ_k h[k-1] tᵏ`` (``k >= 1``) never falls on the reals, ``-1`` where
+    it never rises, ``0`` where it does both or is constant.
+
+    Exact, by Sturm's theorem (SymPy's real-root counting): the derivative keeps
+    one sign when no factor of odd multiplicity in its square-free decomposition
+    has a real root, and the sign is then that of its leading coefficient.
+    """
+    import sympy  # only this rule needs it
+
+    t = sympy.Symbol("t", real=True)
+    terms = [
+        sympy.Rational(k * v.numerator, v.denominator) * t ** (k - 1)
+        for k, v in enumerate(h, 1)
+        if v
+    ]
+    if not terms:
+        return 0
+    dh = sympy.Poly(sympy.Add(*terms), t, domain=sympy.QQ)
+    _, factors = dh.sqf_list()
+    if any(m % 2 == 1 and f.degree() > 0 and f.count_roots() > 0 for f, m in factors):
+        return 0
+    return 1 if dh.LC() > 0 else -1
 
 
 def _perfect_power(e: Add) -> tuple[Fraction, SymExpr, int] | None:

@@ -315,6 +315,8 @@ def _centred(body, reducer=te.max, name="out"):
         (lambda d: tir.exp(d * d * d), te.max, 3),
         (lambda d: d * d * d, te.min, 3),  # the smallest x
         (lambda d: -(d * d * d), te.max, 3),
+        (lambda d: d * d * d + d, te.max, 3),  # a polynomial that never falls, no one power
+        (lambda d: -(d * d * d) - 2 * d, te.max, 3),  # one that never rises: the smallest x
         (lambda d: d * d, te.max, 4),  # grows with |d|: the largest or the smallest x
         (lambda d: d * d * d * d, te.max, 4),
         (lambda d: 2 * d * d + 1, te.max, 4),
@@ -339,7 +341,7 @@ def test_function_that_grows_with_its_argument_leaves_a_maximum(body, reducer, s
     [
         (lambda d: d * d, te.min, "- X[i, j]^2"),  # nearest the mean
         (lambda d: -(d * d), te.max, "- X[i, j]^2"),
-        (lambda d: d * d * d + d, te.max, "X[i, j]^3"),  # grows with x, but is not one power
+        (lambda d: d * d * d - d, te.max, "X[i, j]^3"),  # falls between -1/√3 and 1/√3
     ],
 )
 def test_maximum_that_is_no_extreme_is_left_alone(body, reducer, inside):
