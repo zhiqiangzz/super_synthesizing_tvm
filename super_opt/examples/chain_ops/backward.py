@@ -30,7 +30,7 @@ import numpy as np
 from tvm import te
 from tvm import tirx as tir
 
-from . import DTYPE, Operator, register
+from . import DTYPE, Operator, Showcase, register
 from .moments import LN_EPS
 
 
@@ -123,5 +123,9 @@ register(
         layernorm_backward_reference,
         layernorm_backward_fused,
         states=5,
+        showcase=Showcase(
+            "training: the backward pass of layer normalisation",
+            ("Apex FusedLayerNorm", "PyTorch layer_norm backward", "Liger LayerNorm"),
+        ),
     )
 )

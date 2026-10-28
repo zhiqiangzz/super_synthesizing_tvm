@@ -30,7 +30,7 @@ import numpy as np
 from tvm import te
 from tvm import tirx as tir
 
-from . import DTYPE, Operator, register
+from . import DTYPE, Operator, Showcase, register
 
 LN_EPS = 1.0e-5
 
@@ -289,6 +289,10 @@ register(
         layernorm_reference,
         layernorm_fused,
         states=3,
+        showcase=Showcase(
+            "transformers: layer normalisation",
+            ("Apex FusedLayerNorm", "PyTorch layer_norm", "cuDNN", "Liger LayerNorm"),
+        ),
     )
 )
 register(

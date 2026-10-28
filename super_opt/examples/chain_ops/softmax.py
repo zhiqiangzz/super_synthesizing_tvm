@@ -30,7 +30,7 @@ import numpy as np
 from tvm import te
 from tvm import tirx as tir
 
-from . import DTYPE, Operator, register
+from . import DTYPE, Operator, Showcase, register
 
 
 def online_softmax(rescaled: int, plain: int = 0):
@@ -377,6 +377,10 @@ register(
         softmax_reference,
         softmax_fused,
         states=2,
+        showcase=Showcase(
+            "deep learning: the normaliser of every classifier",
+            ("cuDNN softmax", "PyTorch softmax", "torch.compile"),
+        ),
     )
 )
 register(
@@ -410,6 +414,10 @@ register(
         cross_entropy_reference,
         cross_entropy_fused,
         states=3,
+        showcase=Showcase(
+            "LLM training: the loss over the vocabulary",
+            ("Liger FusedLinearCrossEntropy", "Cut Cross-Entropy", "torch.compile"),
+        ),
     )
 )
 register(
@@ -443,6 +451,10 @@ register(
         entropy_reference,
         entropy_fused,
         states=3,
+        showcase=Showcase(
+            "reinforcement learning: the entropy bonus of PPO / GRPO, token uncertainty",
+            ("torch.compile",),
+        ),
     )
 )
 register(

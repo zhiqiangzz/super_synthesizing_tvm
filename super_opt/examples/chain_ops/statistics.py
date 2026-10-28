@@ -29,7 +29,7 @@ import numpy as np
 from tvm import te
 from tvm import tirx as tir
 
-from . import DTYPE, Operator, register
+from . import DTYPE, Operator, Showcase, register
 from .moments import LN_EPS, pebay
 
 
@@ -359,6 +359,10 @@ register(
         kurtosis_reference,
         kurtosis_fused,
         states=5,
+        showcase=Showcase(
+            "statistics and risk: the tail weight of a distribution",
+            ("scipy.stats.kurtosis", "cuDF kurtosis"),
+        ),
     )
 )
 register(
@@ -370,6 +374,10 @@ register(
         pearson_reference,
         pearson_fused,
         states=6,
+        showcase=Showcase(
+            "statistics and finance: the correlation of two series",
+            ("torch.corrcoef", "cuDF corr"),
+        ),
     )
 )
 register(

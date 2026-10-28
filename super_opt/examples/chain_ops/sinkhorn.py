@@ -32,7 +32,7 @@ import numpy as np
 from tvm import te
 from tvm import tirx as tir
 
-from . import DTYPE, Operator, register
+from . import DTYPE, Operator, Showcase, register
 from .softmax import online_softmax
 
 EPS = 0.5
@@ -155,6 +155,10 @@ register(
         iteration_reference,
         lambda: _iteration(_lse_one_pass),
         states=2,
+        showcase=Showcase(
+            "optimal transport: the Sinkhorn iteration",
+            ("FlashSinkhorn", "KeOps / GeomLoss", "POT", "OTT-JAX"),
+        ),
     )
 )
 register(

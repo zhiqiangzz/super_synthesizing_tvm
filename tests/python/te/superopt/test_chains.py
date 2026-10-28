@@ -17,7 +17,7 @@
 """Every operator of the registry: unfused, fused by hand, and fused by synthesis."""
 
 import pytest
-from chain_ops import OPERATORS
+from chain_ops import OPERATORS, showcase
 from chain_ops.run import extents, passes, rel_err, run_llvm, sample
 
 import tvm.testing
@@ -88,6 +88,15 @@ def test_registry_covers_every_mechanism():
     groups = {op.group for op in OPERATORS.values()}
     assert groups == {"shift/scale", "closure", "hoist", "extreme", "negative"}
     assert all(op.fused is not None for op in OPERATORS.values() if op.fusible)
+
+
+def test_showcase_is_fused_and_shows_every_way_of_fusing():
+    """The operators measured and reported: each one fused, with a hand-written single pass
+    to set against, and between them every group but the negative one."""
+    ops = showcase()
+    assert ops and all(op.fusible and op.fused is not None for op in ops)
+    assert {op.group for op in ops} == {"shift/scale", "closure", "hoist", "extreme"}
+    assert all(op.showcase.domain for op in ops)
 
 
 if __name__ == "__main__":

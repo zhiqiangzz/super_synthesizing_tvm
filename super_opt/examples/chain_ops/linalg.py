@@ -35,7 +35,7 @@ import numpy as np
 from tvm import te
 from tvm import tirx as tir
 
-from . import DTYPE, Operator, register
+from . import DTYPE, Operator, Showcase, register
 
 
 def _rows(name: str = "X", like=None):
@@ -262,6 +262,10 @@ register(
         householder_reference,
         householder_fused,
         states=3,
+        showcase=Showcase(
+            "numerical linear algebra: the Householder reflector of a QR step",
+            ("cuSOLVER geqrf", "LAPACK larfg", "MAGMA"),
+        ),
     )
 )
 register(

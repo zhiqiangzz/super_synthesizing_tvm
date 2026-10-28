@@ -46,6 +46,12 @@ The operators are grouped by what fusing them takes:
 ``negative``
     not fused: no single pass is known for it, or one is and no reducer for
     it passes the checks.
+
+A few operators are the *showcase* (:func:`showcase`): the ones measured for
+performance and reported. Each is used in production, they span several
+fields, and no two fuse the same way; each names where it is used and the
+implementations it is measured against -- none where nothing fuses it yet,
+and the separate operators of the unfused program are the baseline.
 """
 
 from __future__ import annotations
@@ -54,6 +60,15 @@ import dataclasses
 from collections.abc import Callable
 
 DTYPE = "float32"
+
+
+@dataclasses.dataclass(frozen=True)
+class Showcase:
+    """Why an operator is measured and reported: where it is used, and against what."""
+
+    domain: str
+    # fused implementations to compare with; empty: the unfused program is the baseline
+    baselines: tuple[str, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -72,6 +87,7 @@ class Operator:
     # does the theory show a single pass (``None``: no chain is read off the program)?
     judged: bool | None = True
     positive: tuple[str, ...] = ()  # inputs declared positive (weights)
+    showcase: Showcase | None = None  # measured for performance and reported
 
 
 OPERATORS: dict[str, Operator] = {}
@@ -81,6 +97,11 @@ def register(op: Operator) -> Operator:
     assert op.name not in OPERATORS, op.name
     OPERATORS[op.name] = op
     return op
+
+
+def showcase() -> list[Operator]:
+    """The operators measured for performance and reported, in registry order."""
+    return [op for op in OPERATORS.values() if op.showcase is not None]
 
 
 # importing the operator modules is what fills the registry
@@ -96,4 +117,4 @@ from . import (
     weights,
 )
 
-__all__ = ["DTYPE", "OPERATORS", "Operator", "register"]
+__all__ = ["DTYPE", "OPERATORS", "Operator", "Showcase", "register", "showcase"]

@@ -33,6 +33,7 @@ one tuple ``te.comm_reducer`` reduction. For an operator this script shows
     python super_opt/examples/fuse_chain.py                # every operator
     python super_opt/examples/fuse_chain.py attention moment3
     python super_opt/examples/fuse_chain.py zscore_max logit_norm
+    python super_opt/examples/fuse_chain.py --showcase     # the operators measured and reported
     python super_opt/examples/fuse_chain.py --list
 """
 
@@ -43,7 +44,7 @@ import dataclasses
 import sys
 import time
 
-from chain_ops import OPERATORS, Operator
+from chain_ops import OPERATORS, Operator, showcase
 from chain_ops.run import extents, passes, rel_err, run_llvm, sample
 from harness import Column, label, render_source, render_table
 from rich.console import Console
@@ -157,6 +158,11 @@ def _show(console: Console, op: Operator, args) -> Outcome:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("operators", nargs="*", help="operators to fuse (default: all)")
+    parser.add_argument(
+        "--showcase",
+        action="store_true",
+        help="the operators measured for performance and reported (chain_ops.showcase)",
+    )
     parser.add_argument("--list", action="store_true", help="list the operators and exit")
     parser.add_argument("--max-states", type=int, default=None, help="largest reducer to accept")
     parser.add_argument(
@@ -175,6 +181,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     unknown = [n for n in args.operators if n not in OPERATORS]
     if unknown:
         parser.error(f"unknown operator(s) {', '.join(unknown)}; see --list")
+    if args.showcase and args.operators:
+        parser.error("--showcase chooses the operators: name none")
     return args
 
 
@@ -185,16 +193,21 @@ def main(argv: list[str] | None = None) -> int:
         render_table(
             console,
             title="reduction-chain operators",
-            caption="group: how the chain is fused (negative: it is not)",
+            caption="group: how the chain is fused (negative: it is not); "
+            "showcase: measured and reported (--showcase)",
             columns=[
                 label("operator", lambda op: op.name),
                 label("group", lambda op: op.group),
+                label("showcase", lambda op: "[bold]yes[/]" if op.showcase else ""),
                 label("", lambda op: op.doc),
             ],
             rows=OPERATORS.values(),
         )
         return 0
-    chosen = [OPERATORS[n] for n in (args.operators or OPERATORS)]
+    if args.showcase:
+        chosen = showcase()
+    else:
+        chosen = [OPERATORS[n] for n in (args.operators or OPERATORS)]
     outcomes = [_show(console, op, args) for op in chosen]
     if len(outcomes) > 1:
         console.print(Rule("summary"))

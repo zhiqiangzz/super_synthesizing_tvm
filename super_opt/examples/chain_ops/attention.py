@@ -29,7 +29,7 @@ import numpy as np
 from tvm import te
 from tvm import tirx as tir
 
-from . import DTYPE, Operator, register
+from . import DTYPE, Operator, Showcase, register
 from .softmax import online_softmax
 
 DIMS = ("batch", "heads", "seq_q", "seq_k", "dim")
@@ -130,6 +130,10 @@ register(
         _reference,
         lambda: _fused(False),
         states=3,
+        showcase=Showcase(
+            "LLM inference and training",
+            ("FlashAttention-2", "FlashAttention-3", "cuDNN SDPA", "FlexAttention"),
+        ),
     )
 )
 register(

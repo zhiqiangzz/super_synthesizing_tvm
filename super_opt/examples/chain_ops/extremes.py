@@ -49,7 +49,7 @@ import numpy as np
 from tvm import te
 from tvm import tirx as tir
 
-from . import DTYPE, Operator, register
+from . import DTYPE, Operator, Showcase, register
 
 
 def _rows(name: str = "X"):
@@ -394,6 +394,9 @@ register(
         papr_reference,
         papr_fused,
         states=5,
+        showcase=Showcase(
+            "wireless communication: the peak-to-average power ratio of OFDM symbols"
+        ),
     )
 )
 register(

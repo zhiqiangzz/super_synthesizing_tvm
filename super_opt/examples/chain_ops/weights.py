@@ -31,7 +31,7 @@ import numpy as np
 from tvm import te
 from tvm import tirx as tir
 
-from . import DTYPE, Operator, register
+from . import DTYPE, Operator, Showcase, register
 from .softmax import one_pass, online_softmax, two_pass
 
 
@@ -270,6 +270,9 @@ register(
         ess_reference,
         ess_fused,
         states=3,
+        showcase=Showcase(
+            "Bayesian inference: the effective sample size of importance weights (SMC, particles)"
+        ),
     )
 )
 register(
@@ -292,6 +295,10 @@ register(
         contrastive_reference,
         contrastive_fused,
         states=2,
+        showcase=Showcase(
+            "multimodal pretraining: the CLIP / InfoNCE loss",
+            ("open_clip ClipLoss", "torch.compile"),
+        ),
     )
 )
 register(
@@ -303,5 +310,6 @@ register(
         heat_capacity_reference,
         heat_capacity_fused,
         states=4,
+        showcase=Showcase("statistical physics: the energy fluctuation under Boltzmann weights"),
     )
 )
