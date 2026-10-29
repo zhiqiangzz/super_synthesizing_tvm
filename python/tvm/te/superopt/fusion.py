@@ -185,7 +185,7 @@ class Fused:
         return any(c.fused for c in self.chains)
 
     def prim_func(self):
-        return te.create_prim_func([*self.inputs, *self.outputs])
+        return te.create_function([*self.inputs, *self.outputs])
 
     def source(self) -> str:
         """TE source of every fused reducer: what replaces the chains of the program.

@@ -20,10 +20,10 @@ from chain_ops import OPERATORS
 
 import tvm.testing
 from tvm import te
-from tvm import tirx as tir
 from tvm.te.superopt.reducer.chain import PSEUDO, discover_chains, extent_symbol
 from tvm.te.superopt.symbolic import ir
 from tvm.te.superopt.symbolic.canonicalize import contains_node, walk
+from tvm_tirx import tirx as tir
 
 
 def _chains(name: str):

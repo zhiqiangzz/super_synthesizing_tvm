@@ -23,7 +23,6 @@ import te_programs
 
 import tvm.testing
 from tvm import te
-from tvm import tirx as tir
 from tvm.te.superopt.dims import DimTable
 from tvm.te.superopt.symbolic import LowerCtx, Unsupported, ir
 from tvm.te.superopt.symbolic.canonicalize import (
@@ -45,6 +44,7 @@ from tvm.te.superopt.symbolic.canonicalize import (
     subst_domain,
     walk,
 )
+from tvm_tirx import tirx as tir
 
 x, y, z = ir.atom("x"), ir.atom("y"), ir.atom("z")
 c2, c3 = ir.const(2), ir.const(3)

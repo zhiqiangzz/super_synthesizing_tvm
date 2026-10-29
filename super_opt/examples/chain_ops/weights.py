@@ -29,7 +29,7 @@ from __future__ import annotations
 import numpy as np
 
 from tvm import te
-from tvm import tirx as tir
+from tvm_tirx import tirx as tir
 
 from . import DTYPE, Operator, Showcase, register
 from .softmax import one_pass, online_softmax, two_pass
@@ -60,7 +60,7 @@ def squared_weights():
         return (m, a[1] * ra + b[1] * rb, a[2] * ra * ra + b[2] * rb * rb)
 
     def identity(t0, t1, t2):
-        return (tir.min_value(t0), tir.const(0.0, t1), tir.const(0.0, t2))
+        return (tir.min_value(ty=t0), tir.const(0.0, t1), tir.const(0.0, t2))
 
     return te.comm_reducer(merge, identity, name="squared_weights")
 
@@ -233,7 +233,7 @@ def heat_capacity_fused():
         return (lo, z, a[2] + d * zb / z, a[3] * ra + b[3] * rb + d * d * za * zb / z)
 
     def identity(t0, t1, t2, t3):
-        return (tir.max_value(t0), *(tir.const(0.0, t) for t in (t1, t2, t3)))
+        return (tir.max_value(ty=t0), *(tir.const(0.0, t) for t in (t1, t2, t3)))
 
     red = te.comm_reducer(merge, identity, name="boltzmann")
     j = te.reduce_axis((0, m), "j")

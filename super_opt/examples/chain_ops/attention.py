@@ -27,7 +27,7 @@ from __future__ import annotations
 import numpy as np
 
 from tvm import te
-from tvm import tirx as tir
+from tvm_tirx import tirx as tir
 
 from . import DTYPE, Operator, Showcase, register
 from .softmax import online_softmax

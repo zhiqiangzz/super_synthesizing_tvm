@@ -20,7 +20,7 @@ merge against an empty part on classes of floating-point values."""
 from fractions import Fraction
 
 import tvm.testing
-from tvm import te, tirx
+from tvm import te
 from tvm.te.superopt.dims import DimTable
 from tvm.te.superopt.reducer import domain
 from tvm.te.superopt.reducer.derive import domains
@@ -38,6 +38,7 @@ from tvm.te.superopt.symbolic.canonicalize import (
     mk_sqrt,
     mk_sub,
 )
+from tvm_tirx import tirx
 
 
 def _R():

@@ -21,7 +21,6 @@ import te_programs
 
 import tvm.testing
 from tvm import te
-from tvm import tirx as tir
 from tvm.te.superopt.accuracy import (
     AccuracyConfig,
     AccuracyGate,
@@ -34,6 +33,7 @@ from tvm.te.superopt.accuracy import (
 )
 from tvm.te.superopt.symbolic import ir
 from tvm.te.superopt.symbolic.canonicalize import mk_add, mk_max, mk_mul, mk_neg, mk_sub
+from tvm_tirx import tirx as tir
 
 
 # ---------------------------------------------------------------------------
@@ -173,7 +173,7 @@ def test_static_exp_through_a_stored_tensor():
         return (mx, a[1] * tir.exp(a[0] - mx) + b[1] * tir.exp(b[0] - mx))
 
     def ident(t0, t1):
-        return (tir.min_value(t0), tir.const(0.0, t1))
+        return (tir.min_value(ty=t0), tir.const(0.0, t1))
 
     red = te.comm_reducer(merge, ident, name="online")
     j = te.reduce_axis((0, m), "j")
@@ -284,7 +284,7 @@ def test_reference_keeps_reducer_identities_as_written():
         return (tir.max(a[0], b[0]), a[1] + b[1] + tir.const(0.0, "float32") * a[0])
 
     def ident(t0, t1):
-        return (tir.min_value(t0), tir.const(0.0, t1))
+        return (tir.min_value(ty=t0), tir.const(0.0, t1))
 
     red = te.comm_reducer(merge, ident, name="r")
     j = te.reduce_axis((0, m), "j")

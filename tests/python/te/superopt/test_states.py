@@ -20,7 +20,6 @@ from chain_ops import OPERATORS
 
 import tvm.testing
 from tvm import te
-from tvm import tirx as tir
 from tvm.te.superopt.reducer.chain import discover_chains
 from tvm.te.superopt.reducer.derive import atoms_in, closed_merges, domains
 from tvm.te.superopt.reducer.domain import TeSigns
@@ -45,6 +44,7 @@ from tvm.te.superopt.symbolic.canonicalize import (
     recanonicalize,
     walk,
 )
+from tvm_tirx import tirx as tir
 
 
 def _chain(name: str, which: int = 0):

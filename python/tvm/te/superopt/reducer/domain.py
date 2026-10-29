@@ -49,11 +49,14 @@ from __future__ import annotations
 import dataclasses
 from fractions import Fraction
 
-from tvm import te
-from tvm import tirx as tir
-from tvm.ir import Call
-from tvm.tirx.stmt_functor import post_order_visit
+import tvm_ffi
 
+from tvm import te
+from tvm_tirx import tirx as tir
+from tvm_tirx.ir import Call, FloatImm, IntImm
+from tvm_tirx.ir.prim import expr_deep_equal
+
+from ..loads import is_load, load_tensor
 from ..symbolic import ir
 from ..symbolic.canonicalize import NONNEG as NONNEG_ID
 from ..symbolic.canonicalize import Unsupported, mk_neg
@@ -87,17 +90,17 @@ class TeSigns:
         self.declared: dict[str, int] = dict.fromkeys(positive, POS)
         for op in compute_ops(outputs):
             for body in op.body:
-                post_order_visit(body, self._note_domain)
+                tvm_ffi.structural_walk(body, self._note_domain)
 
     def _note_domain(self, e) -> None:
-        if not isinstance(e, Call) or e.op.name not in ("tirx.log", "tirx.sqrt"):
+        if not isinstance(e, Call) or e.op.name not in ("prim.log", "prim.sqrt"):
             return
         arg = e.args[0]
         while isinstance(arg, tir.Cast):
             arg = arg.value
-        if isinstance(arg, tir.ProducerLoad) and isinstance(arg.producer.op, te.PlaceholderOp):
-            sign = POS if e.op.name == "tirx.log" else NONNEG
-            name = arg.producer.op.name
+        if is_load(arg) and isinstance(load_tensor(arg).op, te.PlaceholderOp):
+            sign = POS if e.op.name == "prim.log" else NONNEG
+            name = load_tensor(arg).op.name
             self.declared[name] = max(self.declared.get(name, ANY), sign)
 
     def tensor(self, t: te.Tensor) -> int:
@@ -116,18 +119,18 @@ class TeSigns:
         return sign
 
     def expr(self, e) -> int:
-        if isinstance(e, tir.FloatImm | tir.IntImm):
+        if isinstance(e, FloatImm | IntImm):
             return POS if e.value > 0 else (NONNEG if e.value == 0 else ANY)
         if isinstance(e, tir.Cast):
             return self.expr(e.value)
         if isinstance(e, tir.Var):
             return POS  # an extent used as a value
-        if isinstance(e, tir.ProducerLoad):
-            return self.tensor(e.producer)
+        if is_load(e):
+            return self.tensor(load_tensor(e))
         if isinstance(e, tir.Add):
             return _add_signs((self.expr(e.a), self.expr(e.b)))
         if isinstance(e, tir.Mul):
-            if tir.analysis.expr_deep_equal(e.a, e.b):  # a square
+            if expr_deep_equal(e.a, e.b):  # a square
                 return POS if self.expr(e.a) == POS else NONNEG
             return min(self.expr(e.a), self.expr(e.b))
         if isinstance(e, tir.Div):
@@ -136,22 +139,22 @@ class TeSigns:
             return max(self.expr(e.a), self.expr(e.b))
         if isinstance(e, tir.Min):
             return min(self.expr(e.a), self.expr(e.b))
-        if isinstance(e, tir.Reduce):
+        if isinstance(e, te.Reduce):
             kind = classify_combiner(e.combiner)
             if kind is None:
                 return ANY
             return self.expr(e.source[e.value_index])
         if isinstance(e, Call):
             name = e.op.name
-            if name == "tirx.exp":
+            if name == "prim.exp":
                 return POS
-            if name == "tirx.sqrt":
+            if name == "prim.sqrt":
                 return POS if self.expr(e.args[0]) == POS else NONNEG
-            if name in ("tirx.fabs", "tirx.abs"):
+            if name in ("prim.fabs", "prim.abs"):
                 return NONNEG
-            if name == "tirx.pow":
+            if name == "prim.pow":
                 base, k = self.expr(e.args[0]), e.args[1]
-                if isinstance(k, tir.FloatImm | tir.IntImm):
+                if isinstance(k, FloatImm | IntImm):
                     if float(k.value).is_integer() and int(k.value) % 2 == 0:
                         return POS if base == POS else NONNEG
                 return base

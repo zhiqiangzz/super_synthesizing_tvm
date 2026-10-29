@@ -31,10 +31,11 @@ import dataclasses
 from fractions import Fraction
 
 from tvm import te
-from tvm import tirx as tir
-from tvm.ir import Call
+from tvm_tirx import tirx as tir
+from tvm_tirx.ir import Call, FloatImm, IntImm
 
 from ..dims import DimKey, DimTable
+from ..loads import is_load, load_indices, load_tensor
 from . import ir
 from .canonicalize import (
     Unsupported,
@@ -126,7 +127,7 @@ class LowerCtx:
 
     def lower_expr(self, e, env: dict[str, ir.IndexExpr], level: int) -> ir.SymExpr:
         """``env`` maps loop-variable names to index expressions; ``level`` = binder depth."""
-        if isinstance(e, tir.FloatImm | tir.IntImm):
+        if isinstance(e, FloatImm | IntImm):
             return lower_imm(e)
         if isinstance(e, tir.Var):
             name = e.name
@@ -150,32 +151,34 @@ class LowerCtx:
             a = self.lower_expr(e.a, env, level)
             b = self.lower_expr(e.b, env, level)
             return mk_neg(mk_max(mk_neg(a), mk_neg(b)))
+        if is_load(e):
+            return self.lower_load(e, env, level)
         if isinstance(e, Call):
             name = e.op.name
-            if name == "tirx.exp":
+            if name == "prim.exp":
                 return mk_exp(self.lower_expr(e.args[0], env, level))
-            if name == "tirx.sqrt":
+            if name == "prim.sqrt":
                 return mk_sqrt(self.lower_expr(e.args[0], env, level))
-            if name == "tirx.log":
+            if name == "prim.log":
                 return mk_log(self.lower_expr(e.args[0], env, level))
-            if name == "tirx.rsqrt":
+            if name == "prim.rsqrt":
                 return mk_div(ir.ONE, mk_sqrt(self.lower_expr(e.args[0], env, level)))
-            if name == "tirx.pow":
+            if name == "prim.pow":
                 return integer_power(self.lower_expr(e.args[0], env, level), e)
-            if name == "tirx.fabs":
+            if name == "prim.fabs":
                 a = self.lower_expr(e.args[0], env, level)
                 return mk_max(a, mk_neg(a))
             raise Unsupported(f"intrinsic {name}")
-        if isinstance(e, tir.ProducerLoad):
-            return self.lower_load(e, env, level)
-        if isinstance(e, tir.Reduce):
+        if isinstance(e, te.Reduce):
             return self.lower_reduce(e, env, level)
         raise Unsupported(f"expression {type(e).__name__}")
 
     def lower_load(self, e, env: dict[str, ir.IndexExpr], level: int) -> ir.SymExpr:
         """A tensor read; by default the producer is inlined down to the placeholders."""
-        sem = self.lower(e.producer)
-        index_map = {ir.idx(f"i{k}"): self.lower_index(i, env) for k, i in enumerate(e.indices)}
+        sem = self.lower(load_tensor(e))
+        index_map = {
+            ir.idx(f"i{k}"): self.lower_index(i, env) for k, i in enumerate(load_indices(e))
+        }
         return instantiate(sem.body, index_map, level)
 
     def lower_index(self, e, env: dict[str, ir.IndexExpr]) -> ir.IndexExpr:
@@ -183,13 +186,13 @@ class LowerCtx:
             if e.name not in env:
                 raise Unsupported(f"free index variable {e.name}")
             return env[e.name]
-        if isinstance(e, tir.IntImm):
+        if isinstance(e, IntImm):
             return ir.iconst(int(e.value))
         raise Unsupported(f"non-trivial index expression {e}")
 
     def lower_reduce(self, e, env: dict[str, ir.IndexExpr], level: int) -> ir.SymExpr:
         cond = e.condition
-        if not (isinstance(cond, tir.IntImm) and int(cond.value) == 1):
+        if not (isinstance(cond, IntImm) and int(cond.value) == 1):
             raise Unsupported("conditional reduction")
         if len(e.init) != 0:
             raise Unsupported("reduction with explicit init")
@@ -245,19 +248,19 @@ class LowerCtx:
             a = self._lower_merge(e.a, merge_map, env)
             b = self._lower_merge(e.b, merge_map, env)
             return mk_neg(mk_max(mk_neg(a), mk_neg(b)))
-        unary = {"tirx.exp": mk_exp, "tirx.sqrt": mk_sqrt, "tirx.log": mk_log}
+        unary = {"prim.exp": mk_exp, "prim.sqrt": mk_sqrt, "prim.log": mk_log}
         if isinstance(e, Call):
             if e.op.name in unary:
                 return unary[e.op.name](self._lower_merge(e.args[0], merge_map, env))
-            if e.op.name == "tirx.rsqrt":
+            if e.op.name == "prim.rsqrt":
                 return mk_div(ir.ONE, mk_sqrt(self._lower_merge(e.args[0], merge_map, env)))
-            if e.op.name == "tirx.pow":
+            if e.op.name == "prim.pow":
                 return integer_power(self._lower_merge(e.args[0], merge_map, env), e)
-            if e.op.name == "tirx.fabs":
+            if e.op.name == "prim.fabs":
                 a = self._lower_merge(e.args[0], merge_map, env)
                 return mk_max(a, mk_neg(a))
             raise Unsupported(f"intrinsic {e.op.name} in a merge function")
-        if isinstance(e, tir.FloatImm | tir.IntImm | tir.Var):
+        if isinstance(e, FloatImm | IntImm | tir.Var):
             return self.lower_expr(e, env, 0)  # a constant or an extent
         raise Unsupported(f"{type(e).__name__} in a merge function")
 
@@ -273,7 +276,7 @@ def integer_power(base: ir.SymExpr, call) -> ir.SymExpr:
     k = call.args[1]
     while isinstance(k, tir.Cast):
         k = k.value
-    if not (isinstance(k, tir.IntImm | tir.FloatImm) and float(k.value) == int(k.value)):
+    if not (isinstance(k, IntImm | FloatImm) and float(k.value) == int(k.value)):
         raise Unsupported("pow with an exponent that is not an integer constant")
     out = ir.ONE
     for _ in range(abs(int(k.value))):
@@ -284,7 +287,7 @@ def integer_power(base: ir.SymExpr, call) -> ir.SymExpr:
 def lower_imm(e) -> ir.Const:
     """Immediates; the dtype's lowest/highest finite value stands for ``-inf``/``+inf``."""
     v = e.value
-    if isinstance(e, tir.FloatImm):
+    if isinstance(e, FloatImm):
         if v == float("-inf") or _is_min_value(e):
             return ir.NEG_INF_C
         if v == float("inf") or _is_max_value(e):
@@ -313,7 +316,7 @@ def _is_pair(res, lhs, rhs) -> bool:
 
 
 def _imm_value(e):
-    if isinstance(e, tir.FloatImm | tir.IntImm):
+    if isinstance(e, FloatImm | IntImm):
         return e.value
     return None
 
@@ -325,7 +328,7 @@ def _is_min_value(e) -> bool:
     if v == float("-inf"):
         return True
     try:
-        lowest = tir.min_value(str(e.ty.dtype)).value
+        lowest = tir.min_value(ty=str(e.ty.dtype)).value
     except Exception:  # pragma: no cover - defensive
         return False
     return v == lowest
@@ -338,7 +341,7 @@ def _is_max_value(e) -> bool:
     if v == float("inf"):
         return True
     try:
-        highest = tir.max_value(str(e.ty.dtype)).value
+        highest = tir.max_value(ty=str(e.ty.dtype)).value
     except Exception:  # pragma: no cover - defensive
         return False
     return v == highest

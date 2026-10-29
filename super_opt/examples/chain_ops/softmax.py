@@ -28,7 +28,7 @@ from __future__ import annotations
 import numpy as np
 
 from tvm import te
-from tvm import tirx as tir
+from tvm_tirx import tirx as tir
 
 from . import DTYPE, Operator, Showcase, register
 
@@ -44,7 +44,7 @@ def online_softmax(rescaled: int, plain: int = 0):
         return (m, *scaled, *sums)
 
     def identity(*dtypes):
-        return (tir.min_value(dtypes[0]), *(tir.const(0.0, t) for t in dtypes[1:]))
+        return (tir.min_value(ty=dtypes[0]), *(tir.const(0.0, t) for t in dtypes[1:]))
 
     return te.comm_reducer(merge, identity, name="online_softmax")
 
@@ -226,7 +226,7 @@ def _definition_fused(X, q):
         )
 
     def identity(t0, t1, t2, t3):
-        return (tir.min_value(t0), *(tir.const(0.0, t) for t in (t1, t2, t3)))
+        return (tir.min_value(ty=t0), *(tir.const(0.0, t) for t in (t1, t2, t3)))
 
     red = te.comm_reducer(merge, identity, name="soft_ce")
     j = te.reduce_axis((0, m), "j")
@@ -307,7 +307,7 @@ def entropy_fused():
         return (mx, a[1] * ra + b[1] * rb, ra * (a[2] - da * a[1]) + rb * (b[2] - db * b[1]))
 
     def identity(t0, t1, t2):
-        return (tir.min_value(t0), tir.const(0.0, t1), tir.const(0.0, t2))
+        return (tir.min_value(ty=t0), tir.const(0.0, t1), tir.const(0.0, t2))
 
     red = te.comm_reducer(merge, identity, name="entropy")
     j = te.reduce_axis((0, m), "j")

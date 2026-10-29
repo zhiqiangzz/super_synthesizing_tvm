@@ -45,7 +45,7 @@ def const_source(value: ir.Number, dtype: str, quoted: bool = True) -> str:
     """``tir.const`` / ``tir.min_value`` text; ``dtype`` is a literal unless ``quoted=False``."""
     dt = f'"{dtype}"' if quoted else dtype
     if isinstance(value, float):
-        return f"tir.{'min' if value < 0 else 'max'}_value({dt})"
+        return f"tir.{'min' if value < 0 else 'max'}_value(ty={dt})"
     return f"tir.const({float(value)!r}, {dt})"
 
 

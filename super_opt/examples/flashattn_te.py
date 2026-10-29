@@ -54,8 +54,9 @@ from rich.console import Console
 
 import tvm
 import tvm.s_tir as s_tir
+import tvm_tirx
 from tvm import te
-from tvm import tirx as tir  # tvm.tir is absent in this fork; intrinsics live in tirx
+from tvm_tirx import tirx as tir  # the intrinsics live in the standalone TIRx package
 
 SUPPORTED_DTYPES = ("float16", "bfloat16")
 
@@ -98,7 +99,7 @@ def flash_attention(
     head_dim: int | None = None,
     dtype: str = "float16",
     accum_dtype: str = "float32",
-) -> tvm.IRModule:
+) -> tvm_tirx.IRModule:
     """Build ``O = softmax(Q @ Kᵀ · softmax_scale) @ V`` as a TE PrimFunc.
 
     Batch and head are plain leading dimensions -- attention is independent
@@ -155,7 +156,7 @@ def flash_attention(
 
     def empty_state(max_dtype, denom_dtype, acc_dtype):
         return (
-            tir.min_value(max_dtype),  # no key seen yet
+            tir.min_value(ty=max_dtype),  # no key seen yet
             tir.const(0.0, denom_dtype),
             tir.const(0.0, acc_dtype),
         )
@@ -188,7 +189,7 @@ def flash_attention(
         name="O",
     )
 
-    return tvm.IRModule({"main": te.create_prim_func([Q, K, V, O])})
+    return tvm_tirx.IRModule({"main": te.create_function([Q, K, V, O])})
 
 
 def attention(
@@ -200,7 +201,7 @@ def attention(
     head_dim: int | None = None,
     dtype: str = "float16",
     accum_dtype: str = "float32",
-) -> tvm.IRModule:
+) -> tvm_tirx.IRModule:
     """Build the same attention as a textbook matmul -> softmax -> matmul chain.
 
     Identical mathematics and identical layouts to :func:`flash_attention`, but
@@ -294,7 +295,7 @@ def attention(
         name="O",
     )
 
-    return tvm.IRModule({"main": te.create_prim_func([Q, K, V, O])})
+    return tvm_tirx.IRModule({"main": te.create_function([Q, K, V, O])})
 
 
 def attention_unstable(
@@ -306,7 +307,7 @@ def attention_unstable(
     head_dim: int | None = None,
     dtype: str = "float16",
     accum_dtype: str = "float32",
-) -> tvm.IRModule:
+) -> tvm_tirx.IRModule:
     """Build the same attention as a textbook matmul -> softmax -> matmul chain.
 
     Identical mathematics and identical layouts to :func:`flash_attention`, but
@@ -390,7 +391,7 @@ def attention_unstable(
         name="O",
     )
 
-    return tvm.IRModule({"main": te.create_prim_func([Q, K, V, O])})
+    return tvm_tirx.IRModule({"main": te.create_function([Q, K, V, O])})
 
 
 def flash_attention_unstable(
@@ -402,7 +403,7 @@ def flash_attention_unstable(
     head_dim: int | None = None,
     dtype: str = "float16",
     accum_dtype: str = "float32",
-) -> tvm.IRModule:
+) -> tvm_tirx.IRModule:
     """Build ``O = softmax(Q @ Kᵀ · softmax_scale) @ V`` as a TE PrimFunc.
 
     Batch and head are plain leading dimensions -- attention is independent
@@ -493,13 +494,13 @@ def flash_attention_unstable(
         name="O",
     )
 
-    return tvm.IRModule({"main": te.create_prim_func([Q, K, V, O])})
+    return tvm_tirx.IRModule({"main": te.create_function([Q, K, V, O])})
 
 
 # ---------------------------------------------------------------------------
 # Scheduling
 # ---------------------------------------------------------------------------
-def schedule_naive_cuda(mod: tvm.IRModule, threads_per_block: int = 64) -> s_tir.Schedule:
+def schedule_naive_cuda(mod: tvm_tirx.IRModule, threads_per_block: int = 64) -> s_tir.Schedule:
     """Bind one CUDA thread per output element, leaving every reduction serial.
 
     Deliberately unoptimised: no tiling, no shared memory, and every intermediate
@@ -514,7 +515,7 @@ def schedule_naive_cuda(mod: tvm.IRModule, threads_per_block: int = 64) -> s_tir
     sch = s_tir.Schedule(mod)
     for block in sch.get_child_blocks(sch.get_sblock("root")):
         n_spatial = sum(
-            iter_var.iter_type == tir.IterVar.DataPar for iter_var in sch.get(block).iter_vars
+            iter_var.iter_type == s_tir.IterVar.DataPar for iter_var in sch.get(block).iter_vars
         )
         loops = sch.get_loops(block)
         fused = sch.fuse(*loops[:n_spatial])

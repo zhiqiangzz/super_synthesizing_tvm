@@ -21,10 +21,10 @@ from chain_ops import OPERATORS
 
 import tvm.testing
 from tvm import te
-from tvm import tirx as tir
 from tvm.te.superopt import Judgement, fuse, judge
 from tvm.te.superopt.reducer import discover_chains, members_of
 from tvm.te.superopt.reducer import judge as judge_chain
+from tvm_tirx import tirx as tir
 
 F = "float32"
 

@@ -77,8 +77,9 @@ from harness import Accuracy, accuracy_columns, label, render_source, render_tab
 from rich.console import Console
 
 import tvm
+import tvm_tirx
 from tvm import te
-from tvm import tirx as tir  # tvm.tir is absent in this fork; intrinsics live in tirx
+from tvm_tirx import tirx as tir  # the intrinsics live in the standalone TIRx package
 
 
 # ---------------------------------------------------------------------------
@@ -129,8 +130,8 @@ def _cost(x, y):
     )
 
 
-def _module(x, y, a, b, g, f, g_new) -> tvm.IRModule:
-    return tvm.IRModule({"main": te.create_prim_func([x, y, a, b, g, f, g_new])})
+def _module(x, y, a, b, g, f, g_new) -> tvm_tirx.IRModule:
+    return tvm_tirx.IRModule({"main": te.create_function([x, y, a, b, g, f, g_new])})
 
 
 def sinkhorn_logdomain(*, batch=None, n=None, m=None, dim=None, eps=0.5, dtype="float32"):
@@ -224,7 +225,7 @@ def flash_sinkhorn(*, batch=None, n=None, m=None, dim=None, eps=0.5, dtype="floa
         return new_max, sum_a * tir.exp(max_a - new_max) + sum_b * tir.exp(max_b - new_max)
 
     def empty_state(max_dtype, sum_dtype):
-        return tir.min_value(max_dtype), tir.const(0.0, sum_dtype)  # m <- -inf, s <- 0
+        return tir.min_value(ty=max_dtype), tir.const(0.0, sum_dtype)  # m <- -inf, s <- 0
 
     online_lse = te.comm_reducer(merge, empty_state, name="online_lse")
 
@@ -317,7 +318,7 @@ def check(variant, shape, *, eps, dtype, seed, rtol, atol) -> Accuracy:
     args = make_inputs(shape, dtype=dtype, seed=seed)
     f_out = np.zeros((shape.batch, shape.n), dtype=dtype)
     g_out = np.zeros((shape.batch, shape.m), dtype=dtype)
-    tensors = [tvm.runtime.tensor(v) for v in (*args, f_out, g_out)]
+    tensors = [tvm_tirx.runtime.tensor(v) for v in (*args, f_out, g_out)]
     lib["main"](*tensors)
     got = np.concatenate([t.numpy().astype(np.float64).ravel() for t in tensors[-2:]])
     want = np.concatenate([v.ravel() for v in reference_iteration(*args, eps=eps)])

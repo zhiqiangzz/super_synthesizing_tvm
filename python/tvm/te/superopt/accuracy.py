@@ -60,10 +60,12 @@ from fractions import Fraction
 import numpy as np
 
 import tvm
+import tvm_tirx
 from tvm import te
-from tvm import tirx as tir
-from tvm.ir import Call
+from tvm_tirx import tirx as tir
+from tvm_tirx.ir import Call, FloatImm, IntImm
 
+from .loads import is_load, load_indices, load_tensor
 from .symbolic import ir
 from .symbolic.canonicalize import (
     Unsupported,
@@ -191,9 +193,9 @@ class _OpLower(LowerCtx):
         return PSEUDO_BASE - (len(self.computed) - 1)
 
     def lower_load(self, e, env, level):
-        if isinstance(e.producer.op, te.ComputeOp):
-            tid = self.pseudo_id(e.producer)
-            return ir.elem(tid, tuple(self.lower_index(i, env) for i in e.indices))
+        if isinstance(load_tensor(e).op, te.ComputeOp):
+            tid = self.pseudo_id(load_tensor(e))
+            return ir.elem(tid, tuple(self.lower_index(i, env) for i in load_indices(e)))
         return super().lower_load(e, env, level)
 
     def body(self, op, k: int) -> ir.SymExpr:
@@ -532,7 +534,7 @@ def static_issues(outputs) -> dict[str, list[str]]:
     signs = _Signs(lower)
     issues: dict[str, list[str]] = {"exp": [], "domain": []}
     for op in compute_ops(outputs):
-        bodies = [0] if isinstance(op.body[0], tir.Reduce) else range(len(op.body))
+        bodies = [0] if isinstance(op.body[0], te.Reduce) else range(len(op.body))
         out_keys = tuple(lower.dims.key(iv.dom.extent) for iv in op.axis)
         bad: set[str] = set()
         for k in bodies:
@@ -560,18 +562,18 @@ def static_issues(outputs) -> dict[str, list[str]]:
 # Intrinsics the reference can evaluate. The ops around a chain are not analysed,
 # only run, so this covers more than the lowering understands.
 ELEMENTWISE = {
-    "tirx.exp": np.exp,
-    "tirx.log": np.log,
-    "tirx.sqrt": np.sqrt,
-    "tirx.rsqrt": lambda x: 1.0 / np.sqrt(x),
-    "tirx.pow": np.power,
-    "tirx.tanh": np.tanh,
-    "tirx.sigmoid": lambda x: 1.0 / (1.0 + np.exp(-x)),
-    "tirx.fabs": np.abs,
-    "tirx.sin": np.sin,
-    "tirx.cos": np.cos,
-    "tirx.floor": np.floor,
-    "tirx.ceil": np.ceil,
+    "prim.exp": np.exp,
+    "prim.log": np.log,
+    "prim.sqrt": np.sqrt,
+    "prim.rsqrt": lambda x: 1.0 / np.sqrt(x),
+    "prim.pow": np.power,
+    "prim.tanh": np.tanh,
+    "prim.sigmoid": lambda x: 1.0 / (1.0 + np.exp(-x)),
+    "prim.fabs": np.abs,
+    "prim.sin": np.sin,
+    "prim.cos": np.cos,
+    "prim.floor": np.floor,
+    "prim.ceil": np.ceil,
 }
 
 
@@ -598,7 +600,7 @@ class _Reference:
         return int(self.index(e, {}))
 
     def index(self, e, env):
-        if isinstance(e, tir.IntImm):
+        if isinstance(e, IntImm):
             return int(e.value)
         if isinstance(e, tir.Var):
             return env[e.name] if e.name in env else int(self.vars[e.name])
@@ -615,7 +617,7 @@ class _Reference:
         raise Unsupported(f"index expression {type(e).__name__}")
 
     def ev(self, e, env):
-        if isinstance(e, tir.FloatImm | tir.IntImm):
+        if isinstance(e, FloatImm | IntImm):
             # as written: a reducer identity is the dtype's lowest finite value, and
             # ``0 * lowest`` is 0 where ``0 * -inf`` would be NaN
             return float(e.value)
@@ -636,20 +638,20 @@ class _Reference:
         for cls, fn in binary.items():
             if isinstance(e, cls):
                 return fn(self.ev(e.a, env), self.ev(e.b, env))
+        if is_load(e):
+            arr = self.tensor(load_tensor(e))
+            return arr[tuple(self.index(i, env) for i in load_indices(e))]
         if isinstance(e, Call):
             name = e.op.name
             if name in ELEMENTWISE:
                 return ELEMENTWISE[name](*(self.ev(a, env) for a in e.args))
             raise Unsupported(f"intrinsic {name}")
-        if isinstance(e, tir.ProducerLoad):
-            arr = self.tensor(e.producer)
-            return arr[tuple(self.index(i, env) for i in e.indices)]
         raise Unsupported(f"expression {type(e).__name__}")
 
     def compute(self, op) -> list[np.ndarray]:
         shape = [self.extent(iv.dom.extent) for iv in op.axis]
         first = op.body[0]
-        raxes = list(first.axis) if isinstance(first, tir.Reduce) else []
+        raxes = list(first.axis) if isinstance(first, te.Reduce) else []
         full = shape + [self.extent(iv.dom.extent) for iv in raxes]
         nd = len(full)
         env = {}
@@ -661,7 +663,7 @@ class _Reference:
             if not raxes:
                 return [np.broadcast_to(self.ev(b, env), shape).copy() for b in op.body]
             cond = first.condition
-            if not (isinstance(cond, tir.IntImm) and int(cond.value) == 1):
+            if not (isinstance(cond, IntImm) and int(cond.value) == 1):
                 raise Unsupported("conditional reduction")
             srcs = [np.broadcast_to(self.ev(s, env), full) for s in first.source]
             dims = tuple(range(len(shape), nd))
@@ -735,9 +737,9 @@ def positive_inputs(outputs, inputs, declared=()) -> list[bool]:
     hits: list = []
 
     def scan(e, inside: bool) -> None:
-        if isinstance(e, tir.ProducerLoad):
-            if inside and isinstance(e.producer.op, te.PlaceholderOp):
-                hits.append(e.producer.op)
+        if is_load(e):
+            if inside and isinstance(load_tensor(e).op, te.PlaceholderOp):
+                hits.append(load_tensor(e).op)
         elif isinstance(e, tir.Div):
             scan(e.a, inside)
             scan(e.b, True)
@@ -747,13 +749,13 @@ def positive_inputs(outputs, inputs, declared=()) -> list[bool]:
         elif isinstance(e, tir.Cast):
             scan(e.value, inside)
         elif isinstance(e, Call):
-            partial = e.op.name in ("tirx.log", "tirx.sqrt", "tirx.rsqrt")
-            if e.op.name == "tirx.pow":  # a negative power divides by its base
+            partial = e.op.name in ("prim.log", "prim.sqrt", "prim.rsqrt")
+            if e.op.name == "prim.pow":  # a negative power divides by its base
                 k = e.args[1]
-                partial = isinstance(k, tir.IntImm | tir.FloatImm) and k.value < 0
+                partial = isinstance(k, IntImm | FloatImm) and k.value < 0
             for a in e.args:  # exp maps every real to a positive value
-                scan(a, partial or (inside and e.op.name != "tirx.exp"))
-        elif isinstance(e, tir.Reduce):
+                scan(a, partial or (inside and e.op.name != "prim.exp"))
+        elif isinstance(e, te.Reduce):
             for x in e.source:
                 scan(x, inside)
 
@@ -784,13 +786,13 @@ def sample_inputs(inputs, positive, extent, rng, shift: float = 0.0, scale: floa
 # the gate
 # ---------------------------------------------------------------------------
 def _compile(inputs, outputs):
-    func = te.create_prim_func([*inputs, *_tensors(outputs)])
-    return tvm.compile(tvm.IRModule({"main": func}), target="llvm")
+    func = te.create_function([*inputs, *_tensors(outputs)])
+    return tvm.compile(tvm_tirx.IRModule({"main": func}), target="llvm")
 
 
 def _run(lib, arrays, out_shapes, dtypes) -> list[np.ndarray]:
-    args = [tvm.runtime.tensor(a) for a in arrays]
-    outs = [tvm.runtime.tensor(np.zeros(s, dtype=d)) for s, d in zip(out_shapes, dtypes)]
+    args = [tvm_tirx.runtime.tensor(a) for a in arrays]
+    outs = [tvm_tirx.runtime.tensor(np.zeros(s, dtype=d)) for s, d in zip(out_shapes, dtypes)]
     lib["main"](*args, *outs)
     return [o.numpy().astype(np.float64) for o in outs]
 

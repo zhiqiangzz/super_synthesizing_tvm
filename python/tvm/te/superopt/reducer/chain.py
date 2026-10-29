@@ -53,11 +53,14 @@ from __future__ import annotations
 
 import dataclasses
 
+import tvm_ffi
+
 from tvm import te
-from tvm import tirx as tir
-from tvm.tirx.stmt_functor import post_order_visit
+from tvm_tirx import tirx as tir
+from tvm_tirx.ir import FloatImm, IntImm
 
 from ..dims import DimKey, DimTable
+from ..loads import is_load, load_indices, load_tensor
 from ..symbolic import ir
 from ..symbolic.canonicalize import Unsupported, mk_card, subst, subst_domain
 from ..symbolic.lower import LowerCtx, classify_combiner, compute_ops
@@ -186,7 +189,7 @@ class ChainLower(LowerCtx):
         return next((m for m in self.members if m.op is not None and m.op.same_as(op)), None)
 
     def lower_expr(self, e, env, level):
-        if isinstance(e, tir.IntImm | tir.FloatImm) and e.value == self._extent:
+        if isinstance(e, IntImm | FloatImm) and e.value == self._extent:
             self._note_extent(e, level)
             return self._extent_symbol
         if isinstance(e, tir.Var) and ir.shape_sym(e.name) is self._extent_symbol:
@@ -221,24 +224,24 @@ class ChainLower(LowerCtx):
         inner = e
         while isinstance(inner, tir.Cast):
             inner = inner.value
-        if isinstance(inner, tir.ProducerLoad | tir.Var | tir.IntImm | tir.FloatImm | tir.Reduce):
+        if is_load(inner) or isinstance(inner, tir.Var | IntImm | FloatImm | te.Reduce):
             return False
         found = {"member": False, "moves": False}
 
         def visit(x) -> None:
             if isinstance(x, tir.Var):
                 found["moves"] |= x.name in env and not isinstance(env[x.name], ir.Idx)
-            elif isinstance(x, tir.ProducerLoad):
-                found["member"] |= self.member(x.producer.op) is not None
-            elif isinstance(x, tir.Reduce):
+            elif is_load(x):
+                found["member"] |= self.member(load_tensor(x).op) is not None
+            elif isinstance(x, te.Reduce):
                 found["moves"] = True
 
-        post_order_visit(e, visit)
+        tvm_ffi.structural_walk(e, visit)
         return found["member"] and not found["moves"]
 
     def _context(self, e, env, level: int) -> ir.SymExpr:
         names: list[str] = []
-        post_order_visit(
+        tvm_ffi.structural_walk(
             e, lambda x: names.append(x.name) if isinstance(x, tir.Var) and x.name in env else None
         )
         coords = tuple(sorted({int(env[n].name[1:]) for n in names}))
@@ -256,9 +259,9 @@ class ChainLower(LowerCtx):
         return ir.elem(m.pid, (*m.index, ir.bidx(level - 1)))
 
     def lower_load(self, e, env, level):
-        t = e.producer
+        t = load_tensor(e)
         op = t.op
-        idx = tuple(self.lower_index(i, env) for i in e.indices)
+        idx = tuple(self.lower_index(i, env) for i in load_indices(e))
         along = any(isinstance(i, ir.BIdx) for i in idx)
         m = self.member(op)
         if m is not None and not along:
@@ -317,22 +320,22 @@ def reduction_of(op):
     if len(op.body) != 1:
         return None
     body = op.body[0]
-    if not isinstance(body, tir.Reduce) or len(body.axis) != 1 or len(body.init) != 0:
+    if not isinstance(body, te.Reduce) or len(body.axis) != 1 or len(body.init) != 0:
         return None
     cond = body.condition
-    if not (isinstance(cond, tir.IntImm) and int(cond.value) == 1):
+    if not (isinstance(cond, IntImm) and int(cond.value) == 1):
         return None
     kind = classify_combiner(body.combiner)
     return None if kind is None else (kind, body.axis[0])
 
 
 def is_elementwise(op) -> bool:
-    return len(op.body) == 1 and not isinstance(op.body[0], tir.Reduce)
+    return len(op.body) == 1 and not isinstance(op.body[0], te.Reduce)
 
 
 def loads_in(expr) -> list:
     out: list = []
-    post_order_visit(expr, lambda x: out.append(x) if isinstance(x, tir.ProducerLoad) else None)
+    tvm_ffi.structural_walk(expr, lambda x: out.append(x) if is_load(x) else None)
     return out
 
 
@@ -390,10 +393,10 @@ class _Graph:
 
         def walk(expr, jvars: list) -> None:
             for load in loads_in(expr):
-                i = self.index(load.producer.op)
+                i = self.index(load_tensor(load).op)
                 if i is None:
                     continue
-                dep = [_uses(ix, jvars) for ix in load.indices]
+                dep = [_uses(ix, jvars) for ix in load_indices(load)]
                 if not any(dep):
                     free.add(i)
                 elif self.plain[i]:
@@ -454,10 +457,10 @@ class _Graph:
                 continue
             for body in op.body:
                 for load in loads_in(body):
-                    t = self.index(load.producer.op)
+                    t = self.index(load_tensor(load).op)
                     if t is None or not inside[t]:
                         continue
-                    for p, ix in enumerate(load.indices):
+                    for p, ix in enumerate(load_indices(load)):
                         for q, iv in enumerate(op.axis):
                             if iv.var.same_as(ix):
                                 uf.union((t, p), (d, q))
@@ -466,10 +469,10 @@ class _Graph:
 
 def _uses(expr, variables: list) -> bool:
     """Does an index expression mention one of ``variables``?"""
-    if isinstance(expr, tir.IntImm):
+    if isinstance(expr, IntImm):
         return False
     hit = []
-    post_order_visit(
+    tvm_ffi.structural_walk(
         expr,
         lambda x: (
             hit.append(x)

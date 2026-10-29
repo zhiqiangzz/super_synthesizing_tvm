@@ -28,7 +28,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any
 
-import tvm
+import tvm_ffi
 
 from .accuracy import Accuracy, compare
 
@@ -74,7 +74,7 @@ def launch(kernel, *tensors) -> None:
     """Call the compiled PrimFunc on torch tensors and wait for it to finish."""
     import torch  # local: printing the IR should not require torch
 
-    kernel["main"](*(tvm.runtime.from_dlpack(t) for t in tensors))
+    kernel["main"](*(tvm_ffi.from_dlpack(t) for t in tensors))
     torch.cuda.synchronize()
 
 

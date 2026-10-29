@@ -27,7 +27,7 @@ from __future__ import annotations
 import numpy as np
 
 from tvm import te
-from tvm import tirx as tir
+from tvm_tirx import tirx as tir
 
 from . import DTYPE, Operator, Showcase, register
 from .moments import LN_EPS, pebay
@@ -311,7 +311,7 @@ def minmax_mean_fused():
         return (tir.min(a[0], b[0]), tir.max(a[1], b[1]), a[2] + b[2])
 
     def identity(t0, t1, t2):
-        return (tir.max_value(t0), tir.min_value(t1), tir.const(0.0, t2))
+        return (tir.max_value(ty=t0), tir.min_value(ty=t1), tir.const(0.0, t2))
 
     red = te.comm_reducer(merge, identity, name="range_sum")
     j = te.reduce_axis((0, m), "j")

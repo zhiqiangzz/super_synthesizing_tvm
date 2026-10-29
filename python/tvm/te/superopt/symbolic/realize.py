@@ -28,7 +28,7 @@ import dataclasses
 from collections.abc import Callable
 from fractions import Fraction
 
-from tvm import tirx as tir
+from tvm_tirx import tirx as tir
 
 from ..dims import DimTable
 from . import ir
@@ -48,7 +48,7 @@ class RealizeEnv:
 
 def const_expr(value: ir.Number, dtype: str):
     if isinstance(value, float):
-        return tir.min_value(dtype) if value < 0 else tir.max_value(dtype)
+        return tir.min_value(ty=dtype) if value < 0 else tir.max_value(ty=dtype)
     return tir.const(float(value), dtype)
 
 

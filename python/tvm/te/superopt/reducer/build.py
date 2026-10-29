@@ -26,11 +26,13 @@ nothing else in the program is touched.
 
 from __future__ import annotations
 
+import tvm_ffi
+
 import tvm
 from tvm import te
-from tvm import tirx as tir
-from tvm.tirx.expr_functor import ExprMutator
+from tvm_tirx.ir import Call
 
+from ..loads import is_load, load_tensor
 from ..symbolic import ir
 from ..symbolic.realize import RealizeEnv, const_expr, to_prim
 from .chain import Chain
@@ -41,18 +43,16 @@ def same_tensor(a: te.Tensor, b: te.Tensor) -> bool:
     return a.op.same_as(b.op) and int(a.value_index) == int(b.value_index)
 
 
-class _Swap(ExprMutator):
-    """Redirect tensor reads; everything else is kept."""
+def _swap(expr, lookup):
+    """``expr`` with its tensor reads redirected; everything else is kept."""
 
-    def __init__(self, lookup) -> None:
-        super().__init__()
-        self.lookup = lookup
+    def visit(e):
+        if not is_load(e):
+            return e
+        new = lookup(load_tensor(e))
+        return e if new is None else new(*list(e.args)[1:])
 
-    def visit_producer_load_(self, op):
-        new = self.lookup(op.producer)
-        if new is None:
-            return op
-        return tir.ProducerLoad(new, list(op.indices))
+    return tvm_ffi.structural_map(expr, (Call, visit))
 
 
 class Rewriter:
@@ -93,19 +93,18 @@ def _rebuild(op, swaps: list[tuple[te.Tensor, te.Tensor]]):
     def lookup(t: te.Tensor):
         return next((new for old, new in swaps if same_tensor(old, t)), None)
 
-    swap = _Swap(lookup)
     first = op.body[0]
-    if isinstance(first, tir.Reduce):
-        # ExprMutator cannot rebuild a Reduce, and the outputs of a tuple reduction
-        # must share one source array: rewrite the pieces by hand
-        source = tvm.runtime.convert([swap.visit_expr(s) for s in first.source])
-        cond = swap.visit_expr(first.condition)
+    if isinstance(first, te.Reduce):
+        # the outputs of a tuple reduction must share one source array: rewrite the
+        # pieces by hand
+        source = _swap(first.source, lookup)
+        cond = _swap(first.condition, lookup)
         bodies = [
-            tir.Reduce(first.combiner, source, first.axis, cond, int(b.value_index), first.init)
+            te.Reduce(first.combiner, source, first.axis, cond, int(b.value_index), first.init)
             for b in op.body
         ]
     else:
-        bodies = [swap.visit_expr(b) for b in op.body]
+        bodies = [_swap(b, lookup) for b in op.body]
     return tvm.te._ffi_api.ComputeOp(op.name, op.tag, op.attrs, op.axis, bodies)
 
 

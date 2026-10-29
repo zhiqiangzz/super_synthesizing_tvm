@@ -47,7 +47,7 @@ from __future__ import annotations
 import numpy as np
 
 from tvm import te
-from tvm import tirx as tir
+from tvm_tirx import tirx as tir
 
 from . import DTYPE, Operator, Showcase, register
 
@@ -96,7 +96,7 @@ def zscore_max_fused():
         )
 
     def identity(t0, t1, t2, t3):
-        return (*(tir.const(0.0, t) for t in (t0, t1, t2)), tir.min_value(t3))
+        return (*(tir.const(0.0, t) for t in (t0, t1, t2)), tir.min_value(ty=t3))
 
     red = te.comm_reducer(merge, identity, name="moments_max")
     j = te.reduce_axis((0, m), "j")
@@ -137,7 +137,7 @@ def _sum_and_range(X):
         return (a[0] + b[0], tir.max(a[1], b[1]), tir.min(a[2], b[2]))
 
     def identity(t0, t1, t2):
-        return (tir.const(0.0, t0), tir.min_value(t1), tir.max_value(t2))
+        return (tir.const(0.0, t0), tir.min_value(ty=t1), tir.max_value(ty=t2))
 
     red = te.comm_reducer(merge, identity, name="sum_range")
     j = te.reduce_axis((0, m), "j")
@@ -225,7 +225,7 @@ def papr_fused():
 
     def identity(t0, t1, t2, t3, t4):
         zeros = (tir.const(0.0, t) for t in (t0, t1, t2))
-        return (*zeros, tir.min_value(t3), tir.max_value(t4))
+        return (*zeros, tir.min_value(ty=t3), tir.max_value(ty=t4))
 
     red = te.comm_reducer(merge, identity, name="moments_range")
     j = te.reduce_axis((0, m), "j")
@@ -268,7 +268,7 @@ def peak_to_geomean_fused():
         return (a[0] + b[0], tir.max(a[1], b[1]))
 
     def identity(t0, t1):
-        return (tir.const(0.0, t0), tir.min_value(t1))
+        return (tir.const(0.0, t0), tir.min_value(ty=t1))
 
     red = te.comm_reducer(merge, identity, name="sum_max")
     j = te.reduce_axis((0, m), "j")

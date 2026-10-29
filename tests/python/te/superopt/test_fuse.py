@@ -23,8 +23,8 @@ from chain_ops.run import extents, passes, rel_err, run_llvm, sample
 
 import tvm
 import tvm.testing
+import tvm_tirx
 from tvm import te
-from tvm import tirx as tir
 from tvm.te.superopt import fuse
 from tvm.te.superopt.accuracy import AccuracyGate, references, spec_issues
 from tvm.te.superopt.reducer import Rewriter, build_chain, discover_chains, members_of
@@ -41,6 +41,7 @@ from tvm.te.superopt.symbolic.canonicalize import (
     walk,
 )
 from tvm.te.superopt.symbolic.lower import compute_ops
+from tvm_tirx import tirx as tir
 
 
 def _same_results(ins, outs, res, seed=0, tol=1e-4, **sizes):
@@ -84,7 +85,7 @@ def test_softmax_becomes_one_tuple_reduction():
     assert {t.op.name for t in out.op.input_tensors} == {"X", "fused_mx_den"}
     assert passes([P], X.shape[1]) == 2 and passes(res.outputs, X.shape[1]) == 1
     _same_results([X], [P], res)
-    tvm.compile(tvm.IRModule({"main": res.prim_func()}), target="llvm")
+    tvm.compile(tvm_tirx.IRModule({"main": res.prim_func()}), target="llvm")
 
 
 def test_states_are_outputs_when_the_program_asks_for_them():
@@ -117,7 +118,7 @@ def test_downstream_tuple_reduction_is_rebuilt():
         return (a[0] + b[0], tir.max(a[1], b[1]))
 
     def ident(t0, t1):
-        return (tir.const(0.0, t0), tir.min_value(t1))
+        return (tir.const(0.0, t0), tir.min_value(ty=t1))
 
     red = te.comm_reducer(merge, ident, name="colstat")
     r = te.reduce_axis((0, n), "r")
@@ -247,7 +248,7 @@ def test_minimum_is_fused_like_a_maximum():
     assert report.fused and report.states == ("lo", "Z") and not report.rejected
     assert passes([out], m) == 2 and passes(res.outputs, m) == 1
     source = res.source()
-    assert "t0 = tir.min(a[0], b[0])" in source and "tir.max_value(t0)" in source
+    assert "t0 = tir.min(a[0], b[0])" in source and "tir.max_value(ty=t0)" in source
     assert "tir.exp((t0 - a[0]))" in source  # the weights only ever shrink
     _same_results([X], [out], res)
 
@@ -531,7 +532,7 @@ def test_ops_around_a_chain_are_run_not_analysed():
     odd = te.compute((n, m), lambda i, j: tir.erf(P[i, j]), name="odd")
     res = fuse(odd, [X])
     (report,) = res.chains
-    assert not res.fused and "tirx.erf" in report.reason and res.outputs[0].same_as(odd)
+    assert not res.fused and "prim.erf" in report.reason and res.outputs[0].same_as(odd)
 
 
 def test_report_mode_attaches_the_verdict_without_filtering():

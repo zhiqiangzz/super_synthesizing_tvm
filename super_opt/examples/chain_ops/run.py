@@ -21,8 +21,8 @@ from __future__ import annotations
 import numpy as np
 
 import tvm
+import tvm_tirx
 from tvm import te
-from tvm import tirx as tir
 from tvm.te.superopt.accuracy import (
     concrete_shape,
     extent_names,
@@ -30,6 +30,7 @@ from tvm.te.superopt.accuracy import (
     sample_inputs,
 )
 from tvm.te.superopt.symbolic.lower import compute_ops
+from tvm_tirx import tirx as tir
 
 
 def extents(inputs, outputs, reduce: int = 64, other: int = 3) -> dict[str, int]:
@@ -52,13 +53,13 @@ def sample(
 
 def run_llvm(inputs, outputs, arrays, values: dict[str, int]) -> list[np.ndarray]:
     """Compile for LLVM in the program's own dtype and run; outputs as float64."""
-    func = te.create_prim_func([*inputs, *outputs])
-    lib = tvm.compile(tvm.IRModule({"main": func}), target="llvm")
+    func = te.create_function([*inputs, *outputs])
+    lib = tvm.compile(tvm_tirx.IRModule({"main": func}), target="llvm")
     outs = [
-        tvm.runtime.tensor(np.zeros(concrete_shape(o.shape, values), dtype=str(o.dtype)))
+        tvm_tirx.runtime.tensor(np.zeros(concrete_shape(o.shape, values), dtype=str(o.dtype)))
         for o in outputs
     ]
-    lib["main"](*[tvm.runtime.tensor(a) for a in arrays], *outs)
+    lib["main"](*[tvm_tirx.runtime.tensor(a) for a in arrays], *outs)
     return [o.numpy().astype(np.float64) for o in outs]
 
 
@@ -88,7 +89,7 @@ def passes(outputs, extent) -> int:
     want = key(extent)
     count = 0
     for op in compute_ops(outputs):
-        if isinstance(op.body[0], tir.Reduce):
+        if isinstance(op.body[0], te.Reduce):
             count += sum(key(iv.dom.extent) == want for iv in op.reduce_axis)
     return count
 

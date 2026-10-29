@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 from tvm import te
-from tvm import tirx as tir
+from tvm_tirx import tirx as tir
 
 ATTN_DIMS = ("batch", "num_heads", "seqlen_q", "seqlen_k", "head_dim")
 
@@ -72,7 +72,7 @@ def attention(kind: str = "naive", dtype: str = "float32"):
         return (m, a[1] * ra + b[1] * rb, a[2] * ra + b[2] * rb)
 
     def ident(t0, t1, t2):
-        return (tir.min_value(t0), tir.const(0.0, t1), tir.const(0.0, t2))
+        return (tir.min_value(ty=t0), tir.const(0.0, t1), tir.const(0.0, t2))
 
     online_softmax = te.comm_reducer(merge, ident, name="online_softmax")
     j = te.reduce_axis((0, n_k), name="j")
@@ -110,7 +110,7 @@ def softmax_value_logspace():
         return tir.log(den), (ex * o_x + ey * o_y) / den
 
     def fidentity(t_z, t_o):
-        return tir.min_value(t_z), tir.const(0.0, t_o)
+        return tir.min_value(ty=t_z), tir.const(0.0, t_o)
 
     reducer = te.comm_reducer(fcombine, fidentity, name="attention_reducer")
     _z, out = te.compute((n, d), lambda i, e: reducer((S[i, k], V[k, e]), axis=k), name="attention")

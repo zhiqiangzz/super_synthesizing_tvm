@@ -27,7 +27,8 @@ from __future__ import annotations
 
 import itertools
 
-from tvm import tirx as tir
+from tvm_tirx import tirx as tir
+from tvm_tirx.ir import IntImm
 
 DimKey = int
 
@@ -51,7 +52,7 @@ class DimTable:
         for k in self._order:
             if _same_extent(self._extents[k], extent):
                 return k
-        if isinstance(extent, tir.IntImm):
+        if isinstance(extent, IntImm):
             name = str(int(extent.value))
             value = ir.const(int(extent.value))
         elif isinstance(extent, tir.Var):
@@ -87,6 +88,6 @@ class DimTable:
 def _same_extent(a, b) -> bool:
     if isinstance(a, tir.Var) or isinstance(b, tir.Var):
         return a.same_as(b)
-    if isinstance(a, tir.IntImm) and isinstance(b, tir.IntImm):
+    if isinstance(a, IntImm) and isinstance(b, IntImm):
         return int(a.value) == int(b.value)
     return False
