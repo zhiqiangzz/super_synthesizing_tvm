@@ -18,10 +18,12 @@
 
 The chain becomes one ``te.comm_reducer`` compute over the chain coordinates:
 its inputs are the reducer's leaves evaluated on the boundary tensors, its
-merge and identity are the derived ones. Every member the program still reads
-gets an *epilogue* compute over its own axes that forms it from the state
-outputs. The ops downstream are the original ones with those reads replaced;
-nothing else in the program is touched.
+merge is defined for two non-empty parts. The first leaf initializes the
+reduction; subsequent leaves are merged into it. Parallel execution must
+likewise skip empty partitions, rather than merge padding values. Every
+member the program still reads gets an *epilogue* compute over its own axes
+that forms it from the state outputs. The ops downstream are the original
+ones with those reads replaced; nothing else in the program is touched.
 """
 
 from __future__ import annotations
@@ -30,11 +32,12 @@ import tvm_ffi
 
 import tvm
 from tvm import te
+from tvm_tirx import tirx as tir
 from tvm_tirx.ir import Call
 
 from ..loads import is_load, load_tensor
 from ..symbolic import ir
-from ..symbolic.realize import RealizeEnv, const_expr, to_prim
+from ..symbolic.realize import RealizeEnv, to_prim
 from .chain import Chain
 from .derive import ReducerSpec
 
@@ -99,9 +102,13 @@ def _rebuild(op, swaps: list[tuple[te.Tensor, te.Tensor]]):
         # pieces by hand
         source = _swap(first.source, lookup)
         cond = _swap(first.condition, lookup)
+        init = _swap(first.init, lookup)
+        comb = first.combiner
+        comb = te.CommReducer(
+            comb.lhs, comb.rhs, _swap(comb.result, lookup), _swap(comb.identity_element, lookup)
+        )
         bodies = [
-            te.Reduce(first.combiner, source, first.axis, cond, int(b.value_index), first.init)
-            for b in op.body
+            te.Reduce(comb, source, first.axis, cond, int(b.value_index), init) for b in op.body
         ]
     else:
         bodies = [_swap(b, lookup) for b in op.body]
@@ -115,7 +122,7 @@ def build_chain(chain: Chain, spec: ReducerSpec, rewriter: Rewriter) -> list[te.
     dtype = str(chain.reductions[0].tensor.dtype)
     n = spec.arity
     rank = len(chain.coord_extents)
-    j = te.reduce_axis((0, chain.extent), name=chain.jname)
+    j = te.reduce_axis((1, chain.extent), name=chain.jname)
 
     def env_for(index: dict) -> RealizeEnv:
         return RealizeEnv(dtype=dtype, dims=lower.dims, index=index, scalars=lower.scalars)
@@ -131,22 +138,52 @@ def build_chain(chain: Chain, spec: ReducerSpec, rewriter: Rewriter) -> list[te.
         memo: dict = {}
         return tuple(to_prim(spec.merge_code[k], env, memo) for k in range(n))
 
-    def fidentity(*dtypes):
-        return tuple(const_expr(spec.identity[k].value, str(dtypes[k])) for k in range(n))
-
-    reducer = te.comm_reducer(fcombine, fidentity, name=f"fused_{chain.jname}")
-
     def fcompute(*idx):
         env = env_for({ir.idx(f"i{c}"): idx[c] for c in range(rank)} | {ir.bidx(0): j})
         env.elem = load
         memo: dict = {}
-        return reducer(tuple(to_prim(leaf, env, memo) for leaf in spec.leaves), axis=j)
+        leaves = tuple(to_prim(leaf, env, memo) for leaf in spec.leaves)
+        env.index[ir.bidx(0)] = 0
+        memo = {}
+        init = tuple(to_prim(leaf, env, memo) for leaf in spec.leaves)
+
+        def fidentity(*dtypes):
+            # TE's initialization hook holds the first leaf, not an empty
+            # state. Execution must not inject it into other partial states.
+            return init
+
+        reducer = te.comm_reducer(fcombine, fidentity, name=f"fused_{chain.jname}")
+        return reducer(leaves, axis=j)
 
     name = "_".join(m.name for m in chain.reductions)
     states = te.compute(
-        chain.coord_extents, fcompute, name=f"fused_{name}", varargs_names=list(chain.coord_names)
+        chain.coord_extents,
+        fcompute,
+        name=f"fused_{name}",
+        tag="superopt.nonempty",
+        varargs_names=list(chain.coord_names),
     )
     states = list(states) if isinstance(states, list | tuple) else [states]
+
+    def finish(*idx):
+        env = env_for({ir.idx(f"i{c}"): idx[c] for c in range(rank)} | {ir.bidx(0): 0})
+        env.elem = load
+        memo: dict = {}
+        # A singleton is already a complete non-empty state. Its tail loop has
+        # no iterations, so no reduction-block initialization runs in TE.
+        return tuple(
+            tir.if_then_else(chain.extent == 1, to_prim(leaf, env, memo), state(*idx))
+            for leaf, state in zip(spec.leaves, states)
+        )
+
+    finished = te.compute(
+        chain.coord_extents,
+        finish,
+        name=f"nonempty_{name}",
+        tag="superopt.singleton",
+        varargs_names=list(chain.coord_names),
+    )
+    states = list(finished) if isinstance(finished, list | tuple) else [finished]
 
     def epilogue(m, expr: ir.SymExpr) -> te.Tensor:
         whole = m.coords == tuple(range(rank))

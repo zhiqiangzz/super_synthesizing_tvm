@@ -90,7 +90,12 @@ def passes(outputs, extent) -> int:
     count = 0
     for op in compute_ops(outputs):
         if isinstance(op.body[0], te.Reduce):
-            count += sum(key(iv.dom.extent) == want for iv in op.reduce_axis)
+            for iv in op.reduce_axis:
+                size = iv.dom.extent
+                if op.tag == "superopt.nonempty":
+                    # The first element initializes this pass; its loop visits the rest.
+                    size = tvm_tirx.sym.Analyzer().simplify(iv.dom.begin + size)
+                count += key(size) == want
     return count
 
 

@@ -21,8 +21,8 @@
 ``states``  choosing the states of a chain: keep, supplement, replace
 ``domain``  where a state is defined, by proof
 ``rebase``  merging partial results whose context has moved
-``derive``  leaf, merge, identity and epilogues from a set of states
-``verify``  equalities by proof, and the identity element in floating point
+``derive``  leaf, non-empty merge and epilogues from a set of states
+``verify``  equalities by proof
 ``build``   write the reducer back as TE and rebuild the program around it
 ``source``  the same as text
 """
@@ -33,7 +33,7 @@ from .derive import ReducerSpec, derive
 from .rebase import Candidate
 from .states import Selection, Solution, Step, members_of, select
 from .theory import Judgement, judge
-from .verify import identity_safe, prove_equal
+from .verify import prove_equal
 
 __all__ = [
     "Candidate",
@@ -49,7 +49,6 @@ __all__ = [
     "build_chain",
     "derive",
     "discover_chains",
-    "identity_safe",
     "judge",
     "members_of",
     "prove_equal",

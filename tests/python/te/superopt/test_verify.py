@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Equalities by proof, the laws of derived reducers, and the identity in floating point."""
+"""Equalities by proof, the laws of derived reducers, on non-empty parts."""
 
 import itertools
 
@@ -24,13 +24,11 @@ from tvm.te.superopt.dims import DimTable
 from tvm.te.superopt.reducer.derive import (
     derive,
     domains,
-    identity_law,
-    identity_of,
     invariant_holds,
     merge_of,
     solve_atoms,
 )
-from tvm.te.superopt.reducer.verify import identity_safe, prove_equal
+from tvm.te.superopt.reducer.verify import prove_equal
 from tvm.te.superopt.symbolic import ir
 from tvm.te.superopt.symbolic.canonicalize import (
     mk_add,
@@ -113,7 +111,7 @@ def test_what_is_not_proven_is_not_equal():
 
 
 # ---------------------------------------------------------------------------
-# laws: from the invariant, the identity from the definitions
+# laws on non-empty parts: from the invariant
 # ---------------------------------------------------------------------------
 def _derived_merge(states, R, axis):
     _, _, A, B = domains(axis)
@@ -121,7 +119,7 @@ def _derived_merge(states, R, axis):
     return tuple(merge_of(s, sol, R, A, B) for s in states), A, B
 
 
-def test_laws_rest_on_the_invariant_and_the_identity_law():
+def test_nonempty_merge_laws_rest_on_the_invariant():
     axis, full, R = _axis()
     x = _x()
     states = (
@@ -130,21 +128,9 @@ def test_laws_rest_on_the_invariant_and_the_identity_law():
     )
     merge, A, B = _derived_merge(states, R, axis)
     assert invariant_holds(states, merge, R, A, B) is not None
-    identity, how = identity_of(states, merge, R, A, B)
-    assert identity == (ir.NEG_INF_C, ir.ZERO) and how is not None
     # a merge that is not the derived one breaks the invariant
     bad = (merge[0], mk_add(_sv("a", 1), _sv("b", 1)))
     assert invariant_holds(states, bad, R, A, B) is None
-    # and a wrong identity breaks the identity law
-    assert identity_law(states, merge, (ir.ZERO, ir.ZERO), R, A, B) is None
-
-
-def test_a_mean_has_no_value_on_an_empty_part_and_any_identity_will_do():
-    axis, full, R = _axis()
-    n, mean, m2, _ = _moments(R)
-    merge, A, B = _derived_merge((n, mean, m2), R, axis)
-    identity, _ = identity_of((n, mean, m2), merge, R, A, B)
-    assert identity == (ir.ZERO, ir.ZERO, ir.ZERO)
 
 
 def _moments(R):
@@ -162,7 +148,7 @@ def test_third_moment_laws_do_not_depend_on_slot_order():
 
 
 # ---------------------------------------------------------------------------
-# the identity element in floating point
+# states whose empty-part formulas are undefined
 # ---------------------------------------------------------------------------
 def _smoothed_cross_entropy(R):
     """``Σ_j q_j (lse - x_j)`` and what it is made of, on a sub-range."""
@@ -177,35 +163,14 @@ def _smoothed_cross_entropy(R):
     return mx, den, sq, sqx, loss
 
 
-def test_loss_as_a_state_obeys_the_laws_but_not_the_arithmetic():
+def test_loss_is_derived_without_defining_log_den_on_an_empty_part():
     axis, full, R = _axis()
-    mx, den, sq, sqx, loss = _smoothed_cross_entropy(R)
+    mx, den, sq, _, loss = _smoothed_cross_entropy(R)
     required = (subst_domain(loss, {R: full}),)
-    # the loss itself as a state: its merge needs log-sum-exp of each side, which
-    # is log(0) + lowest on a side that is still empty
     direct = derive((mx, den, sq, loss), required, axis)
     assert direct is not None
-    assert not identity_safe(direct.merge, direct.identity)
-    # Σq and Σqx instead: plain sums, the context only enters the epilogue
-    split = derive((mx, den, sq, sqx), required, axis)
-    assert split is not None
-    assert identity_safe(split.merge, split.identity)
-
-
-def test_online_softmax_and_welford_meet_the_identity():
-    axis, full, R = _axis()
-    x = _x()
-    v = ir.elem(1, (ir.bidx(0), ir.idx("i1")))
-    mx = mk_reduce("max", R, 0, x)
-    den = mk_reduce("sum", R, 0, mk_exp(mk_sub(x, mx)))
-    num = mk_reduce("sum", R, 0, mk_mul(mk_exp(mk_sub(x, mx)), v))
-    spec = derive((mx, den, num), (subst_domain(mk_div(num, den), {R: full}),), axis)
-    assert identity_safe(spec.merge, spec.identity)
-    n, mean, m2, _ = _moments(R)
-    spec = derive((n, mean, m2), (subst_domain(m2, {R: full}),), axis)
-    assert identity_safe(spec.merge, spec.identity)
-    # a wrong identity is caught here as well as by the laws
-    assert not identity_safe(spec.merge, (ir.ONE, ir.ZERO, ir.ZERO))
+    merge, A, B = _derived_merge((mx, den, sq, loss), R, axis)
+    assert invariant_holds((mx, den, sq, loss), merge, R, A, B) is not None
 
 
 if __name__ == "__main__":

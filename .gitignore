@@ -290,3 +290,18 @@ python/bin/
 python/typing_extensions.py
 python/*.dist-info/
 pytest-of-bohanhou/
+
+# Local research materials and reports
+ref_papers/**
+/ref_papers.tar.gz
+/reports/
+/research_notes/
+/plan_edit.txt
+/第一周期汇报slides.pdf
+
+# Local agent configuration
+/.codex/
+
+# Legacy dependency checkouts left after the standalone TIRx migration
+/3rdparty/tvm-ffi/
+/3rdparty/OpenCL-Headers/

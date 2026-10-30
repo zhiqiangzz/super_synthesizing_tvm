@@ -198,8 +198,34 @@ class _OpLower(LowerCtx):
             return ir.elem(tid, tuple(self.lower_index(i, env) for i in load_indices(e)))
         return super().lower_load(e, env, level)
 
-    def body(self, op, k: int) -> ir.SymExpr:
+    def body(self, op, k: int, branch: int = 2) -> ir.SymExpr:
         env = {iv.var.name: ir.idx(f"i{n}") for n, iv in enumerate(op.axis)}
+        if (
+            op.tag == "superopt.singleton"
+            and isinstance(op.body[k], Call)
+            and op.body[k].op.name == "prim.if_then_else"
+        ):
+            return self.lower_expr(op.body[k].args[branch], env, 0)
+        if op.tag == "superopt.nonempty":
+            # For static analysis, restore the full axis including the first
+            # leaf used as init. Both merge operands then have reachable-state
+            # signs. No empty-state value participates in this analysis.
+            body = op.body[k]
+            ax = body.axis[0]
+            end = tvm_tirx.sym.Analyzer().simplify(ax.dom.begin + ax.dom.extent)
+            axis = te.reduce_axis((0, end), ax.var.name)
+            full = te.Reduce(body.combiner, body.source, [axis], body.condition, k, [])
+            lowered = self.lower_expr(full, env, 0)
+            if isinstance(lowered, ir.MonoidReduce):
+                return ir.raw_monoid(
+                    lowered.domain,
+                    lowered.level,
+                    lowered.leaf,
+                    lowered.merge,
+                    lowered.leaf,
+                    lowered.slot,
+                )
+            return lowered
         return self.lower_expr(op.body[k], env, 0)
 
     def definition(self, tid: int) -> ir.SymExpr | None:
@@ -426,11 +452,10 @@ POS, NONNEG, ANY = 2, 1, 0  # sign lattice: > 0, >= 0, unknown
 class _Signs:
     """Sign inference over op bodies, computed tensors and reducer states.
 
-    The state of a ``comm_reducer`` is analysed along the serial fold that
-    TE generates, ``s = identity; s = merge(s, leaf_j)``: the left operand of
-    a merge is the running state (possibly still the identity), the right
-    one a single leaf. A slot's sign is the greatest fixpoint of
-    ``sign(leaf) /\\ sign(merge)`` under those assumptions.
+    A slot's sign is the greatest fixpoint of the leaf and merged-state signs.
+    Generic TE folds also include their initializer on the left side.
+    Derived non-empty folds use a leaf as that initializer, so both merge
+    operands have reachable-state signs, without an empty-state value.
     """
 
     def __init__(self, lower: _OpLower) -> None:
@@ -441,8 +466,18 @@ class _Signs:
     def tensor(self, tid: int) -> int:
         if tid not in self.tensors:
             self.tensors[tid] = ANY  # guards recursion
-            d = self.lower.definition(tid)
-            self.tensors[tid] = ANY if d is None else self.sign(d, {})
+            t = self.lower.computed[PSEUDO_BASE - tid]
+            if t.op.tag == "superopt.singleton":
+                try:
+                    self.tensors[tid] = min(
+                        self.sign(self.lower.body(t.op, int(t.value_index), branch), {})
+                        for branch in (1, 2)
+                    )
+                except Unsupported:
+                    self.tensors[tid] = ANY
+            else:
+                d = self.lower.definition(tid)
+                self.tensors[tid] = ANY if d is None else self.sign(d, {})
         return self.tensors[tid]
 
     def sign(self, e: ir.SymExpr, env: dict) -> int:
@@ -540,7 +575,8 @@ def static_issues(outputs) -> dict[str, list[str]]:
         for k in bodies:
             try:
                 sites: list = []
-                _sites(lower.body(op, k), 0, {}, {}, signs, sites)
+                for branch in (1, 2) if op.tag == "superopt.singleton" else (2,):
+                    _sites(lower.body(op, k, branch), 0, {}, {}, signs, sites)
             except Unsupported:
                 bad |= {"exp", "domain"}
                 break
@@ -562,6 +598,7 @@ def static_issues(outputs) -> dict[str, list[str]]:
 # Intrinsics the reference can evaluate. The ops around a chain are not analysed,
 # only run, so this covers more than the lowering understands.
 ELEMENTWISE = {
+    "prim.if_then_else": np.where,
     "prim.exp": np.exp,
     "prim.log": np.log,
     "prim.sqrt": np.sqrt,
@@ -628,6 +665,7 @@ class _Reference:
         if isinstance(e, tir.Cast):
             return np.asarray(self.ev(e.value, env), dtype=np.float64)
         binary = {
+            tir.EQ: np.equal,
             tir.Add: np.add,
             tir.Sub: np.subtract,
             tir.Mul: np.multiply,
@@ -656,7 +694,7 @@ class _Reference:
         nd = len(full)
         env = {}
         for pos, iv in enumerate([*op.axis, *raxes]):
-            env[iv.var.name] = np.arange(full[pos]).reshape(
+            env[iv.var.name] = (self.extent(iv.dom.begin) + np.arange(full[pos])).reshape(
                 [1] * pos + [full[pos]] + [1] * (nd - pos - 1)
             )
         with np.errstate(all="ignore"):
@@ -667,7 +705,11 @@ class _Reference:
                 raise Unsupported("conditional reduction")
             srcs = [np.broadcast_to(self.ev(s, env), full) for s in first.source]
             dims = tuple(range(len(shape), nd))
-            kind = classify_combiner(first.combiner)
+            kind = (
+                None
+                if len(first.init) or op.tag == "superopt.nonempty"
+                else classify_combiner(first.combiner)
+            )
             if kind == "sum":
                 states = [srcs[0].sum(axis=dims)]
             elif kind == "max":
@@ -675,12 +717,21 @@ class _Reference:
             elif kind == "min":
                 states = [srcs[0].min(axis=dims)]
             else:
-                states = self._fold(first.combiner, srcs, shape)
+                init_env = {
+                    iv.var.name: env[iv.var.name].reshape(
+                        [1] * p + [shape[p]] + [1] * (len(shape) - p - 1)
+                    )
+                    for p, iv in enumerate(op.axis)
+                }
+                initial = first.init if len(first.init) else first.combiner.identity_element
+                init = [self.ev(x, init_env) for x in initial]
+                states = self._fold(first.combiner, srcs, shape, init)
         return [np.asarray(states[int(b.value_index)]).copy() for b in op.body]
 
-    def _fold(self, comb, srcs, shape) -> list[np.ndarray]:
+    def _fold(self, comb, srcs, shape, init=None) -> list[np.ndarray]:
         flat = [s.reshape([*shape, -1]) for s in srcs]
-        state = [np.broadcast_to(self.ev(x, {}), shape) for x in comb.identity_element]
+        initial = [self.ev(x, {}) for x in comb.identity_element] if init is None else init
+        state = [np.broadcast_to(x, shape) for x in initial]
         for p in range(flat[0].shape[-1]):
             env = {}
             for k, (lhs, rhs) in enumerate(zip(comb.lhs, comb.rhs)):
@@ -885,10 +936,11 @@ def spec_issues(spec) -> set[str]:
 
     The merge is analysed in canonical form, as the gate sees it after lowering
     the generated ``comm_reducer``: a printed ``exp(-(max(a, b) - a) c)`` is
-    ``exp(c a - c max(a, b))`` there.
+    ``exp(c a - c max(a, b))`` there. Both sides represent non-empty parts;
+    the sign analysis starts from the leaf, not from an empty state.
     """
     merge = tuple(recanonicalize(m) for m in spec.merge_code)
-    monoid = ir.raw_monoid(ir.dfull(spec.axis), 0, spec.leaves, merge, spec.identity, 0)
+    monoid = ir.raw_monoid(ir.dfull(spec.axis), 0, spec.leaves, merge, spec.leaves, 0)
     lower = _OpLower()
     signs = _Signs(lower)
     sites: list = []

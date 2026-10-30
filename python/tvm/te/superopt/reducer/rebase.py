@@ -66,6 +66,7 @@ from ..symbolic import ir
 from ..symbolic.canonicalize import (
     Unsupported,
     contains_node,
+    factor_view,
     instantiate,
     is_constant,
     map_elems,
@@ -502,8 +503,24 @@ class Printer:
         if t.side is None:
             return t.coeff if isinstance(t.coeff, ir.Const) else None
         v = subst(self.rb.on_side(t.coeff, t.side), self.atom_map)
-        if contains_node(v, _is_partial) or not _monomial(v):
+        if contains_node(v, _is_partial):
             return None
+        if not _monomial(v):
+            # A coefficient may also use the program's own context on this
+            # non-empty side, e.g. -sum(g)/sigma. Recognize those factors
+            # rather than requiring sigma to be hoisted or stored separately.
+            context_bases = set()
+            for context in self.rb.by_pid.values():
+                if context.kind == "value":
+                    value = self.side_value(context, t.side)
+                    if value is not None:
+                        context_bases.update(factor_view(value)[1])
+            factors = v.args if isinstance(v, ir.Mul) else (v,)
+            if any(
+                not _monomial(f) and (f.base if isinstance(f, ir.Pow) else f) not in context_bases
+                for f in factors
+            ):
+                return None
         return v
 
     def _print_key(self, key: ir.SymExpr, corr) -> ir.SymExpr:

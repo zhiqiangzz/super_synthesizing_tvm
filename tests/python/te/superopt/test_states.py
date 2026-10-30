@@ -109,7 +109,7 @@ def test_softmax_keeps_its_loops_and_merges_them_by_rebasing():
     assert _names(sel) == ["mx", "den"]
     assert [st.action for st in sel.steps] == ["keep", "keep"]  # nothing else was needed
     spec = sel.solution.spec
-    assert spec.leaves == (_x(), ir.ONE) and spec.identity == (ir.NEG_INF_C, ir.ZERO)
+    assert spec.leaves == (_x(), ir.ONE)
     # printed: each side keeps its own sum and is rescaled by exp(own max - merged max)
     (a0, b0), (a1, b1) = _ab(0), _ab(1)
     m = ir.raw_max([a0, b0])
@@ -129,7 +129,7 @@ def test_softmax_keeps_its_loops_and_merges_them_by_rebasing():
 
 def test_attention_keeps_the_normalised_output():
     """The output re-bases against two contexts at once: shift for the max, scale for the
-    mass; on an empty part the mass is 0 and the scale is printed as ``den_X / den``."""
+    mass; both sides are non-empty and the scale is printed as ``den_X / den``."""
     sel = _select("attention")
     assert _names(sel) == ["row_max", "den", "O"] and sel.solution.spec.merge_print is not None
     w = _world("attention")
@@ -172,29 +172,22 @@ def test_members_run_on_a_part_of_the_axis_are_where_the_states_start():
 # ---------------------------------------------------------------------------
 # supplement: what a merge needs
 # ---------------------------------------------------------------------------
-def test_variance_is_supplemented_with_the_count_and_keeps_the_mean():
-    """``ss`` re-based around the mean needs the count. The total and the count would do,
-    but the mean they give is 0 / 0 on an empty part: the mean itself is kept instead."""
+def test_variance_keeps_the_total_and_supplements_the_count():
+    """The mean is computed from total/count on non-empty parts, not promoted
+    merely because that expression would be undefined on an empty part."""
     sel = _select("variance")
-    assert _names(sel) == ["mean", "ss", "count"]
-    (promote,) = _steps(sel, "promote")
-    assert promote.startswith("promote mean in place of total_mean")
-    assert "merged with an empty part it is NaN, through mean there" in promote
-    assert _steps(sel, "supplement") == ["supplement count = Σ_j 1: mean needs Σ_j 1"]
-    # Welford: the squares are corrected around the merged mean, never expanded into Σx²
+    assert _names(sel) == ["total_mean", "ss", "count"]
+    assert not _steps(sel, "promote") and not _steps(sel, "hoist")
+    assert _steps(sel, "supplement") == ["supplement count = Σ_j 1: ss needs Σ_j 1"]
     spec = sel.solution.spec
-    (ma, mb), (sa, sb), (na, nb) = _ab(0), _ab(1), _ab(2)
-    mean = mk_div(mk_add(mk_mul(ma, na), mk_mul(mb, nb)), mk_add(na, nb))
+    (ta, tb), (sa, sb), (na, nb) = _ab(0), _ab(1), _ab(2)
+    ma, mb = mk_div(ta, na), mk_div(tb, nb)
+    mean = mk_div(mk_add(ta, tb), mk_add(na, nb))
     want = mk_add(
         sa, sb, mk_mul(na, mk_pow(mk_sub(mean, ma), 2)), mk_mul(nb, mk_pow(mk_sub(mean, mb), 2))
     )
     assert recanonicalize(spec.merge_print[1]) is want
-    assert spec.leaves[1] is ir.ZERO and spec.leaves[2] is ir.ONE
-    # canonical: the merged mean m0 kept, ss written over each side's power sums around it
-    m0 = ir.state_var("m", 0)
-    power_sums = mk_add(sa, mk_mul(na, mk_pow(ma, 2)), sb, mk_mul(nb, mk_pow(mb, 2)))
-    first = mk_mul(ir.const(-2), m0, mk_add(mk_mul(ma, na), mk_mul(mb, nb)))
-    assert spec.merge[1] is mk_add(power_sums, first, mk_mul(mk_add(na, nb), mk_pow(m0, 2)))
+    assert spec.leaves == (_x(), ir.ZERO, ir.ONE)
 
 
 def test_higher_moments_are_supplemented_with_the_lower_ones():
@@ -216,7 +209,7 @@ def test_the_fifth_moment_takes_the_second_third_and_fourth():
     expanded by the size of the result, not by its degree): nothing is taken out, and
     the moments below it are supplemented."""
     sel = _select("moment5")
-    assert _names(sel) == ["mean", "s5", "count", "s5.r0", "s5.r1", "s5.r2"]
+    assert _names(sel) == ["total_mean", "s5", "count", "s5.r0", "s5.r1", "s5.r2"]
     assert not _steps(sel, "hoist") and sel.solution.spec.merge_print is not None
     R = _R(sel)
     x, n = _x(), mk_card(R)
@@ -243,7 +236,7 @@ def test_a_divisor_that_is_zero_on_a_single_element_is_taken_out():
     """``max_j (x - mean) / sd``: ``sd`` of one element is 0. Only ``sd`` is taken out;
     the mean stays, re-based by a shift."""
     sel = _select("zscore_max")
-    assert _names(sel) == ["mean", "ss", "zmax.h0", "count"]
+    assert _names(sel) == ["total", "ss", "zmax.h0", "count"]
     (hoist,) = _steps(sel, "hoist")
     assert hoist == (
         "hoist sigma out of zmax: zmax: it divides by sigma[i], which is 0 on every single element"
@@ -292,41 +285,28 @@ def test_what_reading_a_reduction_back_divides_by_is_checked():
     assert _same(sel.states[1].state, mk_reduce("sum", R, 0, _x(1)))
 
 
-def test_a_context_that_is_infinite_on_an_empty_part_is_taken_out():
-    """``Σ q (lse - x)``: on an empty part ``log den`` is ``-inf`` and the merge adds
-    ``Σ q · (lse - lse_empty)`` = ``0 · inf``. The maximum's shift stays: on an empty
-    part it is the lowest float, and ``exp`` of minus that is 0."""
+def test_cross_entropy_keeps_the_log_context_on_nonempty_parts():
     sel = _select("soft_cross_entropy")
-    (hoist,) = _steps(sel, "hoist")
-    assert hoist.startswith("hoist loss.ctx0 out of loss: loss: merged with an empty part")
+    assert _names(sel) == ["mx", "den", "loss", "loss.r0"]
+    assert sel.solution is not None and not _steps(sel, "hoist")
     R = _R(sel)
-    sums = {c.name: c for c in sel.states if c.origin == "hoist"}
-    assert any(_same(c.state, mk_reduce("sum", R, 0, _x(1))) for c in sums.values())  # Σq
-    (loss,) = sel.solution.spec.epilogues
-    assert not any(isinstance(n, ir.Reduce) for n in walk(loss))
+    assert _same(sel.states[3].state, mk_reduce("sum", R, 0, _x(1)))
 
 
-def test_entropy_takes_the_log_of_the_normaliser_out_and_keeps_the_shift():
+def test_entropy_keeps_its_original_reduction():
     sel = _select("softmax_entropy")
-    assert _names(sel) == ["mx", "den", "H.h0"]
-    (hoist,) = _steps(sel, "hoist")
-    assert hoist.startswith("hoist H.ctx0 out of H")
-    w = _world("softmax_entropy")
-    kept = {w.name(p) for p in w.rebaser.contexts(sel.states[2])}
-    assert kept == {"mx", "den"}
+    assert _names(sel) == ["mx", "den", "H"]
+    assert sel.solution is not None
+    assert [step.action for step in sel.steps] == ["keep", "keep", "keep"]
+    assert sel.solution.spec.leaves[2] is ir.ZERO
 
 
-def test_a_scale_that_is_undefined_on_an_empty_part_is_taken_out():
-    """LayerNorm's backward: ``sgx`` divides by ``sd = sqrt(ss / n + eps)``, positive on
-    every non-empty part, but ``0 / 0`` on an empty one. A factor moves out of a sum
-    at no cost; the mean, a shift, is kept as a state instead."""
+def test_layernorm_backward_keeps_the_scale_and_total():
+    """sigma is positive on non-empty parts (eps > 0); its empty value is irrelevant."""
     sel = _select("layernorm_backward")
-    assert _names(sel) == ["sg", "mean", "ss", "sgx.h0", "count"]
-    hoist = _steps(sel, "hoist")
-    assert hoist == [
-        "hoist sigma out of sgx: sgx: merged with an empty part it is NaN, through sigma there"
-    ]
-    assert _steps(sel, "promote")[0].startswith("promote mean in place of total")
+    assert _names(sel) == ["sg", "total", "ss", "sgx", "count"]
+    assert sel.solution is not None, sel.failure
+    assert not _steps(sel, "hoist") and not _steps(sel, "promote")
 
 
 def test_a_maximum_of_reductions_is_taken_apart():
@@ -335,7 +315,7 @@ def test_a_maximum_of_reductions_is_taken_apart():
     assert _steps(sel, "parts") == [
         "parts dmax: no reduction it is made of can be read back from it"
     ]
-    assert _names(sel) == ["mean", "dmax.m0", "dmax.m1", "count"]
+    assert _names(sel) == ["total", "dmax.m0", "dmax.m1", "count"]
     assert all(c.origin == "part" and c.source == "dmax" for c in sel.states[1:3])
     a, b = _ab(3)
     assert sel.solution.spec.merge[3] is mk_add(a, b)
@@ -346,7 +326,7 @@ def test_a_function_taken_out_of_a_maximum_leaves_its_reduction():
     assert [c.origin for c in sel.states[1:3]] == ["inner", "inner"]
     assert sel.solution.spec.epilogue_print is None
     sel = _select("peak_to_geomean")
-    assert _names(sel) == ["mean", "ratio.m0", "count"] and sel.states[1].origin == "inner"
+    assert _names(sel) == ["total", "ratio.m0", "count"] and sel.states[1].origin == "inner"
 
 
 def _energy():
@@ -372,7 +352,7 @@ def test_a_sum_whose_parts_move_differently_is_kept_as_its_parts():
     energy = _energy()
     (chain,), _ = discover_chains([energy])
     sel = select(chain, members_of(chain), TeSigns([energy]))
-    assert _names(sel) == ["mean", "mx", "energy.p0", "energy.p1", "count"]
+    assert _names(sel) == ["total", "mx", "energy.p0", "energy.p1", "count"]
     assert not _steps(sel, "hoist") and sel.solution.spec.merge_print is not None
     (split,) = _steps(sel, "split")
     assert split.startswith("split energy into ")
@@ -429,7 +409,7 @@ def test_two_rates_of_one_context_are_two_states():
     )
     (chain,), _ = discover_chains([poly])
     sel = select(chain, members_of(chain), TeSigns([poly]))
-    assert _names(sel) == ["mean", "poly", "count"] and not _steps(sel, "split")
+    assert _names(sel) == ["total", "poly", "count"] and not _steps(sel, "split")
 
 
 def test_each_context_takes_the_correction_its_dependence_fits():
@@ -475,7 +455,7 @@ def test_only_the_context_no_correction_fits_is_taken_out():
     (chain,), _ = discover_chains([zmax])
     members = members_of(chain)
     sel = select(chain, members, TeSigns([zmax]))
-    assert _names(sel) == ["mean", "ss", "zmax.h0", "count"]
+    assert _names(sel) == ["total", "ss", "zmax.h0", "count"]
     (hoist,) = _steps(sel, "hoist")
     assert hoist == (
         "hoist sd out of zmax: zmax: it does not re-base: "
@@ -493,19 +473,18 @@ def test_only_the_context_no_correction_fits_is_taken_out():
     )
 
 
-def test_declared_positive_weights_keep_the_weighted_mean():
+def test_declared_positive_weights_keep_the_weighted_context():
     """``mean = Σ w x / Σ w``: with ``w`` declared positive the weight sum is never 0 and
     the mean is kept; without, it may be, and the mean has to be taken out."""
     sel = _select("weighted_variance")
-    assert _names(sel) == ["mean", "sw", "ss"] and not _steps(sel, "hoist")
+    assert _names(sel) == ["swx", "sw", "ss"] and not _steps(sel, "hoist")
     sel = _select("weighted_variance", positive=())
     (hoist,) = _steps(sel, "hoist")
     assert hoist.endswith("it divides by sw[i] (through mean), which is 0 where W[i, j] is")
 
 
-def test_only_a_multiple_of_a_loop_result_is_promoted():
-    """``Σ (log x - log mean)``: ``log mean`` is 0 / 0 on an empty part like the mean, but
-    as a state it would merge through ``exp`` of its own values. It is taken out instead."""
+def test_log_mean_is_kept_without_an_empty_part_repair():
+    """log(mean) is defined on non-empty parts when the input to log is positive."""
     n, m = te.var("n"), te.var("m")
     X = te.placeholder((n, m), name="X")
     j1, j2 = te.reduce_axis((0, m), "j"), te.reduce_axis((0, m), "j")
@@ -516,7 +495,7 @@ def test_only_a_multiple_of_a_loop_result_is_promoted():
     )
     (chain,), _ = discover_chains(out)
     sel = select(chain, members_of(chain), TeSigns(out))
-    assert not _steps(sel, "promote") and _steps(sel, "hoist")
+    assert not _steps(sel, "promote") and not _steps(sel, "hoist")
     assert sel.solution is not None
 
 

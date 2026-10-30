@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Deriving a reducer (leaf, merge, identity, epilogues) from state definitions."""
+"""Deriving a reducer (leaf, non-empty merge, epilogues) from state definitions."""
 
 import itertools
 
@@ -72,7 +72,6 @@ def test_epilogues_read_the_states_at_their_own_coordinates():
     assert spec.merge[0] is m
     assert spec.merge[1] is mk_add(mk_mul(a(1), ra), mk_mul(b(1), rb))
     assert spec.merge[2] is mk_add(mk_mul(a(2), ra), mk_mul(b(2), rb))
-    assert spec.identity == (ir.NEG_INF_C, ir.ZERO, ir.ZERO)
     assert spec.leaves[1] is ir.ONE  # exp(s - s)
 
 
@@ -130,7 +129,6 @@ def test_welford_states_and_the_count_as_the_extent():
     # over the whole axis the count is the extent: no epilogue reads its state
     assert spec.epilogues == (ir.elem(-2, (i0,)), ir.elem(-3, (i0,)))
     assert spec.leaves == (ir.ONE, ir.elem(0, (i0, ir.bidx(0))), ir.ZERO)
-    assert spec.identity[0] is ir.ZERO
 
 
 def test_third_moment_needs_the_second():

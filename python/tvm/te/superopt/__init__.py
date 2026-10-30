@@ -30,6 +30,12 @@ two such parts turns out to need (see :mod:`reducer.states`). It performs
 no scheduling and makes no performance claim; that is the job of later
 s_TIR passes.
 
+Merge formulas accept two non-empty parts. State selection and proofs do
+not evaluate an empty state. The generated serial reduction starts from
+the first leaf; parallel execution must initialize each active partition
+from its own first leaf and skip partitions with no elements. The full
+reduction axis is assumed non-empty.
+
 :func:`judge` answers the question that comes before any derivation: does a
 single pass with finitely many states exist for a chain, and how many are
 enough? The answer is algebra on the program (see :mod:`reducer.theory`):

@@ -29,7 +29,7 @@ from fractions import Fraction
 
 from ..symbolic import ir
 from ..symbolic.canonicalize import Unsupported, recanonicalize, term_view
-from ..symbolic.emit import SourceEnv, const_source, hoisted_source, to_source
+from ..symbolic.emit import SourceEnv, hoisted_source, to_source
 from .chain import Chain
 from .derive import ReducerSpec
 
@@ -194,33 +194,53 @@ def chain_source(
         env.state[ir.state_var("a", k)] = f"a[{k}]"
         env.state[ir.state_var("b", k)] = f"b[{k}]"
     shared, merged = hoisted_source(spec.merge_code, env, prefix="t")
-    lines = [f"def merge_{tag}(a, b):"]
+    lines = [
+        "# Merge operands must represent non-empty parts; execution skips empty partitions.",
+        f"def merge_{tag}(a, b):",
+    ]
     lines += [f"    {line}" for line in shared]
     lines.append("    return (")
     lines += [f"        {m},  # {states[k]}" for k, m in enumerate(merged)]
     lines.append("    )")
     lines.append("")
-    dts = ", ".join(f"t{k}" for k in range(n))
-    ident = ", ".join(const_source(spec.identity[k].value, f"t{k}", quoted=False) for k in range(n))
-    lines.append(f"def identity_{tag}({dts}):")
-    lines.append(f"    return ({ident}{',' if n == 1 else ''})")
-    lines.append("")
-    lines.append(f'{reducer} = te.comm_reducer(merge_{tag}, identity_{tag}, name="fused_{j}")')
-    lines.append(f'{j} = te.reduce_axis((0, {_extent(chain.extent)}), name="{j}")')
-
+    lines.append(f'{j} = te.reduce_axis((1, {_extent(chain.extent)}), name="{j}")')
     leaf_env = env_for({ir.idx(f"i{c}"): coords[c] for c in range(rank)} | {ir.bidx(0): j})
     leaves = [to_source(leaf, leaf_env) for leaf in spec.leaves]
+    leaf_env.index[ir.bidx(0)] = "0"
+    initial = [to_source(leaf, leaf_env) for leaf in spec.leaves]
     shape = ", ".join(_extent(e) for e in chain.coord_extents) + ("," if rank == 1 else "")
     name = "fused_" + "_".join(m.name for m in chain.reductions)
-    lines.append(f"{', '.join(states)} = te.compute(")
-    lines.append(f"    ({shape}),")
-    lines.append(f"    lambda {', '.join(coords)}: {reducer}(")
+    compute = f"compute_{tag}"
+    lines.append("")
+    lines.append(f"def {compute}({', '.join(coords)}):")
+    lines.append("    # TE's initialization hook holds the first leaf, not an empty state.")
+    lines.append(f"    def identity_{tag}({', '.join(f't{k}' for k in range(n))}):")
+    lines.append("        return (")
+    lines += [f"            {leaf},  # {states[k]}" for k, leaf in enumerate(initial)]
+    lines.append("        )")
+    lines.append(f'    {reducer} = te.comm_reducer(merge_{tag}, identity_{tag}, name="fused_{j}")')
+    lines.append(f"    return {reducer}(")
     lines.append("        (")
     lines += [f"            {leaf},  # {states[k]}" for k, leaf in enumerate(leaves)]
     lines.append("        ),")
     lines.append(f"        axis={j},")
-    lines.append("    ),")
+    lines.append("    )")
+    lines.append("")
+    lines.append(f"{', '.join(states)} = te.compute(")
+    lines.append(f"    ({shape}), {compute},")
     lines.append(f'    name="{name}",')
+    lines.append('    tag="superopt.nonempty",')
+    lines.append(")")
+    lines.append(f"{', '.join(states)} = te.compute(")
+    lines.append(f"    ({shape}),")
+    lines.append(f"    lambda {', '.join(coords)}: (")
+    for leaf, state in zip(initial, states):
+        lines.append(
+            f"        tir.if_then_else({_extent(chain.extent)} == 1, {leaf}, "
+            f"{state}[{', '.join(coords)}]),"
+        )
+    lines.append("    ),")
+    lines.append(f'    name="nonempty_{name}", tag="superopt.singleton",')
     lines.append(")")
 
     for m, expr in zip(chain.required, spec.epilogue_code):

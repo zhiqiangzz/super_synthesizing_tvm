@@ -223,7 +223,7 @@ class LowerCtx:
             merge_map[lhs.name] = ir.state_var("a", k)
             merge_map[rhs.name] = ir.state_var("b", k)
         merge = tuple(self._lower_merge(x, merge_map, menv) for x in comb.result)
-        identity = tuple(self.lower_expr(x, {}, 0) for x in comb.identity_element)
+        identity = tuple(self.lower_expr(x, env, level) for x in comb.identity_element)
         dom = ir.dfull(self.dims.key(axes[0].dom.extent))
         return mk_monoid(dom, level, leaf, merge, identity, int(e.value_index))
 

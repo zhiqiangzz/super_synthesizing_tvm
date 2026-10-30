@@ -36,7 +36,7 @@ supplement
     is asked again -- else ``Σ exp(x)`` would stand in for the ``Σ exp(x -
     mx)`` one of its pieces is.
 check
-    Every state must be defined on every part of the axis and determine
+    Every state must be defined on every non-empty part of the axis and determine
     what is read back from it (decided by :mod:`domain`, by proof):
 
     * on a non-empty part nothing in its definition may divide by, or take
@@ -46,22 +46,17 @@ check
     * reading a reduction back from it may not divide by something not
       proven non-zero: from ``out = g Σ y``, ``Σ y = out / g``, and
       ``g = Σ x`` is zero wherever ``x`` is;
-    * it must re-base at all;
-    * against an empty part -- the identity element, as the generated code
-      holds it -- its merge must come out finite: ``log den`` is ``-inf``
-      there and ``Σ q · (lse_m - lse)`` is ``0 · inf``.
+    * it must re-base at all.
+
+    Empty parts are skipped by execution, never passed to the merge. They
+    impose no conditions on the states or the merge formula.
 replace
     For the first state with a problem, the problem is blamed on the
     contexts it comes from and acted on:
 
-    * a context that fails on a non-empty part, or is infinite on an empty
-      one, is taken out of the state (*hoisted*: the state becomes the
-      coefficients of the context's monomials, the context moves to the
-      epilogue);
-    * a shift that is only ``0 / 0`` on an empty part (``mean = total /
-      count``) and a linear function of one loop result is *promoted*: it
-      becomes a state, whose value on an empty part the identity law is
-      free to choose, and replaces the result it was computed from;
+    * a context that fails on a non-empty part is taken out of the state
+      (*hoisted*: the state becomes the coefficients of the context's
+      monomials, the context moves to the epilogue);
     * a state that does not re-base is replaced by the reductions it is the
       maximum of (``max |x - mean|``), or by the pieces it is the sum of
       when each re-bases by itself and the whole does not (``Σ (x - mean)² +
@@ -73,7 +68,7 @@ replace
 
 Every replacement comes out of the replaced state's own expansion. What is
 decided -- per loop of the program: kept, which contexts taken out, taken
-apart, split; per context: promoted -- only ever grows, and the states are rebuilt
+apart, split -- only ever grows, and the states are rebuilt
 from it each round: the procedure ends, with one state set, whose reducer
 is then derived (:mod:`derive`).
 """
@@ -107,11 +102,9 @@ from . import domain
 from .chain import Chain, partial
 from .derive import (
     ReducerSpec,
-    _solve_single,
     atoms_in,
     derive,
     domains,
-    empty_value,
     leftover,
     merge_of,
     needed_states,
@@ -149,7 +142,7 @@ class Solution:
 class Step:
     """One decision of :func:`select` and why it was taken."""
 
-    action: str  # "keep", "supplement", "promote", "hoist", "parts", "split" or "drop"
+    action: str  # "keep", "supplement", "hoist", "parts", "split" or "drop"
     subject: str
     reason: str
 
@@ -514,14 +507,12 @@ class _Decisions:
     hoisted: dict[int, frozenset[int]] = dataclasses.field(default_factory=dict)  # loop: contexts
     parts: set[int] = dataclasses.field(default_factory=set)  # loops taken apart
     split: set[int] = dataclasses.field(default_factory=set)  # loops kept as their pieces
-    promoted: dict[int, int] = dataclasses.field(default_factory=dict)  # context: loop replaced
 
     def key(self):
         return (
             tuple(sorted((k, tuple(sorted(v))) for k, v in self.hoisted.items())),
             tuple(sorted(self.parts)),
             tuple(sorted(self.split)),
-            tuple(sorted(self.promoted.items())),
         )
 
 
@@ -529,10 +520,9 @@ class _Decisions:
 class _Fault:
     """Why a state cannot be kept, and the contexts that is blamed on."""
 
-    kind: str  # "domain", "divisor", "structure" or "empty"
+    kind: str  # "domain", "divisor" or "structure"
     contexts: frozenset[int]
     reason: str
-    undefined: frozenset[int] = frozenset()  # contexts that are only 0 / 0 on an empty part
 
 
 class _Select:
@@ -559,13 +549,7 @@ class _Select:
     # -- tuple B under the decisions ---------------------------------------------------
     def base(self) -> list[Candidate] | str:
         out: list[Candidate] = []
-        dropped = set(self.dec.promoted.values())
         for loop in self.loops:
-            for ctx, replaced in self.dec.promoted.items():
-                if replaced == loop.pid:
-                    out.append(self.w.by_pid[ctx])
-            if loop.pid in dropped:
-                continue
             got = [loop]
             if loop.pid in self.dec.hoisted:
                 got = self.w.hoisted(loop, self.dec.hoisted[loop.pid])
@@ -682,7 +666,6 @@ class _Select:
     # -- check -----------------------------------------------------------------------------
     def faults(self, states, sol, trace) -> tuple[Candidate, list[_Fault]] | None:
         """The first state that cannot be kept, with every reason it cannot."""
-        w = self.w
         if sol is None:
             k = trace.get("unsolvable")
             if k is not None:
@@ -702,13 +685,6 @@ class _Select:
                 return c, found
             if not self._rebases(c):
                 return c, self._structure(c, "it does not re-base")
-        printer = Printer(w.rebaser, list(states), states, sol)
-        identity = [_empty_value(c, w) for c in states]
-        state_signs = {k: w.state_sign(c) for k, c in enumerate(states)}
-        for c in states:
-            found = self._empty(c, printer, identity, state_signs, sol)
-            if found:
-                return c, found
         return None
 
     def _rebases(self, c: Candidate) -> bool:
@@ -774,36 +750,6 @@ class _Select:
                 out.append(_Fault("divisor", blamed, why))
         return out
 
-    def _empty(self, c, printer, identity, state_signs, sol) -> list[_Fault]:
-        w = self.w
-        merged = printer.print(c)
-        if merged is None:  # not printed: the merge as derived, over both sides' states
-            try:
-                merged = merge_of(c.state, sol, w.R, w.A, w.B)
-            except Unsupported:
-                merged = None
-            if merged is None:
-                return []
-        cls = _classes_empty(merged, identity, state_signs)
-        if not domain.bad(cls):
-            return []
-        blamed, undefined, near = set(), set(), set()
-        for pid in w.rebaser.contexts(c):
-            v = printer.side_value(w.by_pid[pid], "b")
-            if v is None:
-                continue
-            vc = _classes_empty(v, identity, state_signs)
-            if vc & {domain.NAN, domain.IP, domain.IN}:
-                blamed.add(pid)
-                if vc == {domain.NAN}:
-                    undefined.add(pid)
-            elif domain.bad(vc):
-                near.add(pid)
-        blamed = blamed or near
-        names = ", ".join(w.name(p) for p in sorted(blamed)) or "its own value"
-        why = f"merged with an empty part it is {_classes_text(cls)}, through {names} there"
-        return [_Fault("empty", frozenset(blamed), why, frozenset(undefined))]
-
     # -- replace ------------------------------------------------------------------------------
     def act(self, c: Candidate, faults: list[_Fault], states, sol) -> str | None:
         """Take the decisions the faults of ``c`` call for; a failure, or ``None``."""
@@ -813,7 +759,7 @@ class _Select:
             return f"{c.name} cannot be kept and is no loop of the program ({faults[0].reason})"
         before = self.dec.key()
         kinds = [f.kind for f in faults]
-        kind = next(k for k in ("domain", "divisor", "structure", "empty") if k in kinds)
+        kind = next(k for k in ("domain", "divisor", "structure") if k in kinds)
         if kind == "divisor":
             kind = "domain"
         chosen = [f for f in faults if f.kind == kind or {f.kind, kind} == {"domain", "divisor"}]
@@ -831,20 +777,6 @@ class _Select:
             else:
                 blamed = frozenset().union(*(f.contexts for f in chosen))
                 self._hoist(loop, blamed or every, c, reason)
-        elif kind == "empty":
-            f = chosen[0]
-            modes = _modes(w, c)
-            for pid in sorted(f.contexts):
-                if pid in f.undefined and modes.get(pid) == "shift":
-                    replaced = self._promotable(pid, states, sol)
-                    if replaced is not None:
-                        self.dec.promoted[pid] = replaced.pid
-                        why = f"{c.name}: {reason}; it is a function of {replaced.name} alone"
-                        self.note("promote", f"{w.name(pid)} in place of {replaced.name}", why)
-                        continue
-                self._hoist(loop, frozenset({pid}), c, reason)
-            if not f.contexts:
-                self._hoist(loop, every, c, reason)
         else:
             blamed = frozenset().union(*(f.contexts for f in chosen))
             self._hoist(loop, blamed or every, c, reason)
@@ -870,29 +802,6 @@ class _Select:
             self.dec.hoisted[loop.pid] = want
             names = ", ".join(w.name(p) for p in sorted(want))
             self.note("hoist", f"{names} out of {loop.name}", f"{c.name}: {reason}")
-
-    def _promotable(self, pid: int, states, sol) -> Candidate | None:
-        """The one loop result the context ``pid`` is a multiple of (``total / count``).
-
-        Only a rational function of the states qualifies: a context such as
-        ``log(total / count)`` would merge through ``exp`` of its own values.
-        """
-        ctx = self.w.by_pid[pid]
-        if ctx.kind != "value":
-            return None
-        try:
-            e = subst(ctx.state, sol)
-        except Unsupported:
-            return None
-        if contains_node(e, lambda n: isinstance(n, ir.Exp | ir.Log | ir.Max)):
-            return None
-        hits = []
-        for v in sorted({n for n in walk(e) if isinstance(n, ir.StateVar)}, key=lambda n: n.k):
-            if _solve_single(e, v, ir.state_var("x", 0)) is not None:
-                hits.append(states[v.k])
-        if len(hits) != 1 or not any(hits[0] is loop for loop in self.loops):
-            return None
-        return hits[0]
 
     # -- the procedure --------------------------------------------------------------------------
     def run(self) -> Selection:
@@ -942,7 +851,6 @@ class _Select:
             sts,
             required,
             w.chain.axis,
-            structs=tuple(c.struct for c in states),
             kept=None if printer is None else tuple(printer.kept(c) for c in states),
         )
         if spec is None:
@@ -969,7 +877,9 @@ class _Select:
         w = self.w
         signs = self._state_signs(states)
         for k, m in enumerate(spec.merge_code):
-            for cond in domain.conditions(recanonicalize(m)):
+            # Inspect the formula as printed: expanding squared corrections
+            # can hide the positivity needed for a retained scale context.
+            for cond in domain.conditions(m):
                 if not cond.holds(signs):
                     return (
                         f"the merge of {states[k].name} is not shown to be defined: "
@@ -1054,32 +964,6 @@ def _distinct(cands: list[Candidate]) -> list[Candidate]:
         seen.add(key)
         out.append(c)
     return out
-
-
-def _modes(w: _Chain, c: Candidate) -> dict[int, str]:
-    return w.rebaser.modes(c)[0]
-
-
-def _empty_value(c: Candidate, w: _Chain) -> ir.Const:
-    v = empty_value(c.state, w.R, c.struct)
-    return ir.ZERO if v is None else v  # no value there: the identity law chooses one
-
-
-def _classes_empty(expr, identity, signs: dict[int, int]) -> frozenset:
-    """The classes of ``expr`` with side ``b`` empty (the identity) and ``a`` not."""
-    env: dict[ir.Node, frozenset] = {}
-    for k, cls in enumerate(domain.identity_classes(identity)):
-        env[ir.state_var("b", k)] = cls
-        env[ir.state_var("a", k)] = domain.sign_classes(signs[k])
-        env[ir.state_var("m", k)] = domain.sign_classes(signs[k])
-    return domain.classes(expr, env)
-
-
-def _classes_text(cls: frozenset) -> str:
-    words = {domain.NAN: "NaN", domain.IP: "+inf", domain.IN: "-inf"}
-    words |= {domain.WP: "the largest float", domain.WN: "the lowest float"}
-    order = (domain.NAN, domain.IP, domain.IN, domain.WP, domain.WN)
-    return " or ".join(words[c] for c in order if c in cls)
 
 
 def _witness_text(w: _Chain, proof: domain.Witness) -> str:

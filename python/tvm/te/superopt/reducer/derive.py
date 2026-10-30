@@ -20,7 +20,7 @@ A state is a function ``I(R)`` of partial reductions over a sub-range ``R``
 of the reduction axis ``j``. That single definition fixes the whole reducer;
 nothing below is searched:
 
-* ``leaf = I({j})`` and ``identity = I(∅)``;
+* ``leaf = I({j})``;
 * the merge, by writing ``I(A u B)`` over the partial reductions of ``A`` and
   ``B`` (``Σ_{A u B} = Σ_A + Σ_B``) and solving those for the state values
   ``I(A)``, ``I(B)``. Where the caller gives it (``rebase.Printer.kept``), each
@@ -35,9 +35,9 @@ is needed. The laws are not tested one by one: the merge satisfies
 ``M(I(A), I(B)) = I(A u B)`` by construction (proven, see
 :func:`invariant_holds`, and :func:`psi_inverts` for the contexts kept), and
 commutativity and associativity on the states a part of the axis can have
-follow from that of the union. The identity is ``I(∅)`` read off the
-definitions (:func:`empty_value`) and the identity law is proven on those
-states as well (:func:`identity_law`).
+follow from that of the union on non-empty parts. Execution starts from a
+leaf and skips empty parts; no numerical identity or empty-state law is
+required or derived.
 """
 
 from __future__ import annotations
@@ -69,14 +69,13 @@ R_NAME, A_NAME, B_NAME = "R", "A", "B"
 
 @dataclasses.dataclass(frozen=True)
 class ReducerSpec:
-    """A fully derived and verified tuple reducer over reduction axis ``axis``."""
+    """A tuple reducer verified for non-empty parts of reduction axis ``axis``."""
 
     axis: DimKey
     states: tuple[ir.SymExpr, ...]  # I_k(R), canonical, over DSym(axis, "R")
     leaves: tuple[ir.SymExpr, ...]  # I_k({j}) at binder depth 1 (BIdx(0) is j)
     # over StateVar a_k / b_k, and m_k (slot k merged) where a context is kept
     merge: tuple[ir.SymExpr, ...]
-    identity: tuple[ir.Const, ...]
     closed: tuple[ir.SymExpr, ...]  # I_k(full axis)
     proof: str
     # One per required tensor: its closed form written over the state outputs
@@ -106,9 +105,7 @@ class ReducerSpec:
     def pretty(self) -> str:
         lines = [f"comm_reduce over ax{self.axis} ({self.proof}):"]
         for k in range(self.arity):
-            lines.append(
-                f"  s{k}: leaf={self.leaves[k]}  merge={self.merge_code[k]}  e={self.identity[k]}"
-            )
+            lines.append(f"  s{k}: leaf={self.leaves[k]}  merge={self.merge_code[k]}")
         for k, e in enumerate(self.epilogues):
             lines.append(f"  out{k} = {e}")
         return "\n".join(lines)
@@ -325,7 +322,7 @@ def spec_key(spec: ReducerSpec):
     for new, old in enumerate(order):
         for side in "abm":
             ren[ir.state_var(side, old)] = ir.state_var(side, new)
-    return tuple((spec.leaves[k], subst(spec.merge[k], ren), spec.identity[k]) for k in order)
+    return tuple((spec.leaves[k], subst(spec.merge[k], ren)) for k in order)
 
 
 def state_refs(e: ir.Node) -> set[int]:
@@ -343,7 +340,7 @@ def count(stats, what, n=1):
 
 
 # ---------------------------------------------------------------------------
-# identity, laws, invariant: shared by every way of choosing the states
+# laws, invariant: shared by every way of choosing the states
 # ---------------------------------------------------------------------------
 def needed_states(merge, refs: set[int]) -> set[int]:
     """Slots feeding ``refs`` through the merge functions."""
@@ -357,115 +354,6 @@ def needed_states(merge, refs: set[int]) -> set[int]:
                     needed.add(sv.k)
                     changed = True
     return needed
-
-
-def empty_value(state: ir.SymExpr, R: ir.DSym, struct: ir.SymExpr | None = None) -> ir.Const | None:
-    """``I(∅)``, the value of a state on an empty part, where it is a constant.
-
-    Read off the reduction as the program writes it (``struct``, its contexts
-    still symbols): an empty sum is 0 and an empty maximum -inf whatever they
-    would have been computed against. Then off the definition: an empty count
-    is 0; where that leaves ``0 / 0`` (a mean, ``Σ x / |R|``) the count is kept
-    as an unknown positive number instead, so that the mean of nothing is
-    ``0 / |R| = 0`` and a maximum shifted by it still -inf. ``None`` when no
-    constant comes out.
-    """
-    for e in (struct, state):
-        if e is None:
-            continue
-        try:
-            e = subst_domain(e, {R: ir.dempty(R.axis)})
-        except Unsupported:
-            continue
-        if isinstance(e, ir.Const):
-            return e
-
-    def fn(n: ir.Node):
-        if isinstance(n, ir.Reduce) and n.domain is R:
-            return ir.ZERO if n.kind == "sum" else ir.NEG_INF_C
-        return None
-
-    try:
-        e = transform(state, fn)
-    except Unsupported:
-        return None
-    return e if isinstance(e, ir.Const) else None
-
-
-def identity_of(states, merge, R, A, B, structs=None) -> tuple[tuple[ir.Const, ...], str] | None:
-    """The identity element and how its law is proven, or ``None``.
-
-    A state with a value on an empty part (:func:`empty_value`) takes it. One
-    without (a weighted mean ``Σ w x / Σ w``) is left as an unknown ``t`` and
-    the law is solved for it: where the merge multiplies ``t`` by an empty
-    weight the law holds whatever ``t`` is, and 0 is taken; where it does not,
-    the law fixes it (it must come out a constant).
-    """
-    structs = structs or (None,) * len(states)
-    values = [empty_value(s, R, st) for s, st in zip(states, structs)]
-    unknown = {ir.atom(f"t{k}"): k for k, v in enumerate(values) if v is None}
-    trial = [ir.atom(f"t{k}") if v is None else v for k, v in enumerate(values)]
-    for _ in range(len(unknown) + 1):
-        residues = identity_residues(states, merge, tuple(trial), R, A, B)
-        if residues is None:
-            return None
-        fixed = False
-        for diff in residues:
-            for t, k in unknown.items():
-                if trial[k] is not t or not contains_node(diff, lambda x, t=t: x is t):
-                    continue
-                v = _solve_single(diff, t, ir.ZERO)
-                if isinstance(v, ir.Const):
-                    trial[k], fixed = v, True
-        if not fixed:
-            break
-    method = identity_law(states, merge, tuple(trial), R, A, B)
-    if method is None:
-        return None
-    return tuple(ir.ZERO if v in unknown else v for v in trial), method
-
-
-def identity_residues(states, merge, identity, R, A, B) -> list[ir.SymExpr] | None:
-    """``M(s, e) - s`` slot by slot (both orders), canonical; ``None`` if undefined."""
-    out = []
-    for mine, other, dom in (("a", "b", A), ("b", "a", B)):
-        env = {}
-        for k, s in enumerate(states):
-            env[ir.state_var(mine, k)] = subst_domain(s, {R: dom})
-            env[ir.state_var(other, k)] = identity[k]
-        for k in range(len(states)):
-            try:
-                out.append(mk_sub(subst(merge[k], env), env[ir.state_var(mine, k)]))
-            except Unsupported:
-                return None
-    return out
-
-
-def identity_law(states, merge, identity, R, A, B) -> str | None:
-    """``M(s, e) = M(e, s) = s`` for every state ``s`` a non-empty part can have:
-    how it is proven, or ``None``.
-
-    ``s`` is written as the definitions over a part (``I(A)``), so the law is
-    asked of reachable states only; a state that is a function of others then
-    agrees with them.
-    """
-    n = len(states)
-    method = "canonical"
-    for mine, other, dom in (("a", "b", A), ("b", "a", B)):
-        env = {}
-        for k, s in enumerate(states):
-            env[ir.state_var(mine, k)] = subst_domain(s, {R: dom})
-            env[ir.state_var(other, k)] = identity[k]
-        for k in range(n):
-            try:
-                got = subst(merge[k], env)
-            except Unsupported:
-                return None
-            how = verify.prove_equal(got, env[ir.state_var(mine, k)])
-            if how is None:
-                return None
-            method = verify.worst(method, how)
-    return method
 
 
 def invariant_holds(states, merge, R, A, B) -> str | None:
@@ -577,7 +465,6 @@ def derive(
     required: tuple[ir.SymExpr, ...],
     axis: DimKey,
     stats: dict | None = None,
-    structs: tuple[ir.SymExpr, ...] | None = None,
     kept: tuple[ir.SymExpr | None, ...] | None = None,
 ) -> ReducerSpec | None:
     """The reducer with these ``states``, if it reproduces every ``required`` closed form.
@@ -586,7 +473,7 @@ def derive(
     ``required`` the closed forms (over the whole axis) of the tensors the rest
     of the program reads. ``kept``, one per state or ``None``, is its merge with
     the contexts kept as merged values (``m_k``): the merge wherever given, when
-    ``Ψ`` inverts the states (:func:`psi_inverts`) and the identity law holds;
+    ``Ψ`` inverts the states (:func:`psi_inverts`);
     the merge written over the partial reductions otherwise.
     """
     full, R, A, B = domains(axis)
@@ -630,29 +517,20 @@ def derive(
     if first is None:
         count(stats, "derive:invariant_failed")
         return None
-    found = None
     if kept is not None and any(k is not None for k in kept):
         swapped = tuple(m if k is None else k for m, k in zip(merge, kept))
         flat = closed_merges(swapped)
         how = None if flat is None else psi_inverts(states, sol, R, A)
         if how is not None:
-            found = identity_of(states, flat, R, A, B, structs)
-            if found is not None:
-                merge, first = swapped, verify.worst(first, how)
-    if found is None:
-        found = identity_of(states, merge, R, A, B, structs)
-    if found is None:
-        count(stats, "derive:law_failed")
-        return None
-    identity, second = found
-    proof = verify.worst(first, second)
+            merge, first = swapped, verify.worst(first, how)
+    proof = first
     try:
         leaves = tuple(singleton(s, R) for s in states)
     except Unsupported:  # a state not defined on a single element (0 / 0)
         count(stats, "derive:undefined_leaf")
         return None
     count(stats, "derive:specs")
-    return ReducerSpec(axis, states, leaves, merge, identity, closed, proof, epilogues)
+    return ReducerSpec(axis, states, leaves, merge, closed, proof, epilogues)
 
 
 __all__ = [

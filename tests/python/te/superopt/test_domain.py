@@ -14,8 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Where a state is defined, decided by proof: conditions, signs, witnesses, and the
-merge against an empty part on classes of floating-point values."""
+"""Where a state is defined on non-empty parts: conditions, signs and witnesses."""
 
 from fractions import Fraction
 
@@ -31,7 +30,6 @@ from tvm.te.superopt.symbolic.canonicalize import (
     mk_div,
     mk_exp,
     mk_log,
-    mk_max,
     mk_mul,
     mk_pow,
     mk_reduce,
@@ -148,61 +146,6 @@ def test_te_signs_see_squares_roots_and_declarations():
     assert signs.tensor(mean) == domain.ANY
     assert signs.tensor(B) == domain.POS  # the program takes its log
     assert domain.TeSigns([sw]).tensor(sw) == domain.ANY  # not declared
-
-
-# ---------------------------------------------------------------------------
-# the empty side: IEEE arithmetic on classes of values
-# ---------------------------------------------------------------------------
-def test_classes_of_the_operations_that_meet_an_empty_side():
-    a, b = ir.state_var("a", 0), ir.state_var("b", 0)
-    big = {b: frozenset({domain.WP})}  # the largest float
-    zero = {b: frozenset({domain.Z})}
-    assert domain.classes(mk_exp(mk_mul(ir.MINUS_ONE, b)), big) == {domain.Z}
-    assert domain.classes(mk_mul(a, b), {a: frozenset({domain.Z}), **big}) == {domain.Z}
-    assert domain.classes(ir.raw_add([b, b]), big) == {domain.IP}  # overflows
-    assert domain.classes(mk_log(b), zero) == {domain.IN}
-    inf = {a: frozenset({domain.Z}), b: frozenset({domain.IP})}
-    assert domain.classes(mk_mul(a, b), inf) == {domain.NAN}
-    assert domain.classes(mk_pow(b, -1), zero) == {domain.IP}  # 1 / +0
-    low = {a: frozenset({domain.P}), b: frozenset({domain.WN})}
-    assert domain.classes(mk_max(a, b), low) == {domain.P}
-
-
-def _online_softmax_merge():
-    a0, b0, a1, b1 = (ir.state_var(s, k) for k in (0, 1) for s in "ab")
-    m = ir.raw_max([a0, b0])
-
-    def rescaled(s0, s1):
-        shift = ir.raw_add([m, ir.raw_mul([ir.MINUS_ONE, s0])])
-        return ir.raw_mul([ir.raw_exp(ir.raw_mul([ir.MINUS_ONE, shift])), s1])
-
-    return ir.raw_add([rescaled(a0, a1), rescaled(b0, b1)])
-
-
-def test_online_softmax_is_finite_against_an_empty_side():
-    merge = _online_softmax_merge()
-    cls = domain.empty_side(merge, "b", (ir.NEG_INF_C, ir.ZERO), [domain.ANY, domain.POS])
-    assert not domain.bad(cls)
-
-
-def test_a_shift_by_log_of_an_empty_sum_meets_zero_as_nan():
-    """``Σq · (lse_m - lse_b)`` with ``lse_b = mx_b + log den_b`` on an empty side."""
-    a0, a1, a2 = (ir.state_var("a", k) for k in range(3))
-    b0, b1, b2 = (ir.state_var("b", k) for k in range(3))
-    lse_b = ir.raw_add([b0, ir.raw_log(b1)])
-    lse_m = ir.raw_add([ir.raw_max([a0, b0]), ir.raw_log(a1)])
-    term = ir.raw_mul([b2, ir.raw_add([lse_m, ir.raw_mul([ir.MINUS_ONE, lse_b])])])
-    cls = domain.empty_side(
-        term, "b", (ir.NEG_INF_C, ir.ZERO, ir.ZERO), [domain.ANY, domain.POS, domain.ANY]
-    )
-    assert domain.NAN in cls
-
-
-def test_a_mean_of_an_empty_part_is_nan():
-    total, count = ir.state_var("b", 0), ir.state_var("b", 1)
-    mean = ir.raw_mul([total, ir.raw_pow(count, -1)])
-    cls = domain.empty_side(mean, "b", (ir.ZERO, ir.ZERO), [domain.ANY, domain.POS])
-    assert cls == {domain.NAN}
 
 
 if __name__ == "__main__":

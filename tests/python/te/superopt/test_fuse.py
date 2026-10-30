@@ -54,7 +54,9 @@ def _same_results(ins, outs, res, seed=0, tol=1e-4, **sizes):
 
 
 def _tuple_ops(outputs):
-    return [op for op in compute_ops(outputs) if len(op.body) > 1]
+    return [
+        op for op in compute_ops(outputs) if len(op.body) > 1 and op.tag != "superopt.singleton"
+    ]
 
 
 def _softmax(dtype="float32", m=None):
@@ -82,7 +84,7 @@ def test_softmax_becomes_one_tuple_reduction():
     assert [iv.var.name for iv in reducer.axis] == ["i"]  # the program's own loop variable
     (out,) = res.outputs
     assert out.op.name == "P" and not out.same_as(P)  # rebuilt around the new states
-    assert {t.op.name for t in out.op.input_tensors} == {"X", "fused_mx_den"}
+    assert {t.op.name for t in out.op.input_tensors} == {"X", "nonempty_mx_den"}
     assert passes([P], X.shape[1]) == 2 and passes(res.outputs, X.shape[1]) == 1
     _same_results([X], [P], res)
     tvm.compile(tvm_tirx.IRModule({"main": res.prim_func()}), target="llvm")
@@ -93,9 +95,28 @@ def test_states_are_outputs_when_the_program_asks_for_them():
     res = fuse([den, mx], [X])
     (reducer,) = _tuple_ops(res.outputs)
     # no epilogue in between: the outputs are the reducer's own state tensors
-    assert all(t.op.same_as(reducer) for t in res.outputs)
+    assert all(t.op.tag == "superopt.singleton" for t in res.outputs)
+    assert all(t.op.same_as(res.outputs[0].op) for t in res.outputs)
     assert [int(t.value_index) for t in res.outputs] == [1, 0]
     _same_results([X], [den, mx], res)
+
+
+@pytest.mark.parametrize("name", ["softmax", "softmax_entropy", "variance", "layernorm_backward"])
+@pytest.mark.parametrize("extent", [1, 2, 7])
+def test_nonempty_reduction_starts_from_a_leaf(name, extent):
+    """A singleton is returned directly; larger inputs only merge populated states."""
+    ins, outs = OPERATORS[name].unfused()
+    res = fuse(outs, ins)
+    assert res.fused, res.summary()
+    values = extents(ins, outs, reduce=extent)
+    arrays = sample(ins, outs, values, seed=7)
+    want = references(outs, ins, arrays, values)
+    np.testing.assert_allclose(references(res.outputs, ins, arrays, values), want, atol=1e-12)
+    for got, expected in zip(run_llvm(ins, res.outputs, arrays, values), want):
+        np.testing.assert_allclose(got, expected, rtol=1e-4, atol=1e-6)
+    for op in _tuple_ops(res.outputs):
+        assert int(op.reduce_axis[0].dom.begin.value) == 1
+        assert op.tag == "superopt.nonempty"
 
 
 def test_member_of_lower_rank_reads_its_state_anywhere_along_the_extra_axis():
@@ -194,7 +215,7 @@ def test_variance_is_welford_however_it_is_written(m, mean_inline):
     (report,) = res.chains
     assert report.fused and len(report.states) == 3, res.summary()
     origins = sorted(c.origin for c in report.solution.states)
-    assert origins == sorted(["context" if mean_inline else "member", "extent", "member"])
+    assert origins == sorted(["member", "extent", "member"])
     assert report.members == (("total", "ss") if mean_inline else ("total", "mean", "ss"))
     _same_results([X], [var], res)
 
@@ -248,7 +269,7 @@ def test_minimum_is_fused_like_a_maximum():
     assert report.fused and report.states == ("lo", "Z") and not report.rejected
     assert passes([out], m) == 2 and passes(res.outputs, m) == 1
     source = res.source()
-    assert "t0 = tir.min(a[0], b[0])" in source and "tir.max_value(ty=t0)" in source
+    assert "t0 = tir.min(a[0], b[0])" in source and "first leaf" in source
     assert "tir.exp((t0 - a[0]))" in source  # the weights only ever shrink
     _same_results([X], [out], res)
 
@@ -259,7 +280,7 @@ def test_maximum_of_standard_scores_keeps_the_largest_element():
     ins, outs = OPERATORS["zscore_max"].unfused()
     res = fuse(outs, ins)
     (report,) = res.chains
-    assert report.fused and report.states == ("mean", "ss", "zmax.h0", "count")
+    assert report.fused and report.states == ("total", "ss", "zmax.h0", "count")
     (extreme,) = [c for c in report.solution.states if c.origin == "hoist"]
     assert extreme.source == "zmax" and extreme.depth == 1  # the mean stays a context
     assert "mean[i]" in "".join(report.derived())
@@ -377,7 +398,7 @@ def test_epilogue_keeps_the_function_as_the_program_writes_it():
     out = te.compute((n,), cube, name="out")
     res = fuse(out, [X])
     (report,) = res.chains
-    assert report.fused and report.states[:2] == ("mean", "ss"), res.summary()
+    assert report.fused and report.states[:2] == ("total", "ss"), res.summary()
     (extreme,) = [c for c in report.solution.states if c.origin in ("inner", "hoist")]
     assert extreme.source.startswith("out") and "mean[i]" in "".join(report.derived())
     (epilogue,) = report.solution.spec.epilogue_code
@@ -413,7 +434,7 @@ def test_expanded_variance_is_kept_out_by_the_accuracy_gate():
     them; built by hand they are correct, and in float32 they cancel."""
     ins, outs = OPERATORS["variance"].unfused()
     full = fuse(outs, ins)
-    assert full.chains[0].states == ("mean", "ss", "count") and not full.chains[0].rejected
+    assert full.chains[0].states == ("total_mean", "ss", "count") and not full.chains[0].rejected
     capped = fuse(outs, ins, max_states=2)
     (report,) = capped.chains
     assert not capped.fused and "are 3, more than the 2 allowed" in report.reason
@@ -453,37 +474,14 @@ def test_unshifted_exponentials_are_refused_statically():
     assert res.fused and "exp" not in spec_issues(res.chains[0].solution.spec)
 
 
-def test_only_the_context_at_fault_is_taken_out():
-    """``-Σ q log p``: ``log den`` is -inf on an empty part and is taken out; the maximum
-    is not at fault and stays, so ``Σ q (x - mx)`` keeps the shift. Taking it out as well
-    leaves ``Σ q x``, which has to cancel a common offset of the scores against the
-    log-sum-exp."""
-    op = OPERATORS["soft_cross_entropy"]
-    ins, outs = op.unfused()
+def test_loss_keeps_its_log_context_and_still_passes_the_accuracy_gate():
+    ins, outs = OPERATORS["soft_cross_entropy"].unfused()
     res = fuse(outs, ins)
     (report,) = res.chains
-    steps = [st.summary() for st in report.selection.steps if st.action == "hoist"]
-    assert len(steps) == 1 and steps[0].startswith("hoist loss.ctx0 out of loss")
-    spec = report.solution.spec
-    world = _Chain(report.chain, members_of(report.chain), TeSigns(outs))
-    shifted = next(
-        k for k, c in enumerate(report.solution.states) if world.rebaser.contexts(c) and c.depth
-    )
-    assert spec.leaves[shifted].size == 1 and spec.leaves[shifted].value == 0  # q (x - x)
-    values = extents(ins, outs)
-    arrays = sample(ins, outs, values, seed=4, shift=1.0e4)
-    want = op.reference(*arrays)
-    assert rel_err(run_llvm(res.inputs, res.outputs, arrays, values), want) < 1e-5
-
-    # the two-context form is correct too, and loses four digits on the same data
-    def both(world, R):
-        loss = next(c for c in world.members if c.name == "loss")
-        out = world.hoisted(loss, frozenset(world.rebaser.contexts(loss)))
-        keep = [c for c in world.members if c.name in ("mx", "den")]
-        return [*keep, *out]
-
-    own, _, _, cancelled = _reducer_of("soft_cross_entropy", both)
-    assert 1e-5 < rel_err(run_llvm(own, cancelled, arrays, values), want) < 1e-2
+    assert report.fused, res.summary()
+    assert "loss" in report.states
+    assert not any(st.action == "hoist" for st in report.selection.steps)
+    _same_results(ins, outs, res)
 
 
 def test_scaled_norm_is_not_traded_for_a_sum_of_squares():
@@ -516,7 +514,14 @@ def test_a_budget_too_small_is_reported_not_raised():
     assert report.theory.states == 6 and len(report.selection.states) == 6
     assert "theory: a single pass with 6 state(s) exists" in res.summary()
     # left to the judgement, the reducer has the six states it takes
-    assert fuse(outs, ins).chains[0].states == ("mean_x", "mean_y", "sxy", "sxx", "syy", "count")
+    assert fuse(outs, ins).chains[0].states == (
+        "total_mean_x",
+        "total_mean_y",
+        "sxy",
+        "sxx",
+        "syy",
+        "count",
+    )
 
 
 def test_ops_around_a_chain_are_run_not_analysed():

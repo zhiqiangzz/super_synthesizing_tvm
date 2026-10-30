@@ -28,7 +28,7 @@ and returns the same program with every such chain replaced by one tuple
    chain no single pass is known for is left as it is;
 3. chooses its states (:mod:`reducer.states`): the results of the program's
    own loops, supplemented where they cannot be merged and replaced where
-   they are not defined on every part of the axis -- one explicit
+   they are not defined on every non-empty part of the axis -- one explicit
    procedure, decided by proof (:mod:`reducer.domain`), not a search;
 4. derives the reducer of those states (:mod:`reducer.derive`), checks it as
    below and writes it back as TE (:mod:`reducer.build`).
@@ -38,11 +38,11 @@ the second says exists does exist over the reals, and the third keeps the
 program's own arithmetic wherever that is defined. Floating point is the
 business of the fourth.
 
-A derived reducer is correct over the reals by construction and its monoid
-laws follow from how it is derived. The checks are about what that leaves
+A derived merge is correct over the reals for two non-empty parts; its
+associativity and commutativity follow from that invariant. Execution must
+start from a leaf and skip empty parts. The checks are about what that leaves
 open, and the chain is left as it is when one of them fails:
 
-* the merge must be finite against the identity element in floating point;
 * it must not take ``exp`` of an unbounded argument, divide by or take the
   ``log`` of a value of unknown sign, unless the original already does;
 * the rebuilt program must agree with the original, evaluated in float64 on
@@ -81,7 +81,6 @@ from .reducer.source import chain_source, describe_members, render
 from .reducer.states import Selection, Solution, members_of, select
 from .reducer.theory import Judgement
 from .reducer.theory import judge as judge_chain
-from .reducer.verify import identity_safe
 from .symbolic.canonicalize import Unsupported
 
 ISSUES = {
@@ -292,9 +291,6 @@ def _fuse_chain(
         report.reason = f"the reducer of ({', '.join(names)}) is refused: {why}"
         return report, rewriter
 
-    dtype = str(chain.reductions[0].tensor.dtype)
-    if not identity_safe(spec.merge_code, spec.identity, dtype):
-        return refuse("its merge is not finite against the empty state in floating point")
     barred = set(gate.required) if gate is not None and accuracy == "filter" else set()
     issues = sorted(barred & spec_issues(spec))
     if issues:
