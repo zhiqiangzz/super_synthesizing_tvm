@@ -80,6 +80,8 @@ def render(e: ir.Node, chain: Chain) -> str:
             return n.name
         if isinstance(n, ir.StateVar):
             return f"{n.side}{n.k}"
+        if isinstance(n, ir.IfZero):
+            return f"if {go(n.test)} == 0 then {go(n.zero)} else {go(n.nonzero)}"
         if isinstance(n, ir.Card):
             return f"Σ_{j} 1" if isinstance(n.domain, ir.DSym) else f"|{j}|"
         if isinstance(n, ir.Elem):

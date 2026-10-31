@@ -77,6 +77,12 @@ def _realize(e: ir.SymExpr, env: RealizeEnv, memo: dict):
         return tir.convert(ext).astype(dt)
     if isinstance(e, ir.StateVar):
         return env.state[e]
+    if isinstance(e, ir.IfZero):
+        return tir.if_then_else(
+            to_prim(e.test, env, memo) == 0,
+            to_prim(e.zero, env, memo),
+            to_prim(e.nonzero, env, memo),
+        )
     if isinstance(e, ir.Elem):
         if env.elem is None:
             raise Unsupported("tensor element without a loader")

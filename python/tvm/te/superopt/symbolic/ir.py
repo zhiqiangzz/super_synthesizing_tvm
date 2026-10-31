@@ -346,6 +346,25 @@ class Max(SymExpr):
         return "max(" + ", ".join(a.pretty() for a in self.args) + ")"
 
 
+class IfZero(SymExpr):
+    """Lazy scalar branch; only the selected value must be defined."""
+
+    __slots__ = ()
+    rank = 39
+    field_names = ("test", "zero", "nonzero")
+
+    def pretty(self) -> str:
+        return f"if_zero({self.test}, {self.zero}, {self.nonzero})"
+
+
+def if_zero(test: SymExpr, zero: SymExpr, nonzero: SymExpr) -> SymExpr:
+    if isinstance(test, Const):
+        return zero if test.value == 0 else nonzero
+    if zero is nonzero:
+        return zero
+    return _intern(IfZero, (test, zero, nonzero))
+
+
 class Reduce(SymExpr):
     """``kind`` in {"sum", "max"} over ``domain``; binds :class:`BIdx` ``level``."""
 

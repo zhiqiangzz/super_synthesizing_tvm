@@ -30,6 +30,11 @@ two such parts turns out to need (see :mod:`reducer.states`). It performs
 no scheduling and makes no performance claim; that is the job of later
 s_TIR passes.
 
+State recovery requires the optional ``superopt`` dependencies (SymPy and Z3).
+Defined original reductions are retained. Failure to prove a preserving
+representation within the theoretical state budget leaves the program unfused;
+only a demonstrated source-domain defect authorizes replacing an original.
+
 Merge formulas accept two non-empty parts. State selection and proofs do
 not evaluate an empty state. The generated serial reduction starts from
 the first leaf; parallel execution must initialize each active partition

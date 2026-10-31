@@ -62,7 +62,7 @@ from ..symbolic.canonicalize import (
     transform,
     walk,
 )
-from . import verify
+from . import smt, verify
 
 R_NAME, A_NAME, B_NAME = "R", "A", "B"
 
@@ -208,6 +208,12 @@ def solve_atoms(
     # Close the solution (later solutions may mention earlier atoms).
     for _ in range(len(sol)):
         sol = {a: subst(v, sol) for a, v in sol.items()}
+    for atom, h in how.items():
+        divisors = tuple(subst(d, sol) for d in h.divisors)
+        guarded = smt.guard_inverse(atom, sol[atom], divisors, states) if divisors else sol[atom]
+        if guarded is not sol[atom]:
+            sol[atom] = guarded
+            how[atom] = Solved(h.state)  # the whole guarded expression has been proved defined
     if trace is not None:
         for atom, h in how.items():
             trace[atom] = Solved(h.state, tuple(subst(d, sol) for d in h.divisors))
@@ -457,6 +463,11 @@ def state_outputs(states, sol, axis: DimKey) -> dict[ir.SymExpr, ir.SymExpr]:
         atom_full = subst_domain(atom, {R: full})
         if not is_constant(atom_full):
             out[atom_full] = subst_domain(subst(expr, refs), {R: full})
+    # A retained original output must read its own slot, including when it
+    # could also be reconstructed from the other coordinates.
+    for k, state in enumerate(closed):
+        if not is_constant(state):
+            out[state] = out_ref(k, state)
     return out
 
 
@@ -466,6 +477,7 @@ def derive(
     axis: DimKey,
     stats: dict | None = None,
     kept: tuple[ir.SymExpr | None, ...] | None = None,
+    preserve: bool = False,
 ) -> ReducerSpec | None:
     """The reducer with these ``states``, if it reproduces every ``required`` closed form.
 
@@ -510,7 +522,7 @@ def derive(
     used: set[int] = set()
     for e in epilogues:
         used |= state_refs(e)
-    if needed_states(merge, used) != set(range(n)):
+    if not preserve and needed_states(merge, used) != set(range(n)):
         count(stats, "derive:irrelevant_state")
         return None
     first = invariant_holds(states, merge, R, A, B)

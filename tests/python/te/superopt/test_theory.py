@@ -186,7 +186,7 @@ def test_nothing_is_derived_for_a_chain_without_a_known_single_pass():
 
 def test_states_chosen_are_as_many_as_judged_enough():
     """Six states for a correlation, five for a fourth moment: nobody has to say so."""
-    for name in ("pearson", "moment4", "papr"):
+    for name in ("pearson", "moment4", "householder"):
         op = OPERATORS[name]
         ins, outs = op.unfused()
         res = fuse(outs, ins)

@@ -60,6 +60,9 @@ def to_source(e: ir.SymExpr, env: SourceEnv, hoist: dict[ir.Node, str] | None = 
         return f'{e.name}.astype("{dt}")'
     if isinstance(e, ir.StateVar):
         return env.state[e]
+    if isinstance(e, ir.IfZero):
+        test, zero, nonzero = (to_source(a, env, hoist) for a in e.children())
+        return f"tir.if_then_else({test} == 0, {zero}, {nonzero})"
     if isinstance(e, ir.Elem):
         if env.elem is None:
             raise Unsupported("tensor element without a loader")
@@ -169,6 +172,9 @@ def shared_subexpressions(
     order: list[ir.Node] = []
 
     def visit(n: ir.Node) -> None:
+        if isinstance(n, ir.IfZero):
+            # Do not lift branch-local divisions out of their lazy guard.
+            return
         if isinstance(n, leaf_types) or not n.children():
             return
         if not any(isinstance(x, ir.StateVar | ir.Elem) for x in walk(n)):

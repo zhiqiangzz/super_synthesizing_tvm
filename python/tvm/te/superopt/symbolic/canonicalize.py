@@ -814,6 +814,8 @@ def mk_monoid(domain, level, leaf, merge, identity, slot) -> SymExpr:
 # ---------------------------------------------------------------------------
 def rebuild(e: Node, children: dict[Node, Node]) -> Node:
     """Rebuild ``e`` with some direct children replaced (canonicalising)."""
+    if isinstance(e, ir.IfZero):
+        return ir.if_zero(*(children.get(a, a) for a in (e.test, e.zero, e.nonzero)))
     if isinstance(e, Add):
         return mk_add(*[children.get(a, a) for a in e.args])
     if isinstance(e, Mul):

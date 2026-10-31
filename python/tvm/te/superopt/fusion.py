@@ -272,7 +272,7 @@ def _fuse_chain(
     if not report.theory.fusible:
         report.reason = report.theory.summary()
         return report, rewriter
-    selection = select(chain, members_of(chain), signs)
+    selection = select(chain, members_of(chain), signs, max_states=max_states)
     report.selection = selection
     sol = selection.solution
     if sol is None:
@@ -327,8 +327,9 @@ def fuse(
     inputs : list of te.Tensor
         Its placeholders, in the order the generated function takes them.
     max_states : int, optional
-        Largest reducer accepted (number of state tensors); a chain whose
-        states come to more is left as it is. No bound by default.
+        Further limit the number of state tensors. The default budget is the
+        theoretical construction's state count. A chain with no verified
+        preserving representation within the budget is left unchanged.
     accuracy : {"filter", "report", "off"}
         ``"filter"`` only accepts a reducer that is as accurate as the original
         (see :mod:`accuracy`); ``"report"`` accepts the first one that is

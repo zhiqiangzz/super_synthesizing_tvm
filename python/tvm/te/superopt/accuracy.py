@@ -481,6 +481,8 @@ class _Signs:
         return self.tensors[tid]
 
     def sign(self, e: ir.SymExpr, env: dict) -> int:
+        if e in env:
+            return env[e]
         if isinstance(e, ir.Const):
             v = e.value
             return POS if v > 0 else (NONNEG if v == 0 else ANY)
@@ -506,6 +508,8 @@ class _Signs:
             return b
         if isinstance(e, ir.Max):
             return max(self.sign(a, env) for a in e.args)
+        if isinstance(e, ir.IfZero):
+            return min(self.sign(e.zero, env), self.sign(e.nonzero, env))
         if isinstance(e, ir.Reduce):
             return self.sign(e.body, env)
         if isinstance(e, ir.MonoidReduce):
@@ -537,6 +541,17 @@ class _Signs:
 
 def _sites(e: ir.Node, depth: int, binders: dict, env: dict, signs: _Signs, out: list) -> None:
     """Collect ``("exp", arg, depth, binders)`` and ``("domain", operand, env)`` sites."""
+    if isinstance(e, ir.IfZero):
+        _sites(e.test, depth, binders, env, signs, out)
+        _sites(e.zero, depth, binders, env, signs, out)
+        nonzero = dict(env)
+        if signs.sign(e.test, env) >= NONNEG:
+            nonzero[e.test] = POS
+            if isinstance(e.test, ir.Pow) and e.test.exponent > 0:
+                if signs.sign(e.test.base, env) >= NONNEG:
+                    nonzero[e.test.base] = POS
+        _sites(e.nonzero, depth, binders, nonzero, signs, out)
+        return
     if isinstance(e, ir.Exp):
         out.append(("exp", e.arg, depth, binders))
     elif isinstance(e, ir.Pow) and e.exponent < 0:
@@ -585,11 +600,24 @@ def static_issues(outputs) -> dict[str, list[str]]:
                     _, arg, depth, binders = site
                     if not bounded_above(arg, _Scope(lower, out_keys, binders, depth)):
                         bad.add("exp")
-                elif signs.sign(site[1], site[2]) != POS:
+                elif not _positive_domain(site[1], site[2], signs):
                     bad.add("domain")
         for kind in sorted(bad):
             issues[kind].append(op.name)
     return issues
+
+
+def _positive_domain(operand, env, signs):
+    if signs.sign(operand, env) == POS:
+        return True
+    from .reducer import smt
+    from .symbolic.canonicalize import walk
+
+    known = dict(env)
+    for n in walk(operand):
+        if isinstance(n, ir.StateVar | ir.Elem):
+            known[n] = signs.sign(n, env)
+    return smt.condition_holds(operand, "positive", tuple(known.items()))
 
 
 # ---------------------------------------------------------------------------
@@ -951,7 +979,7 @@ def spec_issues(spec) -> set[str]:
             _, arg, depth, binders = site
             if not bounded_above(arg, _Scope(lower, (), binders, depth)):
                 out.add("exp")
-        elif signs.sign(site[1], site[2]) != POS:
+        elif not _positive_domain(site[1], site[2], signs):
             out.add("domain")
     return out
 

@@ -308,13 +308,14 @@ def test_minimum_of_standard_scores_keeps_the_smallest_element():
     _same_results([X], [zmin], res)
 
 
-def test_largest_absolute_deviation_is_two_extremes():
+def test_largest_absolute_deviation_is_preserved_when_inverse_is_unproved():
     ins, outs = OPERATORS["max_abs_deviation"].unfused()
     res = fuse(outs, ins)
     (report,) = res.chains
-    assert report.fused and [c.origin for c in report.solution.states].count("part") == 2
-    assert "is the largest of" in "".join(report.derived())
-    _same_results(ins, outs, res)
+    assert not report.fused and report.theory.fusible
+    assert "not an impossibility proof" in report.reason
+    assert all(a.same_as(b) for a, b in zip(res.outputs, outs))
+    assert not any(s.action in {"parts", "hoist"} for s in report.selection.steps)
 
 
 def _centred(body, reducer=te.max, name="out"):
@@ -351,11 +352,12 @@ def test_function_that_grows_with_its_argument_leaves_a_maximum(body, reducer, s
     X, out = _centred(body, reducer)
     res = fuse(out, [X])
     (report,) = res.chains
-    assert report.fused and len(report.states) == states, res.summary()
-    assert {c.origin for c in report.solution.auxiliaries} == {"extent", "inner"}
-    assert "is a function of" in "".join(report.derived())
-    assert passes([out], X.shape[1]) == 2 and passes(res.outputs, X.shape[1]) == 1
-    _same_results([X], [out], res)
+    # A theoretical representation exists, but replacing the original maximum
+    # is no longer permitted merely because the inverse constructor is limited.
+    assert report.theory.fusible
+    assert not report.fused and res.outputs[0].same_as(out)
+    assert "not an impossibility proof" in report.reason
+    assert not any(s.action in {"parts", "hoist"} for s in report.selection.steps)
 
 
 @pytest.mark.parametrize(
@@ -437,7 +439,7 @@ def test_expanded_variance_is_kept_out_by_the_accuracy_gate():
     assert full.chains[0].states == ("total_mean", "ss", "count") and not full.chains[0].rejected
     capped = fuse(outs, ins, max_states=2)
     (report,) = capped.chains
-    assert not capped.fused and "are 3, more than the 2 allowed" in report.reason
+    assert not capped.fused and "within 2 states" in report.reason
     x = ir.elem(0, (ir.idx("i0"), ir.bidx(0)))
 
     def raw(world, R):
@@ -485,24 +487,16 @@ def test_loss_keeps_its_log_context_and_still_passes_the_accuracy_gate():
 
 
 def test_scaled_norm_is_not_traded_for_a_sum_of_squares():
-    """Fused, the norm with scaling is ``sqrt(Σ x²)`` again: correct, and it overflows where
-    the original was written not to. The magnitude families of the gate keep it out."""
+    """An unproved preserving representation stays unfused even with accuracy disabled."""
     ins, outs = OPERATORS["scaled_norm"].unfused()
     res = fuse(outs, ins)
     (report,) = res.chains
     assert not res.fused and res.outputs[0].same_as(outs[0])
-    assert any("huge: inf" in r.why and "tiny" in r.why for r in report.rejected)
-    assert report.theory.states == 3  # a single pass exists: the two extremes and Σ x²
+    assert "not an impossibility proof" in report.reason
+    assert report.theory.states == 3
+    # Disabling numerical filtering must not disable preservation/recovery proofs.
     loose = fuse(outs, ins, accuracy="off")
-    assert loose.fused
-    values = extents(ins, outs)
-    (x,) = sample(ins, outs, values, seed=2)
-    for scale, fused_ok in ((1.0, True), (1.0e25, False)):
-        arrays = [(x * scale).astype("float32")]
-        want = [np.sqrt((arrays[0].astype(np.float64) ** 2).sum(axis=1))]
-        assert rel_err(run_llvm(ins, outs, arrays, values), want) < 1e-5
-        err = rel_err(run_llvm(loose.inputs, loose.outputs, arrays, values), want)
-        assert (err < 1e-5) == fused_ok
+    assert not loose.fused and loose.outputs[0].same_as(outs[0])
 
 
 def test_a_budget_too_small_is_reported_not_raised():
@@ -510,8 +504,8 @@ def test_a_budget_too_small_is_reported_not_raised():
     ins, outs = OPERATORS["pearson"].unfused()
     res = fuse(outs, ins, max_states=4)
     (report,) = res.chains
-    assert not res.fused and "are 6, more than the 4 allowed" in report.reason
-    assert report.theory.states == 6 and len(report.selection.states) == 6
+    assert not res.fused and "exceeds the state budget" in report.reason
+    assert report.theory.states == 6 and len(report.selection.states) == 5
     assert "theory: a single pass with 6 state(s) exists" in res.summary()
     # left to the judgement, the reducer has the six states it takes
     assert fuse(outs, ins).chains[0].states == (
@@ -583,7 +577,7 @@ SOURCED = [
     "sinkhorn_square",
     "heat_capacity",
     "zscore_max",
-    "max_abs_deviation",
+    "householder",
     "contrastive",
 ]
 

@@ -155,6 +155,8 @@ class LowerCtx:
             return self.lower_load(e, env, level)
         if isinstance(e, Call):
             name = e.op.name
+            if name == "prim.if_then_else":
+                return lower_if_zero(e, lambda a: self.lower_expr(a, env, level))
             if name == "prim.exp":
                 return mk_exp(self.lower_expr(e.args[0], env, level))
             if name == "prim.sqrt":
@@ -250,6 +252,8 @@ class LowerCtx:
             return mk_neg(mk_max(mk_neg(a), mk_neg(b)))
         unary = {"prim.exp": mk_exp, "prim.sqrt": mk_sqrt, "prim.log": mk_log}
         if isinstance(e, Call):
+            if e.op.name == "prim.if_then_else":
+                return lower_if_zero(e, lambda a: self._lower_merge(a, merge_map, env))
             if e.op.name in unary:
                 return unary[e.op.name](self._lower_merge(e.args[0], merge_map, env))
             if e.op.name == "prim.rsqrt":
@@ -263,6 +267,16 @@ class LowerCtx:
         if isinstance(e, FloatImm | IntImm | tir.Var):
             return self.lower_expr(e, env, 0)  # a constant or an extent
         raise Unsupported(f"{type(e).__name__} in a merge function")
+
+
+def lower_if_zero(call, lower):
+    """Only equality-to-zero guards are part of the proof IR."""
+    cond, zero, nonzero = call.args
+    if isinstance(cond, tir.EQ):
+        for test, value in ((cond.a, cond.b), (cond.b, cond.a)):
+            if isinstance(value, IntImm | FloatImm) and value.value == 0:
+                return ir.if_zero(lower(test), lower(zero), lower(nonzero))
+    raise Unsupported("conditional is not a scalar zero guard")
 
 
 def integer_power(base: ir.SymExpr, call) -> ir.SymExpr:

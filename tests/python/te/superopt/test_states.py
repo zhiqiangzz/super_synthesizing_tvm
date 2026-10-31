@@ -178,7 +178,7 @@ def test_variance_keeps_the_total_and_supplements_the_count():
     sel = _select("variance")
     assert _names(sel) == ["total_mean", "ss", "count"]
     assert not _steps(sel, "promote") and not _steps(sel, "hoist")
-    assert _steps(sel, "supplement") == ["supplement count = Σ_j 1: ss needs Σ_j 1"]
+    assert _steps(sel, "supplement")[0].startswith("supplement count = Σ_j 1:")
     spec = sel.solution.spec
     (ta, tb), (sa, sb), (na, nb) = _ab(0), _ab(1), _ab(2)
     ma, mb = mk_div(ta, na), mk_div(tb, nb)
@@ -268,8 +268,7 @@ def test_a_context_defined_by_a_division_is_checked_through():
 
 
 def test_what_reading_a_reduction_back_divides_by_is_checked():
-    """``out = Σ_j y_j g`` with ``g = Σ_j x_j``: ``Σ y = out / g``, and ``g`` is 0 where
-    ``x`` is. ``out`` is replaced by ``Σ y`` -- the merge of ``(g, out)`` would lose it."""
+    """A singular inverse cannot authorize replacing a defined original state."""
     n, m = te.var("n"), te.var("m")
     X = te.placeholder((n, m), name="X")
     Y = te.placeholder((n, m), name="Y")
@@ -278,11 +277,9 @@ def test_what_reading_a_reduction_back_divides_by_is_checked():
     out = te.compute((n,), lambda i: te.sum(Y[i, j2] * g[i], axis=j2), name="out")
     (chain,), _ = discover_chains(out)
     sel = select(chain, members_of(chain), TeSigns(out))
-    (hoist,) = _steps(sel, "hoist")
-    assert hoist.startswith("hoist g out of out: out: reading Σ_j Y[i, j] back from it divides")
-    assert hoist.endswith("which is 0 where X[i, j] is")
-    _, R, _, _ = domains(chain.axis)
-    assert _same(sel.states[1].state, mk_reduce("sum", R, 0, _x(1)))
+    assert not _steps(sel, "hoist")
+    assert _names(sel) == ["g", "out"]
+    assert sel.solution is None and "not an impossibility proof" in sel.failure
 
 
 def test_cross_entropy_keeps_the_log_context_on_nonempty_parts():
@@ -309,24 +306,13 @@ def test_layernorm_backward_keeps_the_scale_and_total():
     assert not _steps(sel, "hoist") and not _steps(sel, "promote")
 
 
-def test_a_maximum_of_reductions_is_taken_apart():
-    """``max_j |x - mean|`` is the larger of two reductions, each a shift by the mean."""
-    sel = _select("max_abs_deviation")
-    assert _steps(sel, "parts") == [
-        "parts dmax: no reduction it is made of can be read back from it"
-    ]
-    assert _names(sel) == ["total", "dmax.m0", "dmax.m1", "count"]
-    assert all(c.origin == "part" and c.source == "dmax" for c in sel.states[1:3])
-    a, b = _ab(3)
-    assert sel.solution.spec.merge[3] is mk_add(a, b)
-
-
-def test_a_function_taken_out_of_a_maximum_leaves_its_reduction():
-    sel = _select("peak_power")
-    assert [c.origin for c in sel.states[1:3]] == ["inner", "inner"]
-    assert sel.solution.spec.epilogue_print is None
-    sel = _select("peak_to_geomean")
-    assert _names(sel) == ["total", "ratio.m0", "count"] and sel.states[1].origin == "inner"
+def test_a_maximum_is_not_replaced_when_recovery_is_unproved():
+    for name in ("max_abs_deviation", "peak_power", "peak_to_geomean"):
+        sel = _select(name)
+        assert sel.solution is None
+        assert "not an impossibility proof" in sel.failure
+        assert all(c.origin == "member" for c in sel.states)
+        assert not _steps(sel, "hoist") and not _steps(sel, "parts")
 
 
 def _energy():
@@ -345,38 +331,30 @@ def _energy():
     )
 
 
-def test_a_sum_whose_parts_move_differently_is_kept_as_its_parts():
-    """``Σ (x - mean)² + exp(x - mx)``: re-based, the first part moves with ``1, δ, δ²``,
-    the second with ``e^{-ε}``, and no coefficient is the whole sum. Each part re-bases
-    by itself and is kept; taking the contexts out instead leaves ``Σ exp(x)``."""
+def test_different_rates_supplement_a_component_and_preserve_the_original_sum():
     energy = _energy()
     (chain,), _ = discover_chains([energy])
     sel = select(chain, members_of(chain), TeSigns([energy]))
-    assert _names(sel) == ["total", "mx", "energy.p0", "energy.p1", "count"]
-    assert not _steps(sel, "hoist") and sel.solution.spec.merge_print is not None
-    (split,) = _steps(sel, "split")
-    assert split.startswith("split energy into ")
-    assert split.endswith(": it does not re-base; each of these does")
-    R, x = _R(sel), _x()
-    centred = mk_sub(x, mk_div(mk_reduce("sum", R, 0, x), mk_card(R)))
-    shifted = mk_sub(x, mk_reduce("max", R, 0, x))
-    want = [mk_reduce("sum", R, 0, mk_pow(centred, 2)), mk_reduce("sum", R, 0, mk_exp(shifted))]
-    pieces = sel.states[2:4]
-    assert all(any(_same(c.state, s) for c in pieces) for s in want)
-    assert all(c.origin == "piece" and c.source == "energy" for c in pieces)
+    assert sel.solution is not None, sel.failure
+    assert _names(sel)[:3] == ["total", "mx", "energy"]
+    assert len(sel.states) == 5
+    assert not _steps(sel, "hoist") and not _steps(sel, "split")
+    assert sum(c.origin == "piece" for c in sel.states) == 1
+    # The preserved sum and one component recover the other component.
+    assert sel.solution.spec.epilogues[0].tensor == -3
+    from tvm.te.superopt import fuse
+
+    fused = fuse([energy], list(chain.boundary))
+    assert fused.fused and fused.accuracy.ok, fused.summary()
 
 
-def test_a_state_that_does_not_re_base_gets_nothing_supplemented():
-    """Read off as it is, ``energy`` needs the count and ``Σ exp(x)``. It does not re-base,
-    so neither is added: it is split first, and its piece ``Σ exp(x - mx)`` holds what the
-    raw sum would have."""
+def test_rebase_decomposition_is_not_a_prerequisite_to_supplementing_a_tuple():
     energy = _energy()
     (chain,), _ = discover_chains([energy])
-    sel = _Select(_Chain(chain, members_of(chain), TeSigns([energy])))
-    states, sol, trace = sel.supplement(sel.base())
-    assert [c.name for c in states] == ["total", "mx", "energy"] and sol is None
-    c, (fault,) = sel.faults(states, sol, trace)
-    assert (c.name, fault.kind, fault.reason) == ("energy", "structure", "it does not re-base")
+    selector = _Select(_Chain(chain, members_of(chain), TeSigns([energy])))
+    states, sol, trace = selector.supplement(selector.base())
+    assert [c.name for c in states][:3] == ["total", "mx", "energy"]
+    assert sol is not None and len(states) == 5
 
 
 def test_two_rates_of_one_context_are_two_states():
@@ -394,7 +372,8 @@ def test_two_rates_of_one_context_are_two_states():
     )
     (chain,), _ = discover_chains([out])
     sel = select(chain, members_of(chain), TeSigns([out]))
-    assert _names(sel) == ["mx", "out.p0", "out.p1"] and len(_steps(sel, "split")) == 1
+    assert _names(sel) == ["mx", "out", "out.p0"] and not _steps(sel, "split")
+    assert sel.solution is not None, sel.failure
 
     X, n, m = _rows()
     j1, j2 = (te.reduce_axis((0, m), "j") for _ in range(2))
@@ -437,7 +416,7 @@ def test_each_context_takes_the_correction_its_dependence_fits():
     assert [mode for *_, mode in w.rebaser.decompose(c).corr] == ["scale", "scale"]  # both sides
 
 
-def test_only_the_context_no_correction_fits_is_taken_out():
+def test_tuple_recovery_keeps_a_context_that_individual_rebase_rules_cannot_handle():
     """``max_j (x - mean) / sd`` with ``sd = sqrt(ss / n + eps)``, never 0: the maximum
     moves with a shift of ``mean``, with neither a shift nor a scale of ``sd``. Only
     ``sd`` is taken out, and the maximum of ``x - mean`` is kept."""
@@ -455,22 +434,14 @@ def test_only_the_context_no_correction_fits_is_taken_out():
     (chain,), _ = discover_chains([zmax])
     members = members_of(chain)
     sel = select(chain, members, TeSigns([zmax]))
-    assert _names(sel) == ["total", "ss", "zmax.h0", "count"]
-    (hoist,) = _steps(sel, "hoist")
-    assert hoist == (
-        "hoist sd out of zmax: zmax: it does not re-base: "
-        "neither a shift nor a scale of sd leaves its reduction"
-    )
-    w = _Chain(chain, members, TeSigns([zmax]))
-    assert [w.name(p) for p in w.rebaser.contexts(sel.states[2])] == ["mean"]
-    # where taking it out alone does not leave the reduction, every context goes with it
+    assert _names(sel) == ["total", "ss", "zmax", "count"]
+    assert sel.solution is not None, sel.failure
+    assert not _steps(sel, "hoist")
+    # This other source really divides by zero on a singleton. A repair is
+    # permitted, although the remaining transcendental reduction is unsupported.
     sel = _select("standardised_softmax")
-    (hoist,) = _steps(sel, "hoist")
-    assert hoist.startswith("hoist sigma, mean out of zden")
-    assert hoist.endswith(
-        "neither a shift nor a scale of sigma leaves its reduction; "
-        "sigma alone does not leave the reduction"
-    )
+    assert sel.solution is None
+    assert all("0 on every single element" in st for st in _steps(sel, "hoist"))
 
 
 def test_declared_positive_weights_keep_the_weighted_context():
@@ -507,7 +478,7 @@ def test_the_extent_is_a_count_unless_it_is_a_term_of_what_is_added_up():
     assert _chain("softmax").count  # never used as a value
     assert not _chain("label_smoothing").count  # 0.9 y + 0.1 / k: a constant of the problem
     sel = _select("label_smoothing")
-    assert len(sel.states) == 4 and sel.solution.spec.merge_print is not None
+    assert len(sel.states) == 6 and sel.solution.spec.merge_print is not None
 
 
 # ---------------------------------------------------------------------------

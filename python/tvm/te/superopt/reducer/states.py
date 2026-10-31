@@ -14,63 +14,22 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Choosing the states of a single pass: keep, supplement, replace.
+"""Preserve original reductions; search supplements with proved recovery.
 
-The judgement (:mod:`theory`) shows that a single pass exists by naming
-plain reductions that are enough (tuple *A*). They are seldom the right ones
-to keep in floating point: ``Σ x²`` and ``Σ x`` instead of a mean and the
-squares about it. :func:`select` starts from what the program itself
-computes and changes it only where it has to, by one explicit procedure:
+The context-free verification coordinates are B. The maintained tuple A starts
+with the original program's reductions. Candidates for additional coordinates
+come from B and from rebase coefficients/pieces; a finite search by cardinality
+accepts only complete A -> B recovery, a defined inverse, and tuple merge
+closure. The upper bound from the theoretical construction is the default
+budget, not a promise that a preserving representation exists at that size.
 
-keep
-    The states are the results of the loops of the chain (tuple *B*):
-    ``total`` and ``ss``; ``mx`` and ``den``.
-supplement
-    Where B cannot be merged -- the merge of a state, written over the
-    states, still needs a reduction no state holds -- the missing quantity
-    is added: the count first, then a coefficient of the state's own
-    re-based expansion (``Σ (x - mean)²`` in a third moment), one reduction
-    before a compound one. Only when the expansion offers none is the
-    missing reduction itself added. A state that does not re-base gets
-    nothing: it is replaced first (below), and what its replacements need
-    is asked again -- else ``Σ exp(x)`` would stand in for the ``Σ exp(x -
-    mx)`` one of its pieces is.
-check
-    Every state must be defined on every non-empty part of the axis and determine
-    what is read back from it (decided by :mod:`domain`, by proof):
-
-    * on a non-empty part nothing in its definition may divide by, or take
-      the ``log`` or an even root of, something not proven non-zero
-      (positive): ``zmax = max (x - mean) / sd`` divides by ``sd``, zero on
-      every single element;
-    * reading a reduction back from it may not divide by something not
-      proven non-zero: from ``out = g Σ y``, ``Σ y = out / g``, and
-      ``g = Σ x`` is zero wherever ``x`` is;
-    * it must re-base at all.
-
-    Empty parts are skipped by execution, never passed to the merge. They
-    impose no conditions on the states or the merge formula.
-replace
-    For the first state with a problem, the problem is blamed on the
-    contexts it comes from and acted on:
-
-    * a context that fails on a non-empty part is taken out of the state
-      (*hoisted*: the state becomes the coefficients of the context's
-      monomials, the context moves to the epilogue);
-    * a state that does not re-base is replaced by the reductions it is the
-      maximum of (``max |x - mean|``), or by the pieces it is the sum of
-      when each re-bases by itself and the whole does not (``Σ (x - mean)² +
-      exp(x - mx)``: the two move under different corrections, ``1`` and
-      ``e^{-δ}``), or failing both has taken out the contexts it moves with
-      under neither a shift nor a scale (each tried alone: ``sd`` in ``max (x
-      - mean) / sd``, not ``mean``) -- all of them when no one is to blame, or
-      it does not leave the reduction alone.
-
-Every replacement comes out of the replaced state's own expansion. What is
-decided -- per loop of the program: kept, which contexts taken out, taken
-apart, split -- only ever grows, and the states are rebuilt
-from it each round: the procedure ends, with one state set, whose reducer
-is then derived (:mod:`derive`).
+Z3 verifies zero-branch recovery using solver-proven facts about summands (see
+smt). Symbolic normalization and SymPy prove the remaining algebraic identities.
+Different correction rates generate candidates, never permission to discard
+an original sum. Only a demonstrated domain failure on an actual nonempty
+segment authorizes a hoist. Search exhaustion/unknown preserves the program
+unfused; it is not an impossibility proof. Empty partitions remain an execution
+layer concern. Real proofs do not replace the floating-point accuracy gate.
 """
 
 from __future__ import annotations
@@ -78,6 +37,7 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable
 from fractions import Fraction
+from itertools import combinations
 
 from ..symbolic import ir, sympy_bridge
 from ..symbolic.canonicalize import (
@@ -98,19 +58,17 @@ from ..symbolic.canonicalize import (
     walk,
 )
 from ..symbolic.realize import node_count
-from . import domain
+from . import domain, smt
 from .chain import Chain, partial
 from .derive import (
     ReducerSpec,
     atoms_in,
     derive,
     domains,
-    leftover,
     merge_of,
-    needed_states,
+    psi_inverts,
     solve_atoms,
     state_outputs,
-    state_refs,
 )
 from .rebase import Candidate, Printer, Rebaser, printed_merges, proves
 from .rebase import content as _content
@@ -505,33 +463,36 @@ class _Decisions:
     """What has been decided so far; it only ever grows."""
 
     hoisted: dict[int, frozenset[int]] = dataclasses.field(default_factory=dict)  # loop: contexts
-    parts: set[int] = dataclasses.field(default_factory=set)  # loops taken apart
-    split: set[int] = dataclasses.field(default_factory=set)  # loops kept as their pieces
 
     def key(self):
-        return (
-            tuple(sorted((k, tuple(sorted(v))) for k, v in self.hoisted.items())),
-            tuple(sorted(self.parts)),
-            tuple(sorted(self.split)),
-        )
+        return (tuple(sorted((k, tuple(sorted(v))) for k, v in self.hoisted.items())),)
 
 
 @dataclasses.dataclass(frozen=True)
 class _Fault:
     """Why a state cannot be kept, and the contexts that is blamed on."""
 
-    kind: str  # "domain", "divisor" or "structure"
+    kind: str  # demonstrated source "domain", "unknown_domain", or inverse "divisor"
     contexts: frozenset[int]
     reason: str
 
 
 class _Select:
-    def __init__(self, world: _Chain) -> None:
+    def __init__(self, world: _Chain, max_states: int | None = None) -> None:
         self.w = world
         self.steps: list[Step] = []
         self.round: list[Step] = []  # supplements of the current round
         self.dec = _Decisions()
         self.loops = [c for c in world.members if c.kind != "value"]
+        from .theory import judge
+
+        bound = judge(world.chain, world.members).states
+        self.budget = (
+            bound
+            if max_states is None
+            else min(bound if bound is not None else max_states, max_states)
+        )
+        self.search_failure = ""
 
     def note(self, action: str, subject: str, reason: str) -> None:
         """Record a step. Supplements belong to the round that adds them: a later
@@ -546,7 +507,7 @@ class _Select:
         """The decisions taken, then the supplements of the states arrived at."""
         return [*self.steps, *self.round]
 
-    # -- tuple B under the decisions ---------------------------------------------------
+    # -- maintained tuple A under the decisions ----------------------------------------
     def base(self) -> list[Candidate] | str:
         out: list[Candidate] = []
         for loop in self.loops:
@@ -555,10 +516,9 @@ class _Select:
                 got = self.w.hoisted(loop, self.dec.hoisted[loop.pid])
                 if got is None:
                     return f"the contexts of {loop.name} do not leave its reduction"
-            if loop.pid in self.dec.split:  # what is left is kept as its pieces where it has them
-                got = [p for c in got for p in (self.w.pieces(c) or [c])]
-            if loop.pid in self.dec.parts:  # what is left is taken apart where it can be
-                got = [p for c in got for p in (self.w.parts(c) or [c])]
+                # The original definition was already proved partial. Its
+                # replacement coordinates may be represented by their parts.
+                got = [p for c in got for p in (self.w.parts(c) or self.w.pieces(c) or [c])]
             out.extend(got)
         return _distinct(out)
 
@@ -583,124 +543,108 @@ class _Select:
 
     # -- supplement ---------------------------------------------------------------------
     def supplement(self, states: list[Candidate]):
-        """Add what the merges need until every state merges: ``(states, sol, trace)``.
+        """Search supplements by cardinality, accepting only complete recovery.
 
-        Nothing is added for a state that does not re-base: it is handed to the
-        check as it is (``trace["unrebased"]``), to be replaced first.
+        Rebase pieces are candidate definitions, not replacements. Their order
+        breaks ties, not proof obligations. Failure is not an impossibility proof.
         """
         w = self.w
-        required = [w.by_pid[m.pid] for m in w.chain.required]
-        for _ in range(MAX_SUPPLEMENTS):
+        targets = {a for c in states for a in atoms_in(c.state, w.R)}
+        for m in w.chain.required:
+            targets.update(atoms_in(w.by_pid[m.pid].state, w.R))
+
+        def recover(trial):
             trace: dict = {}
             try:
-                sol = solve_atoms(tuple(c.state for c in states), w.R, trace)
+                sts = tuple(c.state for c in trial)
+                sol = solve_atoms(sts, w.R, trace)
+                if sol is None or any(atoms_in(subst(a, sol), w.R) for a in targets):
+                    return None
+                signs = self._state_signs(trial)
+                if any(self._nonempty(c, k, trial, trace, signs) for k, c in enumerate(trial)):
+                    return None
+                if psi_inverts(sts, sol, w.R, w.A) is None:
+                    return None
+                # For the polynomial fragment, independently check uniqueness
+                # with two copies of B. Transcendentals use the constructive
+                # inverse proof above rather than treating opaque functions as
+                # injective by fiat.
+                if not any(isinstance(n, ir.Exp | ir.Log) for s in sts for n in walk(s)):
+                    if (
+                        smt.recovery_status(
+                            sts, tuple(sorted(targets)), w.R, tuple(w.state_sign(c) for c in trial)
+                        )
+                        != "unsat"
+                    ):
+                        return None
+                if any(merge_of(c.state, sol, w.R, w.A, w.B) is None for c in trial):
+                    return None
+                return sol, trace
             except Unsupported:
-                sol = None
-            if sol is None:
-                return states, None, trace
-            need = self._first_need(states, sol, required)
-            if need is None:
-                return states, sol, trace
-            owner, missing = need
-            if any(owner is c for c in states) and not self._rebases(owner):
-                return states, None, {"unrebased": owner}
-            new = self._what_to_add(owner, missing, states, sol)
-            if new is None:
-                return states, None, {"stuck": owner}
-            states = [*states, new]
-            what = ", ".join(w.render(a) for a in missing)
-            self.note(
-                "supplement", f"{new.name} = {w.render(new.struct)}", f"{owner.name} needs {what}"
+                return None
+
+        limit = self.budget if self.budget is not None else len(states) + MAX_SUPPLEMENTS
+        remaining = limit - len(states)
+        if remaining < 0:
+            self.search_failure = "preserving the original states exceeds the state budget"
+            return states, None, {}
+        got = recover(states)
+        if got is not None:
+            return states, *got
+        pool = []
+        if any(isinstance(a, ir.Card) for a in targets):
+            pool.append(w.count)
+        for owner in states:
+            coeffs = w.coefficients(owner)
+            pool.extend(
+                dataclasses.replace(c, name=f"{owner.name}.r{k}") for k, c in enumerate(coeffs)
             )
-        return states, None, {"stuck": states[-1]}
-
-    def _first_need(self, states, sol, required):
-        w = self.w
-        for c in states:
-            try:
-                left = leftover(c.state, sol, w.R, w.A, w.B)
-            except Unsupported:
-                left = []
-            if left:
-                return c, left
-        try:
-            outputs = state_outputs(tuple(c.state for c in states), sol, w.chain.axis)
-        except Unsupported:
-            return None
-        for m in required:
-            closed = subst_domain(m.state, {w.R: w.full})
-            try:
-                left = atoms_in(subst(closed, outputs), w.full)
-            except Unsupported:
-                continue
-            if left:
-                return m, [subst_domain(a, {w.full: w.R}) for a in left]
-        return None
-
-    def _what_to_add(self, owner: Candidate, missing, states, sol) -> Candidate | None:
-        w = self.w
-        have = {_scaled(c.state, _content(c.state)) for c in states}
-
-        def new(c: Candidate) -> bool:
-            if _scaled(c.state, _content(c.state)) in have:
-                return False
-            try:
-                return bool(atoms_in(subst(c.state, sol), w.R))  # not a function of the states
-            except Unsupported:
-                return True
-
-        if any(isinstance(a, ir.Card) for a in missing):
-            return w.count
-        for c in w.coefficients(owner):
-            if new(c):
-                taken = sum(1 for s in states if s.name.startswith(f"{owner.name}.r"))
-                return dataclasses.replace(c, name=f"{owner.name}.r{taken}")
-        for a in sorted(missing, key=_order):
+            pool.extend(w.pieces(owner))
+            pool.extend(w.parts(owner))
+        for a in sorted(targets, key=_order):
             if isinstance(a, ir.Reduce):
-                index = tuple(ir.idx(n) for n in sorted(a.free_idx))
-                c = Candidate(w.render(a), a.kind, "trivial", a, a, index, source=owner.name)
-                if new(c):
-                    return c
-        return None
-
-    # -- check -----------------------------------------------------------------------------
-    def faults(self, states, sol, trace) -> tuple[Candidate, list[_Fault]] | None:
-        """The first state that cannot be kept, with every reason it cannot."""
-        if sol is None:
-            k = trace.get("unsolvable")
-            if k is not None:
-                why = "no reduction it is made of can be read back from it"
-                return states[k], self._structure(states[k], why)
-            unrebased = trace.get("unrebased")
-            if unrebased is not None:
-                return unrebased, self._structure(unrebased, "it does not re-base")
-            stuck = trace.get("stuck")
-            if stuck is not None:
-                return stuck, self._structure(stuck, "its merge needs what no state provides")
-            return None
-        signs = self._state_signs(states)
-        for k, c in enumerate(states):
-            found = self._nonempty(c, k, states, trace, signs)
-            if found:
-                return c, found
-            if not self._rebases(c):
-                return c, self._structure(c, "it does not re-base")
-        return None
-
-    def _rebases(self, c: Candidate) -> bool:
-        """Does ``c`` merge by re-basing -- or need not: a value, or no context read?"""
-        w = self.w
-        return c.kind == "value" or not w.rebaser.contexts(c) or w.rebaser.decompose(c) is not None
-
-    def _structure(self, c: Candidate, why: str) -> list[_Fault]:
-        """``c`` cannot be merged; blamed on the contexts no correction leaves its
-        reduction for (``|x - mean|``), when there are any."""
-        w = self.w
-        neither = w.rebaser.modes(c)[1] if c.kind != "value" else ()
-        if neither:
-            names = ", ".join(w.name(p) for p in neither)
-            why = f"{why}: neither a shift nor a scale of {names} leaves its reduction"
-        return [_Fault("structure", frozenset(neither), why)]
+                pool.append(
+                    Candidate(
+                        w.render(a),
+                        a.kind,
+                        "trivial",
+                        a,
+                        a,
+                        tuple(ir.idx(n) for n in sorted(a.free_idx)),
+                    )
+                )
+        have = {_scaled(c.state, _content(c.state)) for c in states}
+        pool = [c for c in _distinct(pool) if _scaled(c.state, _content(c.state)) not in have]
+        tried = 0
+        for size in range(1, min(remaining, len(pool)) + 1):
+            for extra in combinations(pool, size):
+                tried += 1
+                if tried > 256:
+                    self.search_failure = (
+                        "candidate search limit reached; preservation is not disproven"
+                    )
+                    return states, None, {}
+                trial = [*states, *extra]
+                got = recover(trial)
+                if got is not None:
+                    named, counts = [], {}
+                    for c in extra:
+                        if c.origin == "closure":
+                            k = counts.get(c.source, 0)
+                            counts[c.source] = k + 1
+                            c = dataclasses.replace(c, name=f"{c.source}.r{k}")
+                        named.append(c)
+                        self.note(
+                            "supplement",
+                            f"{c.name} = {w.render(c.struct)}",
+                            "complete recovery and tuple merge proved on nonempty parts",
+                        )
+                    return [*states, *named], *got
+        self.search_failure = (
+            f"no verified preserving state set within {self.budget} states "
+            f"({tried} candidates checked; this is not an impossibility proof)"
+        )
+        return states, None, {}
 
     def _state_signs(self, states) -> domain.Signs:
         w = self.w
@@ -720,13 +664,29 @@ class _Select:
         seen: set[int] = set()
         while todo:
             struct, via = todo.pop(0)
-            for cond in domain.conditions(w.free(struct)):
+            free = w.free(struct)
+            checked = [free]
+            # A context-dependent divisor may still sit inside a max whose
+            # monotonicity has not been established. Inspect it before using
+            # structural failure as any reason to replace the state.
+            checked.extend(
+                n
+                for n in walk(free)
+                if isinstance(n, ir.Pow | ir.Log)
+                and any(isinstance(a, ir.Elem) and _plain(a.tensor) in w.by_pid for a in walk(n))
+            )
+            conditions = dict.fromkeys(c for e in checked for c in domain.conditions(e))
+            for cond in conditions:
                 if cond.holds(w.signs):
                     continue
                 inside = {_plain(n.tensor) for n in walk(cond.operand) if isinstance(n, ir.Elem)}
                 blamed = frozenset({via}) if via is not None else frozenset(inside & contexts)
                 proof = domain.witness(w.defined(cond.operand), w.R)
-                out.append(_Fault("domain", blamed, _why(w, cond, proof, via)))
+                demonstrated = smt.singleton_counterexample(
+                    w.defined(cond.operand), cond.kind, w.R, w.tensor_sign
+                )
+                kind = "domain" if demonstrated else "unknown_domain"
+                out.append(_Fault(kind, blamed, _why(w, cond, proof, via)))
             for n in walk(struct):
                 pid = _plain(n.tensor) if isinstance(n, ir.Elem) else None
                 if pid in w.by_pid and pid not in seen and w.by_pid[pid].kind == "value":
@@ -758,28 +718,13 @@ class _Select:
         if loop is None:
             return f"{c.name} cannot be kept and is no loop of the program ({faults[0].reason})"
         before = self.dec.key()
-        kinds = [f.kind for f in faults]
-        kind = next(k for k in ("domain", "divisor", "structure") if k in kinds)
-        if kind == "divisor":
-            kind = "domain"
-        chosen = [f for f in faults if f.kind == kind or {f.kind, kind} == {"domain", "divisor"}]
+        chosen = [f for f in faults if f.kind == "domain"]
+        if not chosen:
+            return f"preserving {c.name}: {faults[0].reason}; no proof authorizes replacement"
         reason = "; ".join(f.reason for f in chosen)
         every = frozenset(w.rebaser.contexts(loop))
-        if kind == "structure":
-            pieces = w.pieces(c) if loop.pid not in self.dec.split else []
-            if loop.pid not in self.dec.parts and w.parts(c):
-                self.dec.parts.add(loop.pid)
-                self.note("parts", c.name, reason)
-            elif pieces:
-                self.dec.split.add(loop.pid)
-                into = ", ".join(w.render(p.struct) for p in pieces)
-                self.note("split", f"{c.name} into {into}", f"{reason}; each of these does")
-            else:
-                blamed = frozenset().union(*(f.contexts for f in chosen))
-                self._hoist(loop, blamed or every, c, reason)
-        else:
-            blamed = frozenset().union(*(f.contexts for f in chosen))
-            self._hoist(loop, blamed or every, c, reason)
+        blamed = frozenset().union(*(f.contexts for f in chosen))
+        self._hoist(loop, blamed or every, c, reason)
         if self.dec.key() == before:  # nothing new: take every context out
             if not every or self.dec.hoisted.get(loop.pid) == every:
                 return f"{c.name} cannot be kept and nothing replaces it ({reason})"
@@ -805,6 +750,8 @@ class _Select:
 
     # -- the procedure --------------------------------------------------------------------------
     def run(self) -> Selection:
+        if not smt.available():
+            return Selection(failure="state proofs require z3-solver (install the superopt extra)")
         for loop in self.loops:
             self.note("keep", loop.name, "the result of a loop of the program")
         for _ in range(MAX_ROUNDS):
@@ -812,38 +759,33 @@ class _Select:
             states = self.base()
             if isinstance(states, str):
                 return Selection((), self.trace, None, states)
+            # Only a defect in the original definition can authorize a hoist.
+            signs = self._state_signs(states)
+            original_fault = next(
+                (
+                    (c, faults)
+                    for k, c in enumerate(states)
+                    if (faults := self._nonempty(c, k, states, {}, signs))
+                ),
+                None,
+            )
+            if original_fault is not None:
+                failure = self.act(*original_fault, states, None)
+                if failure is not None:
+                    return Selection(tuple(states), self.trace, None, failure)
+                continue
             states, sol, trace = self.supplement(states)
-            found = self.faults(states, sol, trace)
-            if found is None:
-                if sol is None:
-                    return Selection(tuple(states), self.trace, None, "the states cannot be solved")
-                return self.finish(states)
-            failure = self.act(found[0], found[1], states, sol)
-            if failure is not None:
-                return Selection(tuple(states), self.trace, None, failure)
+            if sol is None:
+                return Selection(tuple(states), self.trace, None, self.search_failure)
+            return self.finish(states)
         return Selection((), self.trace, None, "the selection did not settle")
 
     def finish(self, states: list[Candidate]) -> Selection:
-        """Drop the states nothing reads and derive the reducer of the rest."""
+        """Derive the proved tuple without deleting protected or verification coordinates."""
         w = self.w
         required = tuple(
             subst_domain(w.by_pid[m.pid].state, {w.R: w.full}) for m in w.chain.required
         )
-        while True:
-            sts = tuple(c.state for c in states)
-            sol = solve_atoms(sts, w.R)
-            outputs = state_outputs(sts, sol, w.chain.axis)
-            used: set[int] = set()
-            for t in required:
-                used |= state_refs(subst(t, outputs))
-            merges = [merge_of(s, sol, w.R, w.A, w.B) or ir.ZERO for s in sts]
-            keep = needed_states(merges, used)
-            if len(keep) == len(states):
-                break
-            for k, c in enumerate(states):
-                if k not in keep:
-                    self.note("drop", c.name, "nothing reads it once the others are kept")
-            states = [c for k, c in enumerate(states) if k in keep]
         sts = tuple(c.state for c in states)
         sol = solve_atoms(sts, w.R)
         printer = None if sol is None else Printer(w.rebaser, list(states), states, sol)
@@ -852,6 +794,7 @@ class _Select:
             required,
             w.chain.axis,
             kept=None if printer is None else tuple(printer.kept(c) for c in states),
+            preserve=True,
         )
         if spec is None:
             why = "no reducer with its laws proven is derived from these states"
@@ -877,10 +820,21 @@ class _Select:
         w = self.w
         signs = self._state_signs(states)
         for k, m in enumerate(spec.merge_code):
+            if any(isinstance(n, ir.IfZero) for n in walk(m)):
+                env = {
+                    ir.state_var(side, j): subst_domain(c.state, {w.R: dom})
+                    for side, dom in (("a", w.A), ("b", w.B))
+                    for j, c in enumerate(states)
+                }
+                if smt.defined(ir.raw_subst(m, env)):
+                    continue
+                return f"the guarded merge of {states[k].name} has an unproved domain"
             # Inspect the formula as printed: expanding squared corrections
             # can hide the positivity needed for a retained scale context.
             for cond in domain.conditions(m):
-                if not cond.holds(signs):
+                if not cond.holds(signs) and not smt.condition_holds(
+                    cond.operand, cond.kind, tuple(signs.states.items())
+                ):
                     return (
                         f"the merge of {states[k].name} is not shown to be defined: "
                         f"{_condition_text(cond)} {w.render(cond.operand)}"
@@ -931,10 +885,12 @@ class _Select:
         return False
 
 
-def select(chain: Chain, members: list[Candidate], signs: domain.TeSigns) -> Selection:
+def select(
+    chain: Chain, members: list[Candidate], signs: domain.TeSigns, max_states: int | None = None
+) -> Selection:
     """The states of a single pass over ``chain`` and the reducer they give (see the
     module docstring); ``members`` are its members on a part (:func:`members_of`)."""
-    return _Select(_Chain(chain, members, signs)).run()
+    return _Select(_Chain(chain, members, signs), max_states).run()
 
 
 # ---------------------------------------------------------------------------

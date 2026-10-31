@@ -41,7 +41,7 @@ from ..symbolic import ir, sympy_bridge
 from ..symbolic.canonicalize import Unsupported, recanonicalize, subst, walk
 
 MAX_CASES = 64  # cases a proof may split into
-_RANK = {"canonical": 0, "case-split": 1, "sympy": 2}
+_RANK = {"canonical": 0, "case-split": 1, "sympy": 2, "smt": 3}
 
 
 def worst(*methods: str) -> str:
@@ -60,6 +60,10 @@ def _open_max(e: ir.Node) -> ir.Max | None:
 def prove_equal(lhs: ir.SymExpr, rhs: ir.SymExpr) -> str | None:
     """How ``lhs == rhs`` is proven (``"canonical"``, ``"case-split"`` or
     ``"sympy"``), or ``None`` when it is not."""
+    if any(isinstance(n, ir.IfZero) for e in (lhs, rhs) for n in walk(e)):
+        from . import smt
+
+        return "smt" if smt.equal(lhs, rhs) else None
     budget = [MAX_CASES]
     return _prove(lhs, rhs, budget)
 

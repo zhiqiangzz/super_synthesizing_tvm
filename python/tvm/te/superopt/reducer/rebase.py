@@ -66,7 +66,6 @@ from ..symbolic import ir
 from ..symbolic.canonicalize import (
     Unsupported,
     contains_node,
-    factor_view,
     instantiate,
     is_constant,
     map_elems,
@@ -414,6 +413,9 @@ class Printer:
             for side, dom in rebaser.sides.items():
                 value = subst_domain(swap_sides(expr, "a", side), {rebaser.R: dom})
                 self.atom_map[subst_domain(atom, {rebaser.R: dom})] = value
+        for k, cand in enumerate(self.chosen):
+            for side, dom in rebaser.sides.items():
+                self.atom_map[subst_domain(cand.state, {rebaser.R: dom})] = ir.state_var(side, k)
         self.merged: dict[int, ir.SymExpr | None] = {}  # id(candidate) -> raw merged value
 
     # -- values of a candidate on one side / merged ------------------------------
@@ -475,7 +477,7 @@ class Printer:
         return ir.raw_subst(cand.struct, mapping)
 
     def _reduction(self, cand: Candidate) -> ir.SymExpr | None:
-        d = self.rb.decompose(cand)
+        d = self.rb.rebased(cand)
         return None if d is None else self._evaluate(d)
 
     def _evaluate(self, d: Decomposition) -> ir.SymExpr | None:
@@ -505,22 +507,6 @@ class Printer:
         v = subst(self.rb.on_side(t.coeff, t.side), self.atom_map)
         if contains_node(v, _is_partial):
             return None
-        if not _monomial(v):
-            # A coefficient may also use the program's own context on this
-            # non-empty side, e.g. -sum(g)/sigma. Recognize those factors
-            # rather than requiring sigma to be hoisted or stored separately.
-            context_bases = set()
-            for context in self.rb.by_pid.values():
-                if context.kind == "value":
-                    value = self.side_value(context, t.side)
-                    if value is not None:
-                        context_bases.update(factor_view(value)[1])
-            factors = v.args if isinstance(v, ir.Mul) else (v,)
-            if any(
-                not _monomial(f) and (f.base if isinstance(f, ir.Pow) else f) not in context_bases
-                for f in factors
-            ):
-                return None
         return v
 
     def _print_key(self, key: ir.SymExpr, corr) -> ir.SymExpr:
@@ -599,19 +585,6 @@ class Printer:
         return None
 
 
-def _monomial(v: ir.SymExpr) -> bool:
-    """A constant times a product of positive integer powers of state variables."""
-    factors = v.args if isinstance(v, ir.Mul) else (v,)
-    for f in factors:
-        if isinstance(f, ir.Const | ir.StateVar):
-            continue
-        if isinstance(f, ir.Pow) and isinstance(f.base, ir.StateVar):
-            if f.exponent.denominator == 1 and f.exponent > 0:
-                continue
-        return False
-    return True
-
-
 def _raw_product(key: ir.SymExpr, value: ir.SymExpr) -> ir.SymExpr:
     if key is ir.ONE:
         return value
@@ -672,7 +645,17 @@ def printed_merges(printer: Printer, merge) -> tuple[ir.SymExpr, ...] | None:
         return None
     for p, e, m, c in zip(prints, expanded, merge, closed):
         if not (proves(p, m) if reads_merged(m) else proves(e, c)):
-            return None
+            # Guarded recovery is an identity on reachable states, not on
+            # arbitrary independent scalar slots (q=0 implies vv=0).
+            from . import smt
+
+            env = {
+                ir.state_var(side, k): subst_domain(s.state, {printer.rb.R: dom})
+                for side, dom in printer.rb.sides.items()
+                for k, s in enumerate(printer.chosen)
+            }
+            if not smt.equal(ir.raw_subst(e, env), ir.raw_subst(c, env)):
+                return None
     return tuple(expanded)
 
 
