@@ -91,7 +91,8 @@ class Candidate:
     name: str
     # "sum" / "max" / "min": merged by re-basing; "value": a function of other candidates
     kind: str
-    origin: str  # "member", "context", "extent", "part", "inner", "piece", "closure" or "hoist"
+    # "member", "context", "extent", "piece", "closure", "synthesized", "hoist"
+    origin: str
     state: ir.SymExpr  # canonical, down to the boundary tensors
     struct: ir.SymExpr  # the same with reads of chain members kept (pinned) as written
     index: tuple[ir.IndexExpr, ...]  # chain coordinates of its own axes
@@ -627,6 +628,69 @@ def proves(printed: ir.SymExpr, canonical: ir.SymExpr) -> bool:
     return verify.proves(printed, canonical) is not None
 
 
+def _factor_mean_corrections(expr, chosen):
+    """Factor rational corrections in mean coordinates, then verify the rewrite."""
+    from fractions import Fraction
+
+    import sympy
+
+    from ..symbolic import sympy_bridge
+
+    counts = [k for k, c in enumerate(chosen) if isinstance(c.state, ir.Card)]
+    if not counts:
+        return expr
+    symbols = {}
+    try:
+        original = sympy_bridge.to_sympy(expr, symbols)
+        replacements, mean_slots, back = {}, {}, {v: k for k, v in symbols.items()}
+        for side in "ab":
+            count = ir.state_var(side, counts[0])
+            ns = sympy_bridge.to_sympy(count, symbols)
+            back[ns] = count
+            for k, c in enumerate(chosen):
+                if not isinstance(c.state, ir.Reduce) or c.state.kind != "sum":
+                    continue
+                node = ir.state_var(side, k)
+                symbol = sympy_bridge.to_sympy(node, symbols)
+                mean = sympy.Symbol(f"mean_{side}_{k}", real=True)
+                replacements[symbol] = ns * mean
+                mean_slots[mean] = k
+                back[mean] = ir.raw_mul((node, ir.raw_pow(count, -1)))
+                back[symbol] = node
+        # Leave direct state additions outside the correction's factorization.
+        direct = sum(t for t in sympy.Add.make_args(original) if t.is_Symbol)
+        with sympy_bridge._limit(2):
+            correction = (original - direct).xreplace(replacements)
+            means = sorted(correction.free_symbols & mean_slots.keys(), key=str)
+            # Only bilinear corrections in two distinct additive coordinates.
+            # Factoring higher central moments expands stable small shifts into
+            # differences of large powers and is disastrous in floating point.
+            if len({mean_slots[m] for m in means}) != 2:
+                return expr
+            polynomial = sympy.Poly(correction, *means)
+            if polynomial.total_degree() != 2 or any(polynomial.degree(m) > 1 for m in means):
+                return expr
+            factored = sympy.factor(correction) + direct
+
+        def convert(e):
+            if e in back:
+                return back[e]
+            if isinstance(e, sympy.Rational):
+                return ir.const(Fraction(int(e.p), int(e.q)))
+            if isinstance(e, sympy.Add):
+                return ir.raw_add(tuple(convert(a) for a in e.args))
+            if isinstance(e, sympy.Mul):
+                return ir.raw_mul(tuple(convert(a) for a in e.args))
+            if isinstance(e, sympy.Pow) and e.exp.is_Rational:
+                return ir.raw_pow(convert(e.base), Fraction(int(e.exp.p), int(e.exp.q)))
+            raise Unsupported("not a rational correction")
+
+        proposal = convert(factored)
+        return proposal if proves(proposal, recanonicalize(expr)) else expr
+    except (Unsupported, sympy_bridge._TimeUp, sympy.PolynomialError):
+        return expr
+
+
 def printed_merges(printer: Printer, merge) -> tuple[ir.SymExpr, ...] | None:
     """The merge of every chosen state as it should be evaluated, if all of them
     print and are proven equal to the canonical ``merge``.
@@ -636,9 +700,9 @@ def printed_merges(printer: Printer, merge) -> tuple[ir.SymExpr, ...] | None:
     there they are equal once those are filled in -- and over the two sides
     alone where it does not.
     """
-    prints = [printer.print(c) for c in printer.chosen]
-    if any(p is None for p in prints):
-        return None
+    # A joint coordinate may have no special rebase spelling. Keep its derived
+    # merge without discarding stable spellings for the other tuple slots.
+    prints = [m if (p := printer.print(c)) is None else p for c, m in zip(printer.chosen, merge)]
     expanded = _expand(prints)
     closed = closed_merges(merge)
     if expanded is None or closed is None:
@@ -656,7 +720,7 @@ def printed_merges(printer: Printer, merge) -> tuple[ir.SymExpr, ...] | None:
             }
             if not smt.equal(ir.raw_subst(e, env), ir.raw_subst(c, env)):
                 return None
-    return tuple(expanded)
+    return tuple(_factor_mean_corrections(e, printer.chosen) for e in expanded)
 
 
 __all__ = [

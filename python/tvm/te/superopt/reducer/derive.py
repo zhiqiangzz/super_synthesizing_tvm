@@ -145,7 +145,7 @@ def state_vars(e: ir.Node) -> set[ir.StateVar]:
 class Solved:
     """How an atom was solved for: from which state, dividing by what."""
 
-    state: int
+    state: int  # -1 for a jointly solved, domain-checked nonlinear system
     divisors: tuple[ir.SymExpr, ...] = ()  # over the state values and other atoms
 
 
@@ -202,6 +202,13 @@ def solve_atoms(
                 done.add(k)
                 break
         else:
+            from . import inverse
+
+            nonlinear = inverse.solve(states, R)
+            if nonlinear is not None:
+                if trace is not None:
+                    trace.update({atom: Solved(-1) for atom in nonlinear})
+                return nonlinear
             if trace is not None:
                 trace["unsolvable"] = k
             return None
@@ -362,7 +369,7 @@ def needed_states(merge, refs: set[int]) -> set[int]:
     return needed
 
 
-def invariant_holds(states, merge, R, A, B) -> str | None:
+def invariant_holds(states, merge, R, A, B, sol=None) -> str | None:
     """``M(I(A), I(B)) = I(A u B)`` as an identity in the reductions over ``A`` and
     ``B``: how it is proven, or ``None``.
 
@@ -379,8 +386,20 @@ def invariant_holds(states, merge, R, A, B) -> str | None:
         inv_map[ir.state_var("a", k)] = subst_domain(s, {R: A})
         inv_map[ir.state_var("b", k)] = subst_domain(s, {R: B})
     method = "canonical"
+    lemmas = {}
+    if sol is not None:
+        # Prove the local inverse once, then rewrite its occurrences by
+        # congruence. Expanding both sides' roots and branches in a single
+        # nonlinear SMT query needlessly hides this compositional proof.
+        how = psi_inverts(states, sol, R, A)
+        if how is not None:
+            method = how
+            for atom, expr in sol.items():
+                for side, part in (("a", A), ("b", B)):
+                    key = subst_domain(swap_sides(expr, "a", side), {R: part})
+                    lemmas[key] = subst_domain(atom, {R: part})
     for k, s in enumerate(states):
-        lhs = subst(merge[k], inv_map)
+        lhs = subst(subst(merge[k], lemmas), inv_map)
         rhs = subst_domain(s, {R: ir.dunion(A, B)})
         how = verify.prove_equal(lhs, rhs)
         if how is None:
@@ -525,7 +544,7 @@ def derive(
     if not preserve and needed_states(merge, used) != set(range(n)):
         count(stats, "derive:irrelevant_state")
         return None
-    first = invariant_holds(states, merge, R, A, B)
+    first = invariant_holds(states, merge, R, A, B, sol)
     if first is None:
         count(stats, "derive:invariant_failed")
         return None
@@ -538,6 +557,15 @@ def derive(
     proof = first
     try:
         leaves = tuple(singleton(s, R) for s in states)
+        # Conditional singleton residuals may be identically zero even though
+        # polynomial normalization cannot remove the guarded inverse. Keep the
+        # proof, rather than evaluating cancellation-prone products at runtime.
+        leaves = tuple(
+            ir.ZERO
+            if any(isinstance(n, ir.IfZero) for n in walk(e)) and smt.equal(e, ir.ZERO)
+            else e
+            for e in leaves
+        )
     except Unsupported:  # a state not defined on a single element (0 / 0)
         count(stats, "derive:undefined_leaf")
         return None

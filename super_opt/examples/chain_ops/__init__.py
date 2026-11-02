@@ -106,6 +106,7 @@ def showcase() -> list[Operator]:
 
 # importing the operator modules is what fills the registry
 from . import (
+    advanced,
     attention,
     backward,
     extremes,

@@ -269,6 +269,27 @@ def cov_matrix_reference(x):
     return (d @ d.T,)
 
 
+def cov_matrix_fused():
+    from .advanced import _fold
+
+    X = _rows()
+    n, m = X.shape
+    one, zero = tir.const(1.0, DTYPE), tir.const(0.0, DTYPE)
+
+    def merge(a, b):
+        count = a[0] + b[0]
+        dx, dy = b[1] - a[1], b[2] - a[2]
+        return (
+            count,
+            a[1] + dx * b[0] / count,
+            a[2] + dy * b[0] / count,
+            a[3] + b[3] + dx * dy * a[0] * b[0] / count,
+        )
+
+    states = _fold((n, n), m, lambda a, b, j: (one, X[a, j], X[b, j], zero), merge, "cov_hand")
+    return [X], [states[3]]
+
+
 register(
     Operator(
         "variance",
@@ -354,12 +375,11 @@ register(
 register(
     Operator(
         "cov_matrix",
-        "negative",
+        "closure",
         "Σ_j (x_aj - mean_a)(x_bj - mean_b)",
         cov_matrix_unfused,
         cov_matrix_reference,
-        fusible=False,
-        reason="read at two different indices of C",
-        judged=None,
+        cov_matrix_fused,
+        states=4,
     )
 )

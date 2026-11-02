@@ -307,12 +307,11 @@ def test_layernorm_backward_keeps_the_scale_and_total():
 
 
 def test_a_maximum_is_not_replaced_when_recovery_is_unproved():
-    for name in ("max_abs_deviation", "peak_power", "peak_to_geomean"):
-        sel = _select(name)
-        assert sel.solution is None
-        assert "not an impossibility proof" in sel.failure
-        assert all(c.origin == "member" for c in sel.states)
-        assert not _steps(sel, "hoist") and not _steps(sel, "parts")
+    sel = _select("peak_to_geomean")
+    assert sel.solution is None
+    assert "not an impossibility proof" in sel.failure
+    assert all(c.origin == "member" for c in sel.states)
+    assert not _steps(sel, "hoist") and not _steps(sel, "parts")
 
 
 def _energy():
@@ -491,8 +490,6 @@ def test_every_state_comes_out_of_the_program():
         "member",
         "context",
         "extent",
-        "part",
-        "inner",
         "piece",
         "closure",
         "hoist",
@@ -504,7 +501,7 @@ def test_every_state_comes_out_of_the_program():
         loops = {m.name for m in _chain(name).members}
         for c in sel.states:
             assert c.origin in origins, (name, c.name)
-            if c.origin in ("part", "inner", "piece", "closure", "hoist"):
+            if c.origin in ("piece", "closure", "hoist"):
                 assert c.source.split(".")[0] in loops, (name, c.name)
 
 

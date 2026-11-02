@@ -26,9 +26,6 @@ from tvm.te.superopt import AccuracyConfig, fuse, judge
 # Legacy examples have an unconstrained construction, but the current finite
 # inverse search cannot yet certify a representation retaining these outputs.
 UNPROVED_PRESERVATION = {
-    "max_abs_deviation",
-    "peak_power",
-    "papr",
     "peak_to_geomean",
     "monotone_sum",
 }
@@ -82,7 +79,8 @@ def test_operator_outside_the_method(name):
     res = fuse(outs, ins, max_states=op.max_states)
     assert not res.fused
     if name == "scaled_norm":
-        assert "no verified preserving state set" in res.summary(), res.summary()
+        assert "REJECTED" in res.summary() and "huge" in res.summary(), res.summary()
+        assert all(c.selection.solution is not None for c in res.chains)
     else:
         assert op.reason in res.summary(), res.summary()
     # the program comes back untouched

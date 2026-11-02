@@ -16,11 +16,12 @@
 # under the License.
 """Real-domain proof obligations for state recovery, discharged by Z3.
 
-Reductions are abstract values, not a bounded unrolling of the input. Two
-finite-sum laws lift solver-proven pointwise facts to every nonempty segment:
+Reductions are abstract values, not a bounded unrolling of the input. Generic
+finite-reduction laws lift solver-proven pointwise facts to every nonempty segment:
 nonnegative summands have a nonnegative sum; if a nonnegative sum is zero,
-all its summands are zero. The solver, rather than an operator template,
-decides which bodies are nonnegative and which zero implications hold.
+all its summands are zero; a pointwise upper bound bounds the sum by the count
+times its maximum. The solver, rather than an operator template, decides
+which body inequalities and zero implications hold.
 
 The abstraction overapproximates reachable states. UNSAT proves an obligation;
 SAT is only a possible counterexample, and UNKNOWN is never a disproof.
@@ -34,7 +35,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from ..symbolic import ir
-from ..symbolic.canonicalize import Unsupported, walk
+from ..symbolic.canonicalize import Unsupported, mk_card, mk_mul, mk_sub, walk
 
 try:
     import z3
@@ -139,6 +140,19 @@ class Encoding:
             elif body_fact(r.body, "nonnegative"):
                 self.constraints.append(v >= 0)
         sums = [r for r in reds if r.kind == "sum"]
+        # Pointwise f <= g implies sum(f) <= |R| max(g). In particular,
+        # applying this also to -f proves both bounds on a segment's mean.
+        # These are finite-reduction laws; the body comparison is solver-proved.
+        for m in (r for r in reds if r.kind == "max"):
+            mv, _ = self.value(m)
+            count, _ = self.value(mk_card(m.domain))
+            for s in sums:
+                if s.domain is not m.domain or s.level != m.level:
+                    continue
+                sv, _ = self.value(s)
+                for sign in (1, -1):
+                    if body_fact(mk_sub(m.body, mk_mul(ir.const(sign), s.body)), "nonnegative"):
+                        self.constraints.append(sign * sv <= count * mv)
         for a in sums:
             if not body_fact(a.body, "nonnegative"):
                 continue
@@ -206,6 +220,16 @@ def defined(e):
         return False
 
 
+def source_defined(e):
+    """Prove source domains, including bodies hidden by the reduction abstraction.
+
+    ``defined`` treats reduction results as scalar coordinates. That is suitable
+    for inverse proofs, but source validation must also establish every summand's
+    domain. Checking all bodies is conservative for branch-local reductions.
+    """
+    return defined(e) and all(defined(n.body) for n in walk(e) if isinstance(n, ir.Reduce))
+
+
 @lru_cache(maxsize=4096)
 def condition_holds(operand, kind, signs=()):
     if z3 is None:
@@ -235,6 +259,31 @@ def equal(lhs, rhs):
         b, db = enc.value(rhs)
         enc.facts((lhs, rhs))
         return enc.check(z3.Not(z3.And(da, db, a == b))) == z3.unsat
+    except Unsupported:
+        return False
+
+
+def guarded_inverse(states, solution, guards):
+    """Prove an inverse on the region where all its nonnegative guards hold."""
+    if z3 is None:
+        return False
+    env = {ir.state_var("a", k): s for k, s in enumerate(states)}
+    try:
+        enc = Encoding()
+        conditions, claims, exprs = [], [], list(states)
+        for guard in guards:
+            e = ir.raw_subst(guard, env)
+            g, dg = enc.value(e)
+            conditions.append(z3.And(dg, g >= 0))
+            exprs.append(e)
+        for atom, inverse in solution.items():
+            e = ir.raw_subst(inverse, env)
+            v, dv = enc.value(e)
+            a, da = enc.value(atom)
+            claims.append(z3.And(dv, da, v == a))
+            exprs.extend((e, atom))
+        enc.facts(exprs)
+        return enc.check(z3.And(*conditions, z3.Not(z3.And(*claims)))) == z3.unsat
     except Unsupported:
         return False
 
@@ -285,6 +334,38 @@ def singleton_counterexample(operand, kind, domain, tensor_sign):
         return False
 
 
+def _recovery_query(states, targets, domain, state_signs=(), basis=()):
+    """Build the same overapproximation for uniqueness and counterexample queries."""
+    from ..symbolic.canonicalize import subst_domain
+
+    other = ir.dsym(domain.axis, "recovery_other")
+
+    def copy(e):
+        return subst_domain(e, {domain: other})
+
+    enc = Encoding()
+    equal_states, different, valid = [], [], []
+    exprs = (*states, *targets)
+    for i, e in enumerate(exprs):
+        a, da = enc.value(e)
+        b, db = enc.value(copy(e))
+        valid.extend((da, db))
+        if i < len(state_signs) and state_signs[i]:
+            sign = state_signs[i]
+            valid.extend((a > 0, b > 0) if sign == 2 else (a >= 0, b >= 0))
+        (equal_states if i < len(states) else different).append(
+            a == b if i < len(states) else a != b
+        )
+    differences = []
+    for e in basis:
+        a, da = enc.value(e)
+        b, db = enc.value(copy(e))
+        valid.extend((da, db))
+        differences.append(a - b)
+    enc.facts((*exprs, *basis, *map(copy, (*exprs, *basis))))
+    return enc, z3.And(*valid, *equal_states, z3.Or(*different)), differences
+
+
 @lru_cache(maxsize=1024)
 def recovery_status(states, targets, domain, state_signs=()):
     """Two copies: equal A and unequal B. Only UNSAT proves unique recovery.
@@ -295,28 +376,31 @@ def recovery_status(states, targets, domain, state_signs=()):
     """
     if z3 is None:
         return "unknown"
-    from ..symbolic.canonicalize import subst_domain
-
-    other = ir.dsym(domain.axis, "recovery_other")
-
-    def copy(e):
-        return subst_domain(e, {domain: other})
-
     try:
-        enc = Encoding()
-        equal_states, different, valid = [], [], []
-        exprs = (*states, *targets)
-        for i, e in enumerate(exprs):
-            a, da = enc.value(e)
-            b, db = enc.value(copy(e))
-            valid.extend((da, db))
-            if i < len(state_signs) and state_signs[i]:
-                sign = state_signs[i]
-                valid.extend((a > 0, b > 0) if sign == 2 else (a >= 0, b >= 0))
-            (equal_states if i < len(states) else different).append(
-                a == b if i < len(states) else a != b
-            )
-        enc.facts((*exprs, *map(copy, exprs)))
-        return str(enc.check(z3.And(*valid, *equal_states, z3.Or(*different))))
+        enc, condition, _ = _recovery_query(states, targets, domain, state_signs)
+        return str(enc.check(condition))
     except Unsupported:
         return "unknown"
+
+
+def recovery_collision(states, targets, domain, basis):
+    """Return exact basis differences at an abstract collision for CEGIS.
+
+    A SAT model is a search counterexample, not proof of an actual input
+    collision. No approximate decimal conversion is used for algebraic values.
+    The independent recovery/domain/merge checker still decides acceptance.
+    """
+    if z3 is None:
+        return "unknown", ()
+    try:
+        enc, condition, differences = _recovery_query(states, targets, domain, basis=basis)
+        solver = z3.Solver()
+        solver.set(timeout=TIMEOUT_MS)
+        solver.add(*enc.constraints, condition)
+        status = solver.check()
+        if status != z3.sat:
+            return str(status), ()
+        model = solver.model()
+        return "sat", tuple(model.eval(d, model_completion=True) for d in differences)
+    except Unsupported:
+        return "unknown", ()

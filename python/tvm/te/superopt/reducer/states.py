@@ -18,10 +18,12 @@
 
 The context-free verification coordinates are B. The maintained tuple A starts
 with the original program's reductions. Candidates for additional coordinates
-come from B and from rebase coefficients/pieces; a finite search by cardinality
-accepts only complete A -> B recovery, a defined inverse, and tuple merge
-closure. The upper bound from the theoretical construction is the default
-budget, not a promise that a preserving representation exists at that size.
+first come from rebase coefficients/pieces. If that route cannot prove a
+reducer, Z3 CEGIS synthesizes bounded linear combinations of verification
+atoms, guided by recovery collisions. Both routes require complete A -> B
+recovery, a defined inverse, and a proved, defined tuple merge. The upper bound
+from the theoretical construction is the default budget, not a promise that a
+preserving representation exists at that size.
 
 Z3 verifies zero-branch recovery using solver-proven facts about summands (see
 smt). Symbolic normalization and SymPy prove the remaining algebraic identities.
@@ -116,6 +118,17 @@ class Selection:
     steps: list[Step] = dataclasses.field(default_factory=list)
     solution: Solution | None = None
     failure: str = ""
+    route: str = ""
+    search: tuple[SearchAttempt, ...] = ()
+
+
+@dataclasses.dataclass(frozen=True)
+class SearchAttempt:
+    stage: str
+    status: str
+    candidates: int = 0
+    counterexamples: int = 0
+    detail: str = ""
 
 
 def members_of(chain: Chain, count: bool | None = None) -> list[Candidate]:
@@ -309,37 +322,6 @@ class _Chain:
             )
         return out
 
-    def parts(self, cand: Candidate) -> list[Candidate]:
-        """The reductions ``cand`` is the largest (or smallest) of, or a growing function of."""
-        e, inner = cand.struct, False
-        if cand.kind in ("max", "min"):
-            e, inner = _unwrapped(e)
-        if isinstance(e, ir.Max):
-            args = e.args
-        elif inner and isinstance(e, ir.Reduce):
-            args = (e,)
-        else:
-            return []
-        out = []
-        for struct in sorted(args, key=_order):
-            if not contains_node(struct, lambda x: isinstance(x, ir.Reduce)):
-                continue
-            state = self.defined(struct)
-            by = _content(state)
-            out.append(
-                Candidate(
-                    f"{cand.name}.m{len(out)}",
-                    cand.kind,
-                    "inner" if inner else "part",
-                    _scaled(state, by),
-                    _scaled(struct, by),
-                    cand.index,
-                    depth=cand.depth,
-                    source=cand.name,
-                )
-            )
-        return out
-
     def pieces(self, cand: Candidate) -> list[Candidate]:
         """The parts of a sum that re-base each by itself where the sum does not."""
         terms = self.rebaser.split(cand)
@@ -493,6 +475,9 @@ class _Select:
             else min(bound if bound is not None else max_states, max_states)
         )
         self.search_failure = ""
+        self.search: list[SearchAttempt] = []
+        self.route = ""
+        self.prepared: Selection | None = None
 
     def note(self, action: str, subject: str, reason: str) -> None:
         """Record a step. Supplements belong to the round that adds them: a later
@@ -517,8 +502,8 @@ class _Select:
                 if got is None:
                     return f"the contexts of {loop.name} do not leave its reduction"
                 # The original definition was already proved partial. Its
-                # replacement coordinates may be represented by their parts.
-                got = [p for c in got for p in (self.w.parts(c) or self.w.pieces(c) or [c])]
+                # replacement coordinates may be represented by their additive pieces.
+                got = [p for c in got for p in (self.w.pieces(c) or [c])]
             out.extend(got)
         return _distinct(out)
 
@@ -543,10 +528,10 @@ class _Select:
 
     # -- supplement ---------------------------------------------------------------------
     def supplement(self, states: list[Candidate]):
-        """Search supplements by cardinality, accepting only complete recovery.
+        """Try algebraic rebase coefficients, then solver-driven CEGIS.
 
-        Rebase pieces are candidate definitions, not replacements. Their order
-        breaks ties, not proof obligations. Failure is not an impossibility proof.
+        Both routes require a complete safe inverse and a verified reducer.
+        Only the protected originals survive a change of search route.
         """
         w = self.w
         targets = {a for c in states for a in atoms_in(c.state, w.R)}
@@ -579,6 +564,10 @@ class _Select:
                         return None
                 if any(merge_of(c.state, sol, w.R, w.A, w.B) is None for c in trial):
                     return None
+                prepared = self.finish(trial)
+                if prepared.solution is None:
+                    return None
+                self.prepared = prepared
                 return sol, trace
             except Unsupported:
                 return None
@@ -589,7 +578,9 @@ class _Select:
             self.search_failure = "preserving the original states exceeds the state budget"
             return states, None, {}
         got = recover(states)
+        self.search.append(SearchAttempt("original", "proved" if got else "unproved", 1))
         if got is not None:
+            self.route = "original"
             return states, *got
         pool = []
         if any(isinstance(a, ir.Card) for a in targets):
@@ -600,49 +591,109 @@ class _Select:
                 dataclasses.replace(c, name=f"{owner.name}.r{k}") for k, c in enumerate(coeffs)
             )
             pool.extend(w.pieces(owner))
-            pool.extend(w.parts(owner))
-        for a in sorted(targets, key=_order):
-            if isinstance(a, ir.Reduce):
-                pool.append(
-                    Candidate(
-                        w.render(a),
-                        a.kind,
-                        "trivial",
-                        a,
-                        a,
-                        tuple(ir.idx(n) for n in sorted(a.free_idx)),
-                    )
-                )
         have = {_scaled(c.state, _content(c.state)) for c in states}
         pool = [c for c in _distinct(pool) if _scaled(c.state, _content(c.state)) not in have]
+
+        def accepted(extra, got):
+            named, counts = [], {}
+            for c in extra:
+                if c.origin == "closure":
+                    k = counts.get(c.source, 0)
+                    counts[c.source] = k + 1
+                    c = dataclasses.replace(c, name=f"{c.source}.r{k}")
+                named.append(c)
+                self.note(
+                    "supplement",
+                    f"{c.name} = {w.render(c.struct)}",
+                    "complete recovery and tuple merge proved on nonempty parts",
+                )
+            chosen = [*states, *named]
+            self.prepared = dataclasses.replace(
+                self.prepared,
+                states=tuple(chosen),
+                steps=self.trace,
+                solution=Solution(self.prepared.solution.spec, tuple(chosen)),
+            )
+            return chosen, *got
+
+        # A whole rebase closure is a useful proposal when several correction
+        # rates must be supplied together. It still passes every recovery proof.
+        closure = [c for c in pool if c.origin in {"extent", "closure"}]
+        if closure and len(closure) <= remaining:
+            got = recover([*states, *closure])
+            if got is not None:
+                self.route = "rebase"
+                self.search.append(SearchAttempt("rebase", "proved", 1, detail="whole closure"))
+                return accepted(closure, got)
         tried = 0
         for size in range(1, min(remaining, len(pool)) + 1):
             for extra in combinations(pool, size):
                 tried += 1
                 if tried > 256:
-                    self.search_failure = (
-                        "candidate search limit reached; preservation is not disproven"
-                    )
-                    return states, None, {}
+                    break
                 trial = [*states, *extra]
                 got = recover(trial)
                 if got is not None:
-                    named, counts = [], {}
-                    for c in extra:
-                        if c.origin == "closure":
-                            k = counts.get(c.source, 0)
-                            counts[c.source] = k + 1
-                            c = dataclasses.replace(c, name=f"{c.source}.r{k}")
-                        named.append(c)
-                        self.note(
-                            "supplement",
-                            f"{c.name} = {w.render(c.struct)}",
-                            "complete recovery and tuple merge proved on nonempty parts",
-                        )
-                    return [*states, *named], *got
+                    self.route = "rebase"
+                    self.search.append(SearchAttempt("rebase", "proved", tried))
+                    return accepted(extra, got)
+            if tried > 256:
+                break
+        self.search.append(
+            SearchAttempt(
+                "rebase",
+                "limit" if tried > 256 else "unproved",
+                min(tried, 256),
+                detail="no proved rebase-coefficient tuple within budget",
+            )
+        )
+        from .synthesis import synthesize
+
+        def candidates(definitions):
+            return [
+                Candidate(
+                    "count" if isinstance(e, ir.Card) else f"synth{k}",
+                    "sum"
+                    if isinstance(e, ir.Card)
+                    else e.kind
+                    if isinstance(e, ir.Reduce)
+                    else "value",
+                    "extent" if isinstance(e, ir.Card) else "synthesized",
+                    e,
+                    e,
+                    tuple(ir.idx(n) for n in sorted(e.free_idx)),
+                )
+                for k, e in enumerate(sorted(definitions, key=_order))
+            ]
+
+        def verify_synthesis(definitions):
+            extra = candidates(definitions)
+            got = recover([*states, *extra])
+            return None if got is None else (extra, got)
+
+        result = synthesize(
+            tuple(c.state for c in states),
+            tuple(sorted(targets, key=_order)),
+            w.R,
+            remaining,
+            verify_synthesis,
+        )
+        self.search.append(
+            SearchAttempt(
+                "cegis",
+                result.status,
+                result.candidates,
+                result.counterexamples,
+                result.detail,
+            )
+        )
+        if result.status == "proved":
+            self.route = "cegis"
+            extra, got = result.payload
+            return accepted(extra, got)
         self.search_failure = (
-            f"no verified preserving state set within {self.budget} states "
-            f"({tried} candidates checked; this is not an impossibility proof)"
+            f"no verified preserving state set within {self.budget} states; "
+            f"CEGIS {result.status}: {result.detail}; this is not an impossibility proof"
         )
         return states, None, {}
 
@@ -665,6 +716,13 @@ class _Select:
         while todo:
             struct, via = todo.pop(0)
             free = w.free(struct)
+            # Conditional domains belong to the selected branch, not to every
+            # syntactic divisor. Prove the entire expanded expression first.
+            expanded = w.defined(free)
+            if any(isinstance(n, ir.IfZero) for n in walk(expanded)) and smt.source_defined(
+                expanded
+            ):
+                continue
             checked = [free]
             # A context-dependent divisor may still sit inside a max whose
             # monotonicity has not been established. Inspect it before using
@@ -777,7 +835,7 @@ class _Select:
             states, sol, trace = self.supplement(states)
             if sol is None:
                 return Selection(tuple(states), self.trace, None, self.search_failure)
-            return self.finish(states)
+            return self.prepared
         return Selection((), self.trace, None, "the selection did not settle")
 
     def finish(self, states: list[Candidate]) -> Selection:
@@ -890,7 +948,9 @@ def select(
 ) -> Selection:
     """The states of a single pass over ``chain`` and the reducer they give (see the
     module docstring); ``members`` are its members on a part (:func:`members_of`)."""
-    return _Select(_Chain(chain, members, signs), max_states).run()
+    selector = _Select(_Chain(chain, members, signs), max_states)
+    result = selector.run()
+    return dataclasses.replace(result, route=selector.route, search=tuple(selector.search))
 
 
 # ---------------------------------------------------------------------------

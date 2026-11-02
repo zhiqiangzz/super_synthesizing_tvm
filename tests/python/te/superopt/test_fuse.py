@@ -38,7 +38,6 @@ from tvm.te.superopt.symbolic.canonicalize import (
     mk_mul,
     mk_reduce,
     subst_domain,
-    walk,
 )
 from tvm.te.superopt.symbolic.lower import compute_ops
 from tvm_tirx import tirx as tir
@@ -308,13 +307,13 @@ def test_minimum_of_standard_scores_keeps_the_smallest_element():
     _same_results([X], [zmin], res)
 
 
-def test_largest_absolute_deviation_is_preserved_when_inverse_is_unproved():
+def test_largest_absolute_deviation_is_preserved_with_joint_extreme_coordinate():
     ins, outs = OPERATORS["max_abs_deviation"].unfused()
     res = fuse(outs, ins)
     (report,) = res.chains
-    assert not report.fused and report.theory.fusible
-    assert "not an impossibility proof" in report.reason
-    assert all(a.same_as(b) for a, b in zip(res.outputs, outs))
+    assert report.fused and len(report.states) == 4, res.summary()
+    assert report.states[:2] == ("total", "dmax")
+    _same_results(ins, outs, res)
     assert not any(s.action in {"parts", "hoist"} for s in report.selection.steps)
 
 
@@ -330,33 +329,38 @@ def _centred(body, reducer=te.max, name="out"):
 
 
 @pytest.mark.parametrize(
-    "body, reducer, states",
+    "body, reducer, states, supported",
     [
-        (lambda d: d * d * d, te.max, 3),  # grows with d: the largest x
-        (lambda d: tir.power(d, tir.const(5.0, "float32")), te.max, 3),
-        (lambda d: tir.exp(d), te.max, 3),
-        (lambda d: tir.exp(d * d * d), te.max, 3),
-        (lambda d: d * d * d, te.min, 3),  # the smallest x
-        (lambda d: -(d * d * d), te.max, 3),
-        (lambda d: d * d * d + d, te.max, 3),  # a polynomial that never falls, no one power
-        (lambda d: -(d * d * d) - 2 * d, te.max, 3),  # one that never rises: the smallest x
-        (lambda d: d * d, te.max, 4),  # grows with |d|: the largest or the smallest x
-        (lambda d: d * d * d * d, te.max, 4),
-        (lambda d: 2 * d * d + 1, te.max, 4),
-        (lambda d: -(d * d), te.min, 4),  # min -d² = -max d²
+        (lambda d: d * d * d, te.max, 3, False),  # grows with d: the largest x
+        (lambda d: tir.power(d, tir.const(5.0, "float32")), te.max, 3, False),
+        (lambda d: tir.exp(d), te.max, 3, False),
+        (lambda d: tir.exp(d * d * d), te.max, 3, False),
+        (lambda d: d * d * d, te.min, 3, False),  # the smallest x
+        (lambda d: -(d * d * d), te.max, 3, False),
+        (lambda d: d * d * d + d, te.max, 3, False),  # a polynomial that never falls
+        (lambda d: -(d * d * d) - 2 * d, te.max, 3, False),  # one that never rises
+        (lambda d: d * d, te.max, 4, True),  # grows with |d|: either extreme
+        (lambda d: d * d * d * d, te.max, 4, False),
+        (lambda d: 2 * d * d + 1, te.max, 4, True),
+        (lambda d: -(d * d), te.min, 4, False),  # min -d² = -max d²
     ],
 )
-def test_function_that_grows_with_its_argument_leaves_a_maximum(body, reducer, states):
+def test_function_that_grows_with_its_argument_leaves_a_maximum(body, reducer, states, supported):
     """``max_j g(x_j - mean) = g(max_j (x_j - mean))`` for a ``g`` that grows; an even
     power grows with the absolute value and takes both extremes."""
     X, out = _centred(body, reducer)
     res = fuse(out, [X])
     (report,) = res.chains
-    # A theoretical representation exists, but replacing the original maximum
-    # is no longer permitted merely because the inverse constructor is limited.
     assert report.theory.fusible
-    assert not report.fused and res.outputs[0].same_as(out)
-    assert "not an impossibility proof" in report.reason
+    if supported:
+        assert report.fused and len(report.states) == states, res.summary()
+        assert "out" in report.states
+        _same_results([X], [out], res)
+    else:
+        # A theoretical representation is not permission to discard an original
+        # whose inverse falls outside the current synthesis/proof fragment.
+        assert not report.fused and res.outputs[0].same_as(out)
+        assert "not an impossibility proof" in report.reason
     assert not any(s.action in {"parts", "hoist"} for s in report.selection.steps)
 
 
@@ -375,40 +379,6 @@ def test_maximum_that_is_no_extreme_is_left_alone(body, reducer, inside):
     assert not res.fused and not report.theory.fusible and res.outputs[0].same_as(out)
     assert report.reason.startswith("no single pass is known: out reads mean inside max_j")
     assert inside in report.reason and not report.rejected  # nothing was looked for
-
-
-def test_epilogue_keeps_the_function_as_the_program_writes_it():
-    """``max_j ((x - mean) / sigma)³``: the cube grows with its argument and is taken out
-    of the maximum, the deviation is taken out of what is left, and the state is
-    ``max_j (x - mean)``. The epilogue is the cube of the score again, as the program
-    computes it -- not the expanded cube over ``max_j x``, four large terms that cancel."""
-    n, m = te.var("n"), te.var("m")
-    X = te.placeholder((n, m), name="X")
-    count = m.astype("float32")
-    j1, j2, j3 = (te.reduce_axis((0, m), "j") for _ in range(3))
-    total = te.compute((n,), lambda i: te.sum(X[i, j1], axis=j1), name="total")
-    mean = te.compute((n,), lambda i: total[i] / count, name="mean")
-    ss = te.compute(
-        (n,), lambda i: te.sum((X[i, j2] - mean[i]) * (X[i, j2] - mean[i]), axis=j2), name="ss"
-    )
-    sigma = te.compute((n,), lambda i: tir.sqrt(ss[i] / count), name="sigma")
-
-    def cube(i):
-        z = (X[i, j3] - mean[i]) / sigma[i]
-        return te.max(z * z * z, axis=j3)
-
-    out = te.compute((n,), cube, name="out")
-    res = fuse(out, [X])
-    (report,) = res.chains
-    assert report.fused and report.states[:2] == ("total", "ss"), res.summary()
-    (extreme,) = [c for c in report.solution.states if c.origin in ("inner", "hoist")]
-    assert extreme.source.startswith("out") and "mean[i]" in "".join(report.derived())
-    (epilogue,) = report.solution.spec.epilogue_code
-    cubes = [x for x in walk(epilogue) if isinstance(x, ir.Pow) and x.exponent == 3]
-    assert cubes and not isinstance(epilogue, ir.Add)  # one product, nothing to cancel
-    assert passes([out], m) == 3 and passes(res.outputs, m) == 1
-    assert res.accuracy is not None and res.accuracy.ok
-    _same_results([X], [out], res)
 
 
 # ---------------------------------------------------------------------------
@@ -487,16 +457,19 @@ def test_loss_keeps_its_log_context_and_still_passes_the_accuracy_gate():
 
 
 def test_scaled_norm_is_not_traded_for_a_sum_of_squares():
-    """An unproved preserving representation stays unfused even with accuracy disabled."""
+    """Real recovery alone does not justify an overflow-prone replacement."""
     ins, outs = OPERATORS["scaled_norm"].unfused()
     res = fuse(outs, ins)
     (report,) = res.chains
     assert not res.fused and res.outputs[0].same_as(outs[0])
-    assert "not an impossibility proof" in report.reason
+    assert "REJECTED" in report.reason and "huge" in report.reason
     assert report.theory.states == 3
-    # Disabling numerical filtering must not disable preservation/recovery proofs.
+    # The source scaled sum is undefined on an all-zero singleton, so its
+    # replacement is authorized. Recovery is now proved, but the raw sum of
+    # squares loses the source's overflow/underflow protection.
+    assert report.selection.solution is not None
     loose = fuse(outs, ins, accuracy="off")
-    assert not loose.fused and loose.outputs[0].same_as(outs[0])
+    assert loose.fused
 
 
 def test_a_budget_too_small_is_reported_not_raised():
@@ -564,11 +537,19 @@ def test_reports_name_what_was_derived_and_why_something_was_not():
 
     ins, outs = OPERATORS["cov_matrix"].unfused()
     res = fuse(outs, ins)
-    assert res.chains == [] and len(res.skipped) == 1
-    assert "not fused" in res.summary()
+    assert res.fused and not res.skipped
+    assert "fused into 4 states" in res.summary()
+    # Read-view specialization must not replace the original graph on refusal.
+    refused = fuse(outs, ins, max_states=3)
+    assert not refused.fused
+    assert all(a.same_as(b) for a, b in zip(refused.outputs, outs))
 
 
 SOURCED = [
+    "ledoit_wolf",
+    "ols_hc0",
+    "normalized_policy_loss",
+    "cov_matrix",
     "logsumexp",
     "attention",
     "variance",

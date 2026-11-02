@@ -137,6 +137,8 @@ class ChainReport:
         text = f"{head}: fused into {len(self.states)} states ({', '.join(self.states)})"
         if self.auxiliaries:
             text += f"; derived: {', '.join(self.auxiliaries)}"
+        if self.selection is not None and self.selection.route:
+            text += f"; selection: {self.selection.route}"
         return text
 
     def original(self) -> list[str]:
@@ -148,10 +150,9 @@ class ChainReport:
         if self.solution is None:
             return []
         how = {
+            "synthesized": "synthesized by Z3 CEGIS and independently verified",
             "context": "computed in place by the program",
             "extent": "the extent of the axis, as far as it has been reduced",
-            "part": "one of the reductions {} is the largest of",
-            "inner": "a reduction {} is a function of",
             "piece": "a part of {} that re-bases by itself",
             "closure": "left behind when {} is re-based",
             "hoist": "left when the contexts of {} are taken out of its reduction",
@@ -348,14 +349,20 @@ def fuse(
     outputs = [outputs] if isinstance(outputs, te.Tensor) else list(outputs)
     inputs = list(inputs)
     chains, skipped = discover_chains(outputs)
+    original_outputs = outputs
+    if any("two different indices" in s.reason for s in skipped):
+        from .reducer.views import specialize
+
+        outputs = specialize(outputs)
+        chains, skipped = discover_chains(outputs)
     reports: list[ChainReport] = []
     rewriter = Rewriter()
     if chains:
         config = accuracy_config or AccuracyConfig()
         signs = TeSigns(outputs, config.positive)
         try:
-            gate = AccuracyGate(outputs, inputs, config) if accuracy != "off" else None
-            agree = _Agreement(outputs, inputs, config.positive)
+            gate = AccuracyGate(original_outputs, inputs, config) if accuracy != "off" else None
+            agree = _Agreement(original_outputs, inputs, config.positive)
         except Unsupported as err:
             # nothing is rewritten that cannot be checked against the original
             why = f"the program cannot be evaluated to check a rewrite against ({err})"
@@ -367,7 +374,10 @@ def fuse(
             )
             reports.append(report)
     verdict = next((r.accuracy for r in reversed(reports) if r.fused), None)
-    return Fused([rewriter.tensor(t) for t in outputs], inputs, reports, skipped, verdict)
+    result = (
+        [rewriter.tensor(t) for t in outputs] if any(r.fused for r in reports) else original_outputs
+    )
+    return Fused(result, inputs, reports, skipped, verdict)
 
 
 def judge(outputs) -> list[Judgement]:
@@ -383,7 +393,11 @@ def judge(outputs) -> list[Judgement]:
     single pass.
     """
     outputs = [outputs] if isinstance(outputs, te.Tensor) else list(outputs)
-    chains, _ = discover_chains(outputs)
+    chains, skipped = discover_chains(outputs)
+    if any("two different indices" in s.reason for s in skipped):
+        from .reducer.views import specialize
+
+        chains, _ = discover_chains(specialize(outputs))
     return [_judge(chain) for chain in chains]
 
 
