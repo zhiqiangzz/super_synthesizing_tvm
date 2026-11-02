@@ -18,9 +18,9 @@
 
 The context-free verification coordinates are B. The maintained tuple A starts
 with the original program's reductions. Candidates for additional coordinates
-first come from rebase coefficients/pieces. If that route cannot prove a
-reducer, Z3 CEGIS synthesizes bounded linear combinations of verification
-atoms, guided by recovery collisions. Both routes require complete A -> B
+first come from rebase coefficients/pieces. If the complete closure cannot
+prove a reducer, native cvc5 SyGuS combines these preferred features, then
+expands its grammar with verification coordinates. Both routes require complete A -> B
 recovery, a defined inverse, and a proved, defined tuple merge. The upper bound
 from the theoretical construction is the default budget, not a promise that a
 preserving representation exists at that size.
@@ -39,7 +39,6 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable
 from fractions import Fraction
-from itertools import combinations
 
 from ..symbolic import ir, sympy_bridge
 from ..symbolic.canonicalize import (
@@ -50,7 +49,6 @@ from ..symbolic.canonicalize import (
     is_constant,
     map_elems,
     mk_add,
-    mk_card,
     mk_mul,
     mk_pow,
     nonneg_alias,
@@ -127,7 +125,6 @@ class SearchAttempt:
     stage: str
     status: str
     candidates: int = 0
-    counterexamples: int = 0
     detail: str = ""
 
 
@@ -234,8 +231,6 @@ class _Chain:
         self.te = signs
         self._member_sign: dict[int, int] = {}
         self.signs = domain.Signs(self.tensor_sign)
-        card = mk_card(self.R)
-        self.count = Candidate("count", "sum", "extent", card, card, ())
 
     # -- signs -------------------------------------------------------------------
     def tensor_sign(self, tid: int) -> int:
@@ -376,7 +371,10 @@ class _Chain:
                     source=cand.name,
                 )
             )
-        out.sort(key=lambda c: (len(_reductions(c.state)) > 1, _order(c.state)))
+        # Equivalent coefficients can have different source expressions. Prefer
+        # the smaller structure before deduplication, e.g. sum(1) over an equal
+        # expression containing a cancelling centered sum.
+        out.sort(key=lambda c: (len(_reductions(c.state)) > 1, _order(c.state), _order(c.struct)))
         return out
 
 
@@ -528,7 +526,7 @@ class _Select:
 
     # -- supplement ---------------------------------------------------------------------
     def supplement(self, states: list[Candidate]):
-        """Try algebraic rebase coefficients, then solver-driven CEGIS.
+        """Try the rebase closure, then native SyGuS over preferred and raw features.
 
         Both routes require a complete safe inverse and a verified reducer.
         Only the protected originals survive a change of search route.
@@ -583,8 +581,6 @@ class _Select:
             self.route = "original"
             return states, *got
         pool = []
-        if any(isinstance(a, ir.Card) for a in targets):
-            pool.append(w.count)
         for owner in states:
             coeffs = w.coefficients(owner)
             pool.extend(
@@ -593,6 +589,10 @@ class _Select:
             pool.extend(w.pieces(owner))
         have = {_scaled(c.state, _content(c.state)) for c in states}
         pool = [c for c in _distinct(pool) if _scaled(c.state, _content(c.state)) not in have]
+        from .synthesis import parameters_of, valid_feature
+
+        parameters = parameters_of(tuple(c.state for c in states))
+        pool = [c for c in pool if valid_feature(c.state, targets, parameters)]
 
         def accepted(extra, got):
             named, counts = [], {}
@@ -618,56 +618,67 @@ class _Select:
 
         # A whole rebase closure is a useful proposal when several correction
         # rates must be supplied together. It still passes every recovery proof.
-        closure = [c for c in pool if c.origin in {"extent", "closure"}]
+        closure = [c for c in pool if c.origin == "closure"]
         if closure and len(closure) <= remaining:
             got = recover([*states, *closure])
             if got is not None:
                 self.route = "rebase"
                 self.search.append(SearchAttempt("rebase", "proved", 1, detail="whole closure"))
                 return accepted(closure, got)
-        tried = 0
-        for size in range(1, min(remaining, len(pool)) + 1):
-            for extra in combinations(pool, size):
-                tried += 1
-                if tried > 256:
-                    break
-                trial = [*states, *extra]
-                got = recover(trial)
-                if got is not None:
-                    self.route = "rebase"
-                    self.search.append(SearchAttempt("rebase", "proved", tried))
-                    return accepted(extra, got)
-            if tried > 256:
-                break
         self.search.append(
             SearchAttempt(
                 "rebase",
-                "limit" if tried > 256 else "unproved",
-                min(tried, 256),
-                detail="no proved rebase-coefficient tuple within budget",
+                "unproved",
+                int(bool(closure)),
+                detail="no proved complete rebase closure within budget",
             )
         )
         from .synthesis import synthesize
 
-        def candidates(definitions):
-            return [
-                Candidate(
-                    "count" if isinstance(e, ir.Card) else f"synth{k}",
-                    "sum"
-                    if isinstance(e, ir.Card)
-                    else e.kind
-                    if isinstance(e, ir.Reduce)
-                    else "value",
-                    "extent" if isinstance(e, ir.Card) else "synthesized",
-                    e,
-                    e,
-                    tuple(ir.idx(n) for n in sorted(e.free_idx)),
-                )
-                for k, e in enumerate(sorted(definitions, key=_order))
-            ]
+        preferred = {c.state: c for c in pool}
 
-        def verify_synthesis(definitions):
-            extra = candidates(definitions)
+        def candidates(proposal):
+            extra = []
+            for k, (e, row) in enumerate(zip(proposal.definitions, proposal.weights)):
+                terms = [
+                    (weight, feature) for weight, feature in zip(row, proposal.features) if weight
+                ]
+                if len(terms) == 1 and terms[0][0] == 1 and e in preferred:
+                    # Keep the reduction body, pinned context and rebase printer;
+                    # the expanded B expression alone loses centered arithmetic.
+                    extra.append(preferred[e])
+                    continue
+                struct = mk_add(
+                    *(
+                        mk_mul(
+                            ir.const(weight),
+                            preferred[feature].struct if feature in preferred else feature,
+                        )
+                        for weight, feature in terms
+                    )
+                )
+                additive = all(
+                    preferred[f].kind == "sum"
+                    if f in preferred
+                    else isinstance(f, ir.Card) or (isinstance(f, ir.Reduce) and f.kind == "sum")
+                    for _, f in terms
+                )
+                extra.append(
+                    Candidate(
+                        f"synth{k}",
+                        "sum" if additive else e.kind if isinstance(e, ir.Reduce) else "value",
+                        "synthesized",
+                        e,
+                        struct,
+                        tuple(ir.idx(n) for n in sorted(e.free_idx)),
+                    )
+                )
+            return extra
+
+        def verify_synthesis(proposal):
+            extra = candidates(proposal)
+            if len(_distinct([*states, *extra])) != len(states) + len(extra):
+                return None
             got = recover([*states, *extra])
             return None if got is None else (extra, got)
 
@@ -677,23 +688,23 @@ class _Select:
             w.R,
             remaining,
             verify_synthesis,
+            preferred=tuple(preferred),
         )
         self.search.append(
             SearchAttempt(
-                "cegis",
+                "sygus",
                 result.status,
                 result.candidates,
-                result.counterexamples,
-                result.detail,
+                detail=f"{result.phase}: {result.detail}",
             )
         )
         if result.status == "proved":
-            self.route = "cegis"
+            self.route = "sygus"
             extra, got = result.payload
             return accepted(extra, got)
         self.search_failure = (
             f"no verified preserving state set within {self.budget} states; "
-            f"CEGIS {result.status}: {result.detail}; this is not an impossibility proof"
+            f"SyGuS {result.status}: {result.detail}; this is not an impossibility proof"
         )
         return states, None, {}
 

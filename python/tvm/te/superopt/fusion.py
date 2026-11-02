@@ -150,9 +150,8 @@ class ChainReport:
         if self.solution is None:
             return []
         how = {
-            "synthesized": "synthesized by Z3 CEGIS and independently verified",
+            "synthesized": "synthesized by cvc5 SyGuS and independently verified",
             "context": "computed in place by the program",
-            "extent": "the extent of the axis, as far as it has been reduced",
             "piece": "a part of {} that re-bases by itself",
             "closure": "left behind when {} is re-based",
             "hoist": "left when the contexts of {} are taken out of its reduction",

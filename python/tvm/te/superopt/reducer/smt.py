@@ -334,8 +334,8 @@ def singleton_counterexample(operand, kind, domain, tensor_sign):
         return False
 
 
-def _recovery_query(states, targets, domain, state_signs=(), basis=()):
-    """Build the same overapproximation for uniqueness and counterexample queries."""
+def recovery_query(states, targets, domain, state_signs=(), features=()):
+    """Two-copy recovery obligation shared by the independent SMT check and SyGuS."""
     from ..symbolic.canonicalize import subst_domain
 
     other = ir.dsym(domain.axis, "recovery_other")
@@ -356,14 +356,12 @@ def _recovery_query(states, targets, domain, state_signs=(), basis=()):
         (equal_states if i < len(states) else different).append(
             a == b if i < len(states) else a != b
         )
-    differences = []
-    for e in basis:
+    for e in features:
         a, da = enc.value(e)
         b, db = enc.value(copy(e))
         valid.extend((da, db))
-        differences.append(a - b)
-    enc.facts((*exprs, *basis, *map(copy, (*exprs, *basis))))
-    return enc, z3.And(*valid, *equal_states, z3.Or(*different)), differences
+    enc.facts((*exprs, *features, *map(copy, (*exprs, *features))))
+    return enc, z3.And(*valid, *equal_states, z3.Or(*different))
 
 
 @lru_cache(maxsize=1024)
@@ -377,30 +375,7 @@ def recovery_status(states, targets, domain, state_signs=()):
     if z3 is None:
         return "unknown"
     try:
-        enc, condition, _ = _recovery_query(states, targets, domain, state_signs)
+        enc, condition = recovery_query(states, targets, domain, state_signs)
         return str(enc.check(condition))
     except Unsupported:
         return "unknown"
-
-
-def recovery_collision(states, targets, domain, basis):
-    """Return exact basis differences at an abstract collision for CEGIS.
-
-    A SAT model is a search counterexample, not proof of an actual input
-    collision. No approximate decimal conversion is used for algebraic values.
-    The independent recovery/domain/merge checker still decides acceptance.
-    """
-    if z3 is None:
-        return "unknown", ()
-    try:
-        enc, condition, differences = _recovery_query(states, targets, domain, basis=basis)
-        solver = z3.Solver()
-        solver.set(timeout=TIMEOUT_MS)
-        solver.add(*enc.constraints, condition)
-        status = solver.check()
-        if status != z3.sat:
-            return str(status), ()
-        model = solver.model()
-        return "sat", tuple(model.eval(d, model_completion=True) for d in differences)
-    except Unsupported:
-        return "unknown", ()

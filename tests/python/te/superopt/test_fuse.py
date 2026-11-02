@@ -214,7 +214,7 @@ def test_variance_is_welford_however_it_is_written(m, mean_inline):
     (report,) = res.chains
     assert report.fused and len(report.states) == 3, res.summary()
     origins = sorted(c.origin for c in report.solution.states)
-    assert origins == sorted(["member", "extent", "member"])
+    assert origins == sorted(["member", "closure", "member"])
     assert report.members == (("total", "ss") if mean_inline else ("total", "mean", "ss"))
     _same_results([X], [var], res)
 
@@ -233,7 +233,7 @@ def test_power_intrinsic_fuses_like_the_product():
     assert report.fused and len(report.states) == 4, res.summary()
     assert sorted(c.origin for c in report.solution.states) == [
         "closure",
-        "extent",
+        "closure",
         "member",
         "member",
     ]
@@ -279,7 +279,7 @@ def test_maximum_of_standard_scores_keeps_the_largest_element():
     ins, outs = OPERATORS["zscore_max"].unfused()
     res = fuse(outs, ins)
     (report,) = res.chains
-    assert report.fused and report.states == ("total", "ss", "zmax.h0", "count")
+    assert report.fused and report.states == ("total", "ss", "zmax.h0", "ss.r0")
     (extreme,) = [c for c in report.solution.states if c.origin == "hoist"]
     assert extreme.source == "zmax" and extreme.depth == 1  # the mean stays a context
     assert "mean[i]" in "".join(report.derived())
@@ -406,7 +406,7 @@ def test_expanded_variance_is_kept_out_by_the_accuracy_gate():
     them; built by hand they are correct, and in float32 they cancel."""
     ins, outs = OPERATORS["variance"].unfused()
     full = fuse(outs, ins)
-    assert full.chains[0].states == ("total_mean", "ss", "count") and not full.chains[0].rejected
+    assert full.chains[0].states == ("total_mean", "ss", "ss.r0") and not full.chains[0].rejected
     capped = fuse(outs, ins, max_states=2)
     (report,) = capped.chains
     assert not capped.fused and "within 2 states" in report.reason
@@ -487,7 +487,7 @@ def test_a_budget_too_small_is_reported_not_raised():
         "sxy",
         "sxx",
         "syy",
-        "count",
+        "sxy.r0",
     )
 
 
@@ -525,9 +525,9 @@ def test_reports_name_what_was_derived_and_why_something_was_not():
     ins, outs = OPERATORS["moment3"].unfused()
     res = fuse(outs, ins)
     (report,) = res.chains
-    assert len(report.auxiliaries) == 2 and "count" in report.auxiliaries
+    assert report.auxiliaries == ("s3.r0", "s3.r1")
     assert "fused into 4 states" in res.summary() and "derived:" in res.summary()
-    assert [c.origin for c in report.solution.auxiliaries] == ["extent", "closure"]
+    assert [c.origin for c in report.solution.auxiliaries] == ["closure", "closure"]
 
     ins, outs = OPERATORS["mean_abs_deviation"].unfused()
     res = fuse(outs, ins)

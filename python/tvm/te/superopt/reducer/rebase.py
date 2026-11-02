@@ -91,7 +91,7 @@ class Candidate:
     name: str
     # "sum" / "max" / "min": merged by re-basing; "value": a function of other candidates
     kind: str
-    # "member", "context", "extent", "piece", "closure", "synthesized", "hoist"
+    # "member", "context", "piece", "closure", "synthesized", "hoist"
     origin: str
     state: ir.SymExpr  # canonical, down to the boundary tensors
     struct: ir.SymExpr  # the same with reads of chain members kept (pinned) as written

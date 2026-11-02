@@ -176,9 +176,11 @@ def test_variance_keeps_the_total_and_supplements_the_count():
     """The mean is computed from total/count on non-empty parts, not promoted
     merely because that expression would be undefined on an empty part."""
     sel = _select("variance")
-    assert _names(sel) == ["total_mean", "ss", "count"]
+    assert _names(sel) == ["total_mean", "ss", "ss.r0"]
+    assert sel.states[2].state == mk_card(_R(sel))
+    assert sel.states[2].origin == "closure" and sel.states[2].source == "ss"
     assert not _steps(sel, "promote") and not _steps(sel, "hoist")
-    assert _steps(sel, "supplement")[0].startswith("supplement count = Σ_j 1:")
+    assert _steps(sel, "supplement")[0].startswith("supplement ss.r0 = Σ_j 1:")
     spec = sel.solution.spec
     (ta, tb), (sa, sb), (na, nb) = _ab(0), _ab(1), _ab(2)
     ma, mb = mk_div(ta, na), mk_div(tb, nb)
@@ -196,12 +198,12 @@ def test_higher_moments_are_supplemented_with_the_lower_ones():
     x, n = _x(), mk_card(R)
     mean = mk_div(mk_reduce("sum", R, 0, x), n)
     m2 = mk_reduce("sum", R, 0, mk_pow(mk_sub(x, mean), 2))
-    (lifted,) = [c for c in sel.states if c.origin == "closure"]
+    (lifted,) = [c for c in sel.states if c.origin == "closure" and c.state != n]
     assert lifted.source == "s3" and _same(lifted.state, m2)
-    assert {c.origin for c in sel.states} == {"member", "extent", "closure"}
+    assert {c.origin for c in sel.states} == {"member", "closure"}
     sel = _select("moment4")
     assert len(sel.states) == 5 and sel.solution.spec.merge_print is not None
-    assert [c.origin for c in sel.states].count("closure") == 2
+    assert [c.origin for c in sel.states].count("closure") == 3
 
 
 def test_the_fifth_moment_takes_the_second_third_and_fourth():
@@ -209,11 +211,12 @@ def test_the_fifth_moment_takes_the_second_third_and_fourth():
     expanded by the size of the result, not by its degree): nothing is taken out, and
     the moments below it are supplemented."""
     sel = _select("moment5")
-    assert _names(sel) == ["total_mean", "s5", "count", "s5.r0", "s5.r1", "s5.r2"]
+    assert _names(sel) == ["total_mean", "s5", "s5.r0", "s5.r1", "s5.r2", "s5.r3"]
     assert not _steps(sel, "hoist") and sel.solution.spec.merge_print is not None
     R = _R(sel)
     x, n = _x(), mk_card(R)
     mean = mk_div(mk_reduce("sum", R, 0, x), n)
+    assert sel.states[2].state == n and sel.states[2].origin == "closure"
     for c, k in zip(sel.states[3:], (2, 3, 4)):
         assert c.origin == "closure" and c.source == "s5"
         assert _same(c.state, mk_reduce("sum", R, 0, mk_pow(mk_sub(x, mean), k)))
@@ -236,7 +239,7 @@ def test_a_divisor_that_is_zero_on_a_single_element_is_taken_out():
     """``max_j (x - mean) / sd``: ``sd`` of one element is 0. Only ``sd`` is taken out;
     the mean stays, re-based by a shift."""
     sel = _select("zscore_max")
-    assert _names(sel) == ["total", "ss", "zmax.h0", "count"]
+    assert _names(sel) == ["total", "ss", "zmax.h0", "ss.r0"]
     (hoist,) = _steps(sel, "hoist")
     assert hoist == (
         "hoist sigma out of zmax: zmax: it divides by sigma[i], which is 0 on every single element"
@@ -301,7 +304,7 @@ def test_entropy_keeps_its_original_reduction():
 def test_layernorm_backward_keeps_the_scale_and_total():
     """sigma is positive on non-empty parts (eps > 0); its empty value is irrelevant."""
     sel = _select("layernorm_backward")
-    assert _names(sel) == ["sg", "total", "ss", "sgx", "count"]
+    assert _names(sel) == ["sg", "total", "ss", "sgx", "ss.r0"]
     assert sel.solution is not None, sel.failure
     assert not _steps(sel, "hoist") and not _steps(sel, "promote")
 
@@ -387,7 +390,10 @@ def test_two_rates_of_one_context_are_two_states():
     )
     (chain,), _ = discover_chains([poly])
     sel = select(chain, members_of(chain), TeSigns([poly]))
-    assert _names(sel) == ["total", "poly", "count"] and not _steps(sel, "split")
+    assert _names(sel) == ["total", "poly", "poly.r0"] and not _steps(sel, "split")
+    assert sel.solution is not None, sel.failure
+    assert sel.states[2].state == sel.states[2].struct == mk_card(_R(sel))
+    assert sel.states[2].origin == "closure" and sel.states[2].source == "poly"
 
 
 def test_each_context_takes_the_correction_its_dependence_fits():
@@ -433,7 +439,7 @@ def test_tuple_recovery_keeps_a_context_that_individual_rebase_rules_cannot_hand
     (chain,), _ = discover_chains([zmax])
     members = members_of(chain)
     sel = select(chain, members, TeSigns([zmax]))
-    assert _names(sel) == ["total", "ss", "zmax", "count"]
+    assert _names(sel) == ["total", "ss", "zmax", "ss.r0"]
     assert sel.solution is not None, sel.failure
     assert not _steps(sel, "hoist")
     # This other source really divides by zero on a singleton. A repair is
@@ -484,12 +490,10 @@ def test_the_extent_is_a_count_unless_it_is_a_term_of_what_is_added_up():
 # the procedure as a whole
 # ---------------------------------------------------------------------------
 def test_every_state_comes_out_of_the_program():
-    """No state is invented: a loop of the program, a context it computes, the count, or
-    taken from the expansion of one of those."""
+    """States come from the program or its expansion, including sum(1)."""
     origins = (
         "member",
         "context",
-        "extent",
         "piece",
         "closure",
         "hoist",

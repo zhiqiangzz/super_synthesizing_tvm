@@ -31,13 +31,12 @@ coordinate system admits an equally small representation.
    divisors still inside a reduction. Only a solver-demonstrated invalid domain
    on a legal singleton authorizes replacing an original. Declared input signs
    are included in that counterexample query.
-2. Try the complete rebase closure within the budget, then subsets of the
-   algebraically extracted coefficients/components (at most 256 subset attempts).
-   If these cannot establish all proof obligations, start Z3 CEGIS with only
-   the protected original states fixed. The solver constructs supplementary
-   expressions from verification atoms; failed rebase supplements are not locked
-   into this search. Candidate generation and search scheduling never replace
-   proof obligations. See the two-stage audit below for the precise grammar.
+2. Extract rebase coefficients and additive pieces. Keep only candidates whose
+   expressions use B alone and whose domains are proved. Try the complete closure
+   as a fast path. Otherwise use native cvc5 SyGuS, first with these preferred
+   features, then with preferred features plus the raw B coordinates. Failed
+   closure supplements are optional grammar terms, not locked-in states.
+   Candidate generation and scheduling never replace proof obligations.
 3. Construct a complete inverse A -> B, including every verification coordinate,
    not just combinations that happen to cancel from a merge. Prove its identity
    and domains. In the polynomial fragment, independently ask Z3 whether two
@@ -56,9 +55,11 @@ impossibility prover authorizing replacements of otherwise defined originals.
 
 ## Tools and trusted boundary
 
-Install the `superopt` optional dependencies, or install `sympy` and `z3-solver`
-into the worktree environment. TVM itself must still be imported using PYTHONPATH,
-not an editable install. Missing Z3 refuses selection with an explicit reason.
+Install the `superopt` optional dependencies (`sympy`, `z3-solver>=4.13`,
+`cvc5>=1.3,<2`) into the worktree environment. TVM itself must still be imported using PYTHONPATH,
+not an editable install. Missing Z3 refuses proof-dependent selection; missing
+cvc5 reports `unavailable` when native synthesis is needed. There is no custom
+CEGIS fallback. The native interfaces were exercised with cvc5 1.4.2.
 
 * Symbolic normalization and SymPy construct/check algebraic identities.
 * Z3 checks real domains, zero implications, and recovery uniqueness. Each query
@@ -140,7 +141,8 @@ papr = peak / (ss / n)
 For nonempty segments, let `hi = max(x)`, `lo = min(x)`, and `q = sum(x*x)`.
 The verification coordinates are `B = (n, total, q, hi, lo)`. The selected
 maintained coordinates are **`A = (total, peak, ss, n, w)`**, where `w = hi + lo`.
-All three original reductions remain slots. The CEGIS coefficient solver constructs w as `max(x) - max(-x)`.
+All three original reductions remain slots. Native cvc5 grammar search constructs
+w as `max(x) - max(-x)` (or its negation); the independent checker proves recovery.
 There is no hand-enumerated extrema-pair rule or operator-name dispatch.
 
 The forward definition B -> A is:
@@ -409,74 +411,97 @@ are the execution comparisons. Independent correctness checks were also run
 with scikit-learn 1.9.1, statsmodels 0.15.0 and PyTorch (the A2C expression),
 without treating these checks as performance comparisons.
 
-## Two-stage selection and the 17-operator audit
+## Rebase-feature SyGuS and the 17-operator audit
 
-Selection now follows this order:
+Selection follows this order:
 
 ```text
-preserve the source reductions (repair only a demonstrated source-domain defect)
+preserve source reductions (repair only a demonstrated source-domain defect)
   -> try the originals alone
-  -> extract rebase coefficients/components; try them within the state budget
-  -> prove complete recovery, source/inverse domains, the full merge and its domains
-       success -> generate code -> existing numerical gate
-       failure -> Z3 CEGIS -> independent recovery/domain/merge proof -> numerical gate
+  -> extract rebase coefficients/pieces, with their B definitions and source structure
+  -> filter features with unproved domains or dependencies outside B
+  -> try the complete rebase closure as a fast path
+  -> native cvc5 SyGuS: preferred features first, then preferred features plus B
+  -> independent complete recovery/domain/merge proof
+  -> generated code and the existing numerical gate
 ```
 
-The numerical gate still decides final acceptance; a proof does not bypass it.
-A numerical rejection does not silently authorize replacing a source state.
-Only A0 is fixed on entry to CEGIS; unsuccessful rebase supplements are discarded.
-This matters when a different representation must fit the same state budget.
-The old manually enumerated pairwise sums/differences of extrema are removed.
+The old application-owned Z3 coefficient learner and collision-refinement loop
+are removed. cvc5 receives a universal two-copy specification: equal original
+states and equal synthesized coordinates must imply equal verification states,
+under the existing conservative reachable-state abstraction. Its native
+`checkSynth` / `checkSynthNext` APIs handle candidate search and internal
+refinement. A SyGuS solution still needs the independent constructive inverse,
+domain and complete merge checks; injectivity alone is insufficient.
 
-The `parts()` candidate source and its repair-time extraction of inner reductions
-are also removed. Algebraic candidates still come from rebase coefficients and
-additive `pieces()`; CEGIS can synthesize joint extrema coordinates. The non-core
-`max_j ((x_j - mean) / sigma)^3` fusion test is removed: supporting that case again
-requires extending rebase decomposition and safe inversion or repair-coordinate
-selection. Its former extraction of the inner maximum is no longer provided.
+If native quantified synthesis returns `unknown`, cvc5's own grammar enumerator
+(`findSynth` / `findSynthNext`) can supply proposals within the same budget.
+Those proposals have **no SyGuS injectivity certificate**: only the independent
+checker can accept them after proving the full inverse and reducer. Reports
+identify this route with a `-enumeration` phase suffix. No sampled acceptance or
+application-owned counterexample learner is used. This fallback is needed for
+some nonlinear extrema constraints such as PAPR on the tested cvc5 version.
 
-The implementation uses **Z3-driven CEGIS**, not a cvc5 SyGuS invocation. The
-current explicit grammar is:
+Verification targets and candidate features are separate:
 
 ```text
-C_j(B) = sum_i c_ji * B_i,  c_ji in {-2,-1,0,1,2}
+B = context-free verification coordinates, all of which must be recovered
+E_preferred = proved, defined rebase coefficients and additive pieces
+E_mixed = E_preferred followed by B, with duplicate expressions removed
+
+C_j = a signed sum of at most max_terms feature terminals (default: 3)
 ```
 
-B_i range over the complete verification atoms. Thus the solver can construct
-joint coordinates, not only select a subset of an operator-specific list.
-This first implementation does not synthesize arbitrary products, conditional
-state definitions or transcendental expressions for C. Those remain supported
-where algebraic rebase extraction already provides them. The inverse D is
-constructed with the existing algebraic/SymPy machinery and independently
-checked; this is not unrestricted joint synthesis of arbitrary C and D programs.
+The finite native grammar starts with feature terminals and adds/subtracts one
+terminal per level. Repeated terminals permit integer coefficients. This is
+still a restricted grammar, but a feature can be nonlinear in B. For example,
+`M3 = R3 - 3*S*R2/n + 2*S^3/n^2` is one preferred terminal; the solver need not
+rediscover its products and divisions. Preferred-only search precedes mixed
+search, so the priority does not depend on incidental enumeration order. Adding
+features enlarges the total expression space; staging can reduce work before
+finding a solution, but does not establish minimality or completeness.
 
-For each coefficient proposal the verifier looks for equal maintained states
-with unequal B. An exact model supplies basis differences `d_i=B_i(left)-B_i(right)`;
-the next coefficient matrix must satisfy `OR_j(sum_i c_ji*d_i != 0)`. These
-counterexamples eliminate entire families of coefficients. No floating-point
-rounding is used when feeding models back. A proposed tuple is accepted only
-when the separate checker constructs a full, defined inverse and proves the
-actual reducer. Injectivity by itself is insufficient.
+Features may also read fixed problem extents already present in A0, such as the
+full label-smoothing dimension. These parameters are shared by both copies of B;
+they are not new segment state. An unknown extent or input value is rejected.
+Features whose definedness cannot be proved are omitted from the preferred pool.
 
-Counterexamples belong to an overapproximation of reachable states. They are
-not automatically realizable input segments, and failure after using them is
-not an impossibility theorem. Automatic refinement of the reachable-state
-abstraction is not implemented. For exp/log, the constructive checker is also
-tried before learning a collision, because opaque-function SMT models can miss
-identities known to the algebraic verifier.
+Count has no dedicated candidate injection or priority. When a rebase correction
+contains `sum(1)`, it enters the preferred pool through the same coefficient
+extraction as other reductions. Otherwise, if count belongs to B, it is available
+through the ordinary mixed grammar. Its reported origin is the route that
+discovered it (`closure`, `piece`, or `synthesized`), not a special extent category.
+The IR still represents segment cardinality and its nonempty-domain facts;
+these are semantic properties, not state-selection exceptions.
 
-The coefficient learner uses Z3 with increasing L1 expression-cost bounds.
-It tries the available state-budget width first, then smaller widths, with fair
-shares of a 64-proposal budget and a 20-second search deadline (an in-flight
-proof may finish after that deadline). This scheduling does not establish
-minimality. Solver calls have timeouts; missing Z3, unknown, exhausted bounded
-search and resource limits are reported separately and never permit a hoist.
-Independent proof failure blocks that coefficient assignment and continues.
+Every proposal retains its feature recipe. A selected rebase feature keeps its
+original reduction kind, pinned contexts and structural expression, rather than
+being reconstructed only as an expanded raw-moment expression. Combinations
+likewise carry both the B definition used for proof and the structural expression
+used by the merge printer. This lets a centered M3 remain a centered state.
 
-`Selection.route` records `original`, `rebase`, or `cegis`; `Selection.search`
-records stage outcomes, candidate counts and collision counts. A proved selection
-may still be rejected by the numerical gate, so the audit records both.
-Reproduce the audit, including the default numerical gate, with:
+Default limits are 256 proposals, at most three feature terms per coordinate,
+and a 20-second overall search deadline, split among grammar stages and state
+widths. Native semantic queries get up to 1500 ms per call; an in-flight
+independent proof can finish after the search deadline. A failed independent
+proof requests another native solution. Timeouts, conservative abstract
+counterexamples, unsupported features, and bounded exhaustion do not establish
+that preserving the original state is impossible. Missing solvers are reported.
+
+D remains constructed by the existing algebraic/SymPy inverse machinery and
+verified independently with symbolic/SymPy/Z3 checks. This is not unrestricted
+joint SyGuS synthesis of C and D. The numerical gate remains outside synthesis:
+a numerical rejection refuses the generated reducer, without claiming universal
+floating-point correctness or automatically resuming the search.
+
+The `parts()` candidate source and repair-time extraction of inner reductions
+remain removed. The non-core `max_j ((x_j - mean) / sigma)^3` fusion case is still
+deferred. `pieces()` and rebase coefficients remain supported.
+
+`Selection.route` records `original`, `rebase`, or `sygus`. `Selection.search`
+records stage outcomes, proposals checked and the native grammar phase. It does
+not pretend to count counterexamples hidden inside cvc5. Reproduce the audit
+with the `superopt` dependencies and worktree PYTHONPATH:
 
 ```bash
 python super_opt/examples/audit_state_selection.py
@@ -496,8 +521,8 @@ The measured result for the current showcase is:
 | Attention | original | No | 3 |
 | Layer normalization | rebase | No | 3 |
 | Layer normalization backward | rebase | No | 5 |
-| PAPR | **CEGIS** | No | 5 |
-| Householder | rebase | No | 3 |
+| PAPR | **SyGuS** | No | 5 |
+| Householder | SyGuS | No | 3 |
 | Sinkhorn iteration | original | No | 2 + 2 |
 | Kurtosis | rebase | Yes: singleton standardized moment is undefined | 5 |
 | Pearson correlation | rebase | No | 6 |
@@ -505,16 +530,13 @@ The measured result for the current showcase is:
 | Contrastive loss | original | No | 2 + 2 |
 | Heat capacity | original | No | 4 |
 
-All 17 pass the default numerical gate. **Only PAPR needs the CEGIS fallback**
-under the current budget and rebase candidate language. Its original peak is
-rebased through the two extrema; storing both separately alongside the original
-three states and count would take six slots. The five-slot solution instead
-uses `count` and the joint coordinate `max(x)+min(x)`. Z3 constructs that
-coordinate from the verification atoms; SymPy and Z3 certify its guarded inverse.
-This is an observed limitation of the current rebase candidate language, not a
-proof that no stronger algebraic analysis could discover the same coordinate.
+The core audit checks fusion and the default numerical gate separately. PAPR
+uses count and a joint extreme coordinate while preserving its original peak,
+squared-deviation sum and total. Householder selects a rebase feature through
+SyGuS while retaining vv and its independently proved zero-norm inverse branch.
+Kurtosis and normalized policy loss first need the existing source-domain repair
+because their normalized source reductions are undefined on singleton segments.
 
-Kurtosis and normalized policy loss are a different category: the source
-normalized reduction is genuinely undefined on singleton partitions. After the
-existing solver-authorized repair, rebase coefficients suffice. Householder's
-zero-norm branch is proved safe, retains vv, and does not enter CEGIS.
+A regression test bypasses the first complete-closure proposal for kurtosis:
+native search still selects the centered third-moment feature, preserves its
+structural reduction representation, and passes the default numerical gate.

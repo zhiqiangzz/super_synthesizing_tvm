@@ -58,7 +58,7 @@ tvm-config = "tvm.config:__main__"
 torch = ["torch"]
 cuda = ["cuda-bindings"]
 meta-schedule = ["xgboost"]
-superopt = ["sympy", "z3-solver>=4.13"]
+superopt = ["sympy", "z3-solver>=4.13", "cvc5>=1.3,<2"]
 popen-pool = ["psutil", "cloudpickle"]
 rpc = ["tornado", "psutil", "cloudpickle"]
 all = ["xgboost", "psutil", "cloudpickle", "tornado"]
