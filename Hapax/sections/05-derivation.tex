@@ -3,7 +3,7 @@
 
 The reference construction supplies a state tuple with a componentwise join, but its expanded coordinates may lose the centring and scaling that make the source program numerically useful.
 Our task is to find a different representation: retain the source reductions, discover the information missing from their partial results, and derive a join for the augmented tuple.
-We combine algebraic analysis of context changes with syntax-guided synthesis of supplemental states.
+We combine algebraic analysis of context changes with syntax-guided synthesis of auxiliary states.
 A constructive recovery proof connects the new representation to the reference state tuple and transfers its join to the maintained states.
 
 \subsection{Constructing Features from the Source Reductions}
@@ -15,9 +15,9 @@ If such a result is undefined on a legal part, its definition cannot serve as a 
 Only demonstrated domain failures trigger this repair.
 Expanding the resulting $A_0$ and the required outputs yields a context-free reference state tuple $B(S)$, whose components we call verification coordinates, and a known map $G_0$ such that $A_0(S)=G_0(B(S))$.
 The coordinates of $B$ join independently and determine the outputs.
-They are fixed before supplementation: every new state must be a defined function of these coordinates and any fixed program parameters.
+They are fixed before auxiliary states are synthesised: every new state must be a defined function of these coordinates and any fixed program parameters.
 
-A supplemental state should supply information needed to correct a partial result when its context changes.
+An auxiliary state should supply information needed to correct a partial result when its context changes.
 We discover such quantities by symbolically replacing local contexts with shifted or scaled contexts and applying the algebraic rules of the reference construction.
 For an additive state $r$, a successful expansion under the rules' side conditions has the form
 \begin{equation}
@@ -39,12 +39,12 @@ A count enters through the same mechanism: the constant coefficient of a shifted
 If reference expansion exposes it instead, it is available with the other coordinates of $B$.
 There is no separate count-selection rule.
 
-\subsection{Synthesising the Missing Coordinates}
+\subsection{Synthesising Auxiliary States}
 \label{sec:synthesis}
 
 The features describe useful quantities, but selecting them individually need not give a compact sufficient state.
-We therefore synthesise supplemental coordinates $C=(c_1,\ldots,c_w)$ and maintain $A=(A_0,C)$.
-For a feature set $E$, each coordinate is an expression from the finite grammar
+We therefore synthesise an auxiliary state tuple $C=(c_1,\ldots,c_w)$ and maintain $A=(A_0,C)$.
+For a feature set $E$, each auxiliary state is an expression from the finite grammar
 \[
 \begin{aligned}
 \mathcal E_1&::=e\quad(e\in E),\\
@@ -66,7 +66,7 @@ For fixed program parameters, cvc5 receives
 \bigl(G_0(B_1)=G_0(B_2)\ \land\ C(B_1)=C(B_2)\bigr)
 \ \Longrightarrow\ B_1=B_2.
 \end{equation}
-Equality of source states alone can conceal information needed by a join; the new coordinates must distinguish those cases.
+Equality of source states alone can conceal information needed by a join; the auxiliary states must distinguish those cases.
 This makes the recovery target explicit rather than testing only whether the final outputs happen to agree.
 
 \noindent\begin{minipage}{\linewidth}
@@ -130,7 +130,7 @@ H(G(B(S)))=B(S).
 \end{equation}
 The identity holds on tuples arising from legal non-empty parts and also gives $G(H(A(S)))=A(S)$ on their maintained representations.
 Recovery reconstructs aggregated coordinates, not input elements.
-\Cref{fig:recovery-square} traces the running variance example through supplementation, recovery and join derivation.
+\Cref{fig:recovery-square} traces the running variance example through auxiliary state construction, recovery and join derivation.
 \input{figures/recovery-overview}
 
 The inverse procedure eliminates verification coordinates from the equations defining $A$.
@@ -185,7 +185,7 @@ The domain assumptions ensure that each executed operation denotes a value.
 Associativity and commutativity on reachable states follow from union of disjoint partitions.
 Each partition can therefore be processed independently and combined through a reduction tree, which supplies the divide-and-conquer parallel structure.
 Execution starts each active partition from its first leaf and skips empty partitions.
-The proof establishes the result for the entire tuple, including supplemental coordinates, rather than only for the final output.
+The proof establishes the result for the entire tuple, including auxiliary states, rather than only for the final output.
 
 \subsection{Numerical Formulation of the Join}
 \label{sec:rebase}

@@ -40,8 +40,8 @@
 % Each part's completed first reduction supplies its second reduction.
 \foreach \a/\b in {t1b/t2a,t1b/t2b,s1d/s2c,s1d/s2d}
   \draw[dependency] (\a.south) -- (\b.north);
-\node[label,text=auxpurple] at (1.50,-1.90) {Supplemental states};
-\node[label,text=auxpurple] at (4.90,-1.90) {Supplemental states};
+\node[label,text=auxpurple] at (1.50,-1.90) {Auxiliary states};
+\node[label,text=auxpurple] at (4.90,-1.90) {Auxiliary states};
 
 \node[joinop] (combined) at (3.20,-2.70) {Join};
 \draw[combine] (1.50,-2.10) -- (combined.north west);

@@ -30,7 +30,8 @@ Executing that representation directly can, however, expand source expressions w
 Reconstructing centred quantities from expanded sums can subtract large, nearly equal values; removing scaling can expose intermediate values to overflow.
 These effects motivate retaining the source reduction results and their centred or scaled definitions when constructing the fused computation.
 
-Retaining those results creates a further requirement: the representation must also contain enough information to correct them when local contexts change.
+We call the representation accumulated by the fused program its \emph{maintained state tuple}.
+It combines the retained results with \emph{auxiliary states} that supply the information needed to correct them as local contexts change.
 Farzan and Nicolet augment loops with auxiliary accumulators so that partial results can be combined~\citep{farzan17,farzan21}; AutoLifter synthesises additional information for divide-and-conquer computations~\citep{autolifter}.
 We adapt this construction of auxiliary states and joins to fuse dependent reductions while retaining the source program's numerical structure.
 
@@ -38,19 +39,19 @@ We adapt this construction of auxiliary states and joins to fuse dependent reduc
 \noindent\begin{minipage}{\linewidth}
 \begin{minipage}[t]{0.50\linewidth}
 \vspace{0pt}
-Each partition evaluates the reductions in its local contexts and retains their results together with the supplemental states needed for correction.
-A derived join corrects and combines these states to obtain the state tuple for the union (\cref{fig:dc-fusion}).
-When each partition contains one element, the reductions become per-element computations; evaluating them, initialising supplemental states, and immediately joining the resulting tuple into the running tuple yields one fused traversal.
+Computing a partition's maintained state tuple may still require multiple traversals.
+The derived join corrects and combines two such tuples to obtain the tuple for their union (\cref{fig:dc-fusion}).
+When each partition contains exactly one element, its tuple can be computed from that element alone.
+A fused loop initialises the running tuple from the first element, then computes and joins each subsequent element's tuple during the same traversal.
 \end{minipage}\hfill
 \input{figures/divide-conquer-fusion}
 \end{minipage}\par\medskip
 
-The \emph{maintained state tuple}, which the fused program accumulates, starts from the source reduction results evaluated on each input part using that part's local contexts.
-To discover useful \emph{supplemental states}, \sys symbolically expresses a changed context as a shift or scale of the local one and expands the resulting correction.
+To discover useful auxiliary states, \sys symbolically expresses a changed context as a shift or scale of the local one and expands the resulting correction.
 Factoring out the context changes exposes coefficients that are themselves aggregates over the processed input.
 For variance, correcting a part's centred sum of squares requires weighting the correction by that part's size.
 The fused representation therefore carries a count alongside the source results, even though the source obtains its full-input size from the loop extent.
-When terms in a source sum require different correction factors, the analysis also exposes their separately correctable parts.
+When additive terms in the body of a sum reduction require different context corrections, the analysis also exposes their separate reduction results.
 These aggregate expressions provide the building blocks for state synthesis.
 
 Syntax-guided synthesis searches combinations of these building blocks to supplement the retained source results.
@@ -74,9 +75,9 @@ GPU scheduling and performance evaluation remain subsequent work.
 \item \textbf{A sufficient condition for fusion.}
 An algebraic analysis constructs reference states and bounds their number, covering context dependencies beyond the correction forms studied in prior fusion work.
 \item \textbf{State discovery and join derivation.}
-Analysis of source context corrections supplies building blocks for synthesising supplemental states; verified recovery of reference states establishes their sufficiency and determines the join.
+Analysis of source context corrections supplies building blocks for synthesising auxiliary states; verified recovery of reference states establishes their sufficiency and determines the join.
 \item \textbf{Accuracy-aware formulation.}
-Retained source reduction results and direct context corrections reuse centring and scaling to stay close to the source program's numerical accuracy.
+Retained source results guide direct context corrections that reuse centring and scaling where possible, aiming to preserve numerical accuracy.
 \item \textbf{Implementation and evaluation.}
 A TVM implementation and an evaluation of coverage, states, derivation cost and accuracy on \nShowcase operators.
 \end{itemize}

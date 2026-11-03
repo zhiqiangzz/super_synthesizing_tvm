@@ -131,13 +131,13 @@ Generic finite-sum implications justify the reachable-state constraints independ
 Lazy conditionals ensure that inactive divisions are not evaluated.
 These arguments hold over the reals and do not exclude floating-point underflow.
 
-\subsection{Sufficient Supplementation and Bounded Synthesis}
-\begin{proposition}[Sufficient supplementation]
+\subsection{Sufficient Auxiliary States and Bounded Synthesis}
+\begin{proposition}[Sufficiency of auxiliary states]
 \label{prop:supplement}
 Let $A_0$ have $m$ coordinates and $B$ have $k$ coordinates.
 Suppose $B$ is defined on legal non-empty parts, joins componentwise under $\oplus$, and determines the required outputs on their source domain.
 Suppose also that $A_0=G_0\circ B$, with $G_0$ defined on reachable reference tuples.
-If every coordinate of $B$ is an allowed supplement, there is a representation retaining $A_0$ that recovers $B$ and admits a join, using at most $m+k$ states.
+If every coordinate of $B$ is allowed as an auxiliary state, there is a representation retaining $A_0$ that recovers $B$ and admits a join, using at most $m+k$ states.
 \end{proposition}
 \begin{proof}
 Choose $\widehat A(S)=(A_0(S),B(S))$.
@@ -151,11 +151,11 @@ The tuple has $m+k$ coordinates, with sharing able to reduce this count.
 
 The proposition gives an algebraic construction, not a completeness result for compact source-preserving synthesis or a floating-point guarantee.
 The implemented search first checks the protected source tuple and its complete admissible rebase closure, then invokes native cvc5 SyGuS over preferred features and subsequently over preferred features plus verification coordinates.
-Each supplemental coordinate contains at most three feature occurrences, combined by addition and subtraction.
+Each auxiliary state contains at most three feature occurrences, combined by addition and subtraction.
 The synthesis constraint excludes collisions between two copies of the verification tuple under a conservative reachable-state abstraction.
 Native enumeration on an unknown synthesis result provides proposals without a synthesis certificate; independent constructive verification remains mandatory.
-The search allows 256 proposals within a 20-second deadline, shared among grammar stages and widths, with up to 1500\,ms per semantic synthesis call.
-It tries the maximum allowed width first, followed by smaller widths in increasing order.
+The search allows 256 proposals within a 20-second deadline, shared among grammar stages and choices of auxiliary state count, with up to 1500\,ms per semantic synthesis call.
+It tries the maximum allowed number of auxiliary states first, followed by smaller numbers in increasing order.
 An in-flight independent check may finish after the search deadline.
 Repair is restricted to demonstrated source-domain failures, with 64 rounds and 1500\,ms per Z3 query.
 Numerical rejection does not resume synthesis.

@@ -13,9 +13,9 @@ The back end prints each join as TE expressions, emits one \commreducer per chai
 A chain that is not fused is left exactly as written, and its report gives the reason.
 
 
-Native cvc5 SyGuS~\citep{cvc5} searches for supplemental coordinates; it owns candidate enumeration and internal refinement.
-The implementation tries the largest permitted supplemental width first, then smaller widths in increasing order, within each grammar stage.
-It allows at most 256 proposals, three feature occurrences per coordinate and a 20-second synthesis deadline, shared among stages and widths.
+Native cvc5 SyGuS~\citep{cvc5} searches for auxiliary states; it owns candidate enumeration and internal refinement.
+Within each grammar stage, the implementation first tries the largest permitted number of auxiliary states, then smaller numbers in increasing order.
+It allows at most 256 proposals, three feature occurrences per auxiliary state and a 20-second synthesis deadline, shared among grammar stages and choices of state count.
 Semantic synthesis calls have a 1500\,ms limit; an in-flight independent proof may finish after the overall deadline.
 On an unknown synthesis result, cvc5's native grammar enumerator can supply proposals for independent verification.
 For polynomial tuples, that checker also rejects any unresolved two-copy uniqueness query, supplementing the constructive recovery proof.

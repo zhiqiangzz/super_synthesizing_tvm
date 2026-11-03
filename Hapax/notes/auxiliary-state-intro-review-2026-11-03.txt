@@ -1,0 +1,29 @@
+Auxiliary-state terminology and singleton-fusion explanation — 2026-11-03
+
+Implemented changes
+- Removed the abstract sentence about singleton partitions and parallel reduction trees. The abstract retains the fusion objective, synthesis/recovery/join contribution, numerical motivation and evaluation claim (175 words under whitespace counting).
+- Introduced maintained state tuple and auxiliary states together before the introduction's partition diagram; removed the later duplicate definition.
+- Replaced per-element computations with an explicit explanation: a larger partition may still take multiple traversals; a singleton tuple depends only on its element; the fused loop initialises from the first element and computes/joins each later tuple during the same traversal. Wording uses contains exactly one element.
+- Standardised added-state terminology to auxiliary states / 辅助状态 throughout body prose, headings, figures and supplement. Reference states, complete maintained tuples and repaired source states remain distinct.
+- Ordinary supplement verbs, Supplementary Material, literal code/identifiers and bibliographic titles retain their original meanings.
+- Clarified that independent correction features arise from additive terms in the body of a sum reduction. Accuracy contribution now explicitly states an objective rather than a numerical guarantee.
+
+Read-through and independent reviews
+- Read the main manuscript in sequence and checked modified paragraphs against their surrounding argument. The mathematical expressions in all English sections are unchanged from the committed manuscript.
+- First cold reader received only the current English abstract and introduction, with no conversation or other sections. It correctly explained the contribution, all three state roles, the recovered join and singleton-fold fusion. It identified an unclear description of split terms and a potentially overstrong accuracy sentence; both were clarified.
+- That reader also wanted concrete tuples and more details of analysis/rewrite scope. Those already appear in the variance section and method sections, so no additional examples or cross-references were inserted into the introduction.
+- A second independent reader again received only abstract/introduction. It reported no blocking misunderstanding, correctly distinguished all three state roles, and explained why auxiliary information and a corrective join enable fusion. It treated detailed success conditions and numerical rewrite mechanics as appropriate later-section questions.
+
+Validation
+- main.tex, main-zh.tex and supplement.tex compiled successfully with cached Tectonic.
+- check_zh.py --pdf passed, including matching protected content, headings, math, citations, numerical macros and reviewed source fingerprints.
+- Citation audit passed: 47 cited keys verified.
+- Source and PDF scans found no supplemental/supplementation terminology for auxiliary states or old Chinese state names.
+- No undefined-reference diagnostics, missing characters, overfull boxes or unresolved PDF text markers.
+- Fonts embedded, no Type 3, expected page geometry and anonymous metadata.
+- Visually checked both abstracts and the introduction's half-width figure layout; figures retain readable labels and arrows.
+- git diff --check passed.
+
+Existing draft limits
+- English body still ends on page 21, exceeding the configured 20-page limit by one page.
+- Two existing GPU-performance placeholders remain. This revision makes no performance-data or compiler changes.

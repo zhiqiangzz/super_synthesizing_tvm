@@ -53,7 +53,7 @@ To compare the implementations, we wrote the \nPriorPrograms programs that the t
 \sys fuses \nPriorFused of them, among them every attention variant once its mask or bias is supplied as a tensor, RMSNorm followed by a maximum, the three reduction patterns of the performer, MLA decoding, the variance and the moment of inertia.
 Six use constructs outside the language of \cref{fig:grammar}: masks built with \code{if\_then\_else}, ALiBi computed from loop indices, soft-capping with $\tanh$, grouped-query indexing by \code{n // G}, and a reduction over two axes at once.
 The scaled L2 norm and FP8 quantisation followed by GEMM obtain verified reducers but fail the numerical check on extreme input families.
-Two further programs fail state selection: the sum-of-sums example has an unresolved domain obligation, and the Appendix~A.1 program below needs a supplement beyond its state limit.
+Two further programs fail state selection: the sum-of-sums example has an unresolved domain obligation, and the Appendix~A.1 program below requires auxiliary states that exceed its state limit.
 Neptune keeps the scale in its L2 norm and divides by the running maximum, which is zero after an all-zero prefix; the paper does not discuss that case.
 
 \textbf{Contexts without an inverse.}
@@ -61,8 +61,8 @@ RedFuser rescales a stale partial result by $H(d_{\mathrm{old}})^{-1}\otimes H(d
 
 \label{ex:a1}
 When a zero factor has already erased a contribution, substituting an identity for the inverse cannot recover that information.
-A valid join must retain enough information to reconstruct the erased contribution, for example through an additional state.
-Under \sys's preservation policy this supplement must fit alongside the defined original results; if it exceeds the state limit, the chain remains unfused.
+A valid join must retain enough information to reconstruct the erased contribution, for example through an auxiliary state.
+Under \sys's preservation policy this auxiliary state must fit alongside the defined original results; if it exceeds the state limit, the chain remains unfused.
 Appendix~D of the supplementary material gives a concrete counterexample and evaluates the incremental form.
 
 \Cref{tab:capabilities} summarises the comparison, including where the prior systems are ahead.
@@ -105,7 +105,7 @@ Flashlight~\citep{flashlight} rewrites attention variants into an online form th
 Halide's \code{rfactor}~\citep{rfactor} and TVM~\citep{tvm,tensorir} parallelise associative reductions, including tuple reducers, but do not fuse a reduction with one that reads its final value.
 Mirage~\citep{mirage} searches multi-level graphs of tensor operators and verifies candidates probabilistically on a fragment of multilinear operators, division and at most one exponential per path, filtering numerically unstable ones with floating-point tests; a maximum is outside that fragment.
 STENSO~\citep{stenso} and Prism~\citep{prism} search equivalent tensor programs symbolically.
-\sys extracts features from context-correction formulas and synthesises supplemental coordinates over them; constructive recovery and domain proofs govern acceptance.
+\sys extracts features from context-correction formulas and synthesises auxiliary states over them; constructive recovery and domain proofs govern acceptance.
 The synthesis concerns partition summaries rather than arbitrary operator graphs.
 
 \textbf{Program calculation and synthesis.}

@@ -1,14 +1,13 @@
 \begin{abstract}
 Many tensor operators use the completed result of one reduction as the context for another.
 This dependency obstructs ordinary loop fusion, leaving experts to derive and implement single-pass algorithms.
-Fusion requires retaining enough information to correct partial results as their contexts change, and a join that performs these corrections without rereading input.
+Fusion requires retaining enough information for a join to correct partial results as contexts change without rereading input.
 We present \sys, which adapts state synthesis and join construction from automated divide-and-conquer parallelisation to fuse dependent reductions.
 Algebraic analysis exposes reference states that combine independently and determine the required results.
 Directly executing this representation can expand the source centring and scaling, introducing cancellation or overflow.
-\sys therefore builds its maintained states from the source results and supplemental quantities exposed by analysing context corrections.
-Syntax-guided synthesis combines these quantities so that the maintained states can recover the reference states.
+\sys therefore uses syntax-guided synthesis to augment source results with auxiliary states built from quantities exposed by context-correction analysis.
+The resulting maintained state tuple must support recovery of the reference states.
 Verified transformations between these representations yield a correct join over the reals.
-The join is rewritten into direct corrections that retain source centring and scaling where possible, with the aim of preserving the source program's numerical accuracy.
-With one element per partition, these states can be computed and joined in a single fused traversal; the same join also admits parallel reduction trees.
+The join is rewritten to retain source centring and scaling where possible, aiming to preserve numerical accuracy.
 Our TVM implementation derives single-pass reducers for \nShowFused of \nShowcase selected operators; we evaluate coverage, discovered states, derivation cost and numerical behaviour.
 \end{abstract}
