@@ -38,3 +38,22 @@
 
 % Keep half-width diagrams/algorithms beside their explanatory prose without reordering the argument.
 \newenvironment{paperdiagram}{\begin{minipage}[t]{0.48\linewidth}\vspace{0pt}}{\end{minipage}}
+
+% Reserve room for a wrapped diagram; its accompanying prose remains pageable.
+\newcommand{\reservewrapspace}[1]{%
+  \par\penalty-100\relax\begingroup
+  \dimen0=#1\relax
+  \dimen2=\pagegoal\advance\dimen2 by -\pagetotal
+  \ifdim\dimen0>\dimen2\newpage\fi
+  \endgroup
+}
+
+% Clear any remaining wrapped height before a full-width theorem or display.
+% wrapfig counts the remaining narrow lines plus one; clearing alone adds no space.
+\newcommand{\finishwrapspace}{%
+  \par
+  \ifnum\value{WF@wrappedlines}>1\relax
+    \vspace{\dimexpr\value{WF@wrappedlines}\baselineskip-\baselineskip\relax}%
+  \fi
+  \WFclear
+}

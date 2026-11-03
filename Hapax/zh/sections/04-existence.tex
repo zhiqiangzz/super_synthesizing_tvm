@@ -58,15 +58,10 @@ $\min_j$ & dual to $\max_j$ & dual\\
 从求和中提取常量项也可能产生同一个原子。
 这两种来源进入同一集合，并通过规范形式相等进行共享；只有所需表达式使用某个原子时，才将其加入集合。
 
-\noindent\begin{minipage}{\linewidth}
-\begin{minipage}[t]{0.50\linewidth}
-\vspace{0pt}
-\Cref{alg:judge} 访问每个所需成员及其依赖，每个成员只处理一次。
-算法将上下文替换为沿归约轴保持不变的符号，通过 \cref{tab:rules} 重写归约体，并将剩余原子收集到 $\mathcal Q$ 中。
-仍然读取上下文的原子称为\emph{受阻}：这些规则无法将它与上下文分离。
-否则，收集到的原子构成参考状态元组，每个不同的原子对应一个状态。
-\end{minipage}\hfill
-\begin{paperdiagram}
+\begingroup
+\setlength{\intextsep}{2pt}
+\reservewrapspace{16\baselineskip}
+\begin{wrapfigure}{r}{0.48\textwidth}
 \begin{minipage}{\linewidth}
 \begin{algorithm}[H]
 \small
@@ -87,13 +82,19 @@ $W\leftarrow \mathit{req}$;\ $\mathcal Q\leftarrow\emptyset$\;
 \Return \textsc{Fusible}$(\mathcal Q)$\;
 \end{algorithm}
 \end{minipage}
-\end{paperdiagram}
-\end{minipage}\par\medskip
+\end{wrapfigure}
+\Cref{alg:judge} 访问每个所需成员及其依赖，每个成员只处理一次。
+算法将上下文替换为沿归约轴保持不变的符号，通过 \cref{tab:rules} 重写归约体，并将剩余原子收集到 $\mathcal Q$ 中。
+仍然读取上下文的原子称为\emph{受阻}：这些规则无法将它与上下文分离。
+否则，收集到的原子构成参考状态元组，每个不同的原子对应一个状态。
 
 这一构造给出有限摘要，其分量可以独立合并，其值能够确定所需输出。
 它的大小界定了这一构造的状态数；状态选择将该上界用作默认状态数限制。
 它也确定了验证所选表示时使用的无上下文量。
 这两种作用需要区分：这一构造的存在性并不意味着每种保留原始结果的表示都能满足同一限制。
+
+\finishwrapspace
+\endgroup
 
 \begin{theorem}[Existence]
 \label{thm:existence}

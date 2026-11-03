@@ -3,6 +3,10 @@
 \usepackage{libertine}
 \usepackage{listings}
 \usepackage[ruled,linesnumbered,noend]{algorithm2e}
+% Section references match the paper; compile main.tex before this export.
+\usepackage[hidelinks]{hyperref}
+\usepackage{xr}
+\externaldocument{build/main}
 \usetikzlibrary{arrows.meta,positioning}
 \input{preamble/style}
 \begin{document}

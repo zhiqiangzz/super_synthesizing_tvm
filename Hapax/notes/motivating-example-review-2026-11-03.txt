@@ -1,0 +1,46 @@
+Motivating example and system overview revision — 2026-11-03
+
+Argument and terminology
+- Section 2 is now Motivating Example. Its argument proceeds from the source dependency and failure of local scalar addition, through the variance expansion and reference tuple, to the numerical motivation for retaining source results, discovery of count, constructive recovery, join and singleton fusion.
+- The expansion labels and highlights the three mean-independent reductions. It establishes a sufficient three-state representation, without a minimality claim.
+- The correction coefficient n is discovered by context-correction analysis. The recorded variance route is rebase closure, not SyGuS. Recovery q = ss + t^2/n with n > 0 establishes that (t, ss, n) retains all reference information.
+- Source reduction addition and tuple join are distinguished. Larger partitions still require two source traversals; directly evaluated singleton states and a fold produce the fused traversal.
+- The numerical comparison is limited to the illustrated shifted input and says the corrected join matches the two-pass result. Chan/Welford equivalence is explicitly algebraic over the reals.
+- Section 3 is now System Overview, with Derivation Pipeline, Input Reduction Chains and Single-Pass Reducer Contract. The pipeline distinguishes source-only and rebase-closure checks from subsequent synthesis.
+- Abstract and introduction now give correction analysis and synthesis their respective roles. The recovery composition is described as a symbolic join, followed by direct numerical corrections.
+- The reducer definition now specifies scalar states at fixed non-reduction indices and a tuple size fixed for a given reducer independently of reduction length. This also clarifies the attention state count. The existing invariant, lemma and proof are unchanged.
+
+Layout and Chinese edition
+- The three-panel variance overview (Fig. 3, not the introduction's partition diagram Fig. 2) is a top float with a short caption and unchanged font size. It appears at the top of page 3 in both editions, before the Section 2 heading; the English introduction concludes between the figure and heading.
+- Both pseudocode listings remain half-width and retain their original bodies and Listing numbering. Only short adjacent explanations are kept with them; the derivation and singleton discussion can paginate normally.
+- The pipeline diagram remains half-width. A local page-space guard keeps its nonfloating wrap inside the page and prevents collision with the following grammar figure. No additional LaTeX package is required.
+- Initial layout trials exposed deferred-listing collisions and a malformed underbrace glyph. The final PDF uses stable local listing placement and rendered underbrackets below the highlighted terms.
+- Visually inspected English pages 1–7, Chinese pages 1–6 and the standalone pipeline. The old large English page-3/page-4 bottom gaps are gone. Chinese pages 2 and 4 retain some bottom space to keep the short source block and the pipeline diagram intact; there are no overlaps or content outside the text area.
+- Chinese prose is synchronised. Headings, figures, pseudocode, equations, symbols, citations and numerical macros match the English source. Source fingerprints are updated.
+
+Independent reading and factual audit
+- Two separate agents cold-read only the current abstract, introduction and Sections 2–3, plus necessary figures/macros, without conversation history, later method sections or historical notes.
+- Both could explain the contribution, reference/maintained distinction, correction-derived count, constructive sufficiency and singleton-based fusion. Neither reported a remaining blocking comprehension problem.
+- The first review exposed the missing fixed-size-state constraint and an ambiguous floating-point interpretation of Welford equivalence; both were corrected. The second prompted unification of full-reference recovery wording and a targeted pointer for source-domain repair.
+- A separate factual audit checked the variance equations, recorded selection route, implementation recovery checks and float32 illustration. The maintained panel now uses the merge-result macro rather than the source-result macro, although both recorded results equal 14.
+- Read the surrounding theory, synthesis, accuracy, implementation, evaluation, related-work and conclusion sections for consistency with the new overview. No compiler code or experimental results were changed.
+
+Validation
+- Cached Tectonic builds succeeded for main.tex, main-zh.tex, supplement.tex and pipeline.tex.
+- check_zh.py --pdf passed; check_cites.py passed for English/supplement and Chinese (47 cited keys).
+- PDF checks found no undefined references, overfull boxes, wrap collisions, missing characters, unembedded fonts or Type 3 fonts. The Chinese implementation section retains one pre-existing underfull-line warning.
+- git diff --check passed. Listing bodies match HEAD, and all prior lemma/proof blocks in Section 3 are unchanged.
+- English PDF: 24 pages including back matter, body ending on page 21. Chinese PDF: 20 pages including back matter, body ending on page 18. Supplement: 11 pages; standalone pipeline: 1 page.
+
+Remaining draft and reviewer issues
+- The configured 20-page English body limit is still exceeded by one page. Two existing GPU-performance placeholders remain; draft checks report them rather than treating the manuscript as submission-ready.
+- Cold readers found the mechanism understandable, but judging novelty still requires the later evidence: comparison with prior fusion/synthesis methods, nontrivial cases needing feature combinations rather than count alone, synthesis and proof failures, and the scope of the sufficient condition.
+- Numerical evidence must support the stated sampled acceptance criterion. Actual speedups still require scheduling and runtime measurements; the introduction continues to identify GPU performance as subsequent work.
+
+Follow-up layout refinements
+- Partition notation is now S,T throughout the shared partition macros; the third partition in the supplement is U. State-representation symbols A,B remain distinct.
+- Equations (1) and (2) now each occupy a single display line, retaining all terms, highlighting, labels and the original font size.
+- The two short paired listing blocks described above have been replaced by nonfloating right-hand wraps. Following paragraphs fill the space beside each listing, with local 2pt vertical spacing and page-space guards.
+- The space guard now flushes pending paragraph contributions through a legal page-break point before measuring remaining space, avoiding an extra nearly empty page when the previous paragraph crosses a page boundary.
+- The pipeline wrap begins with its overview paragraph. Space is reserved before the Section 3 heading, keeping the diagram on the Chinese page 4 without leaving the previous large bottom gap.
+- Inspected the affected English and Chinese pages 3–5. Both editions compile without overfull boxes, wrap collisions, missing characters or undefined references; bilingual protected-content checks pass. Page counts and existing draft limits remain as recorded above.

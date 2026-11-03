@@ -1,27 +1,27 @@
-\noindent\begin{minipage}{\linewidth}
-\begin{minipage}[t]{0.50\linewidth}
-\vspace{0pt}
-\paragraph{Execution overview.}
-如 \cref{fig:pipeline} 所示，推导从 TE 归约链及其声明的输入域出发。
-代数分析将归约体与上下文分离，得到各分量可独立合并、且能确定输出的参考状态元组。
-其大小给出状态数上界，并被用作状态选择的默认限制。
-
-选择保留源归约结果，修复已证实的定义域失效，并从上下文修正公式中提取特征。
-语法引导合成将这些特征组合为辅助状态。
-对于每个候选元组，验证确立其状态和输出所用的全部无上下文坐标均可恢复，且操作在合法分区上有定义。
-证明未成功时，在搜索限制内尝试下一个合成元组。
-
-经验证的恢复关系使过程能够推导满足分区摘要不变量的合并。
-合并被重写为维护状态上的直接修正，尽可能保留中心化和缩放，以接近源程序的数值行为。
-生成的叶子、元组合并和收尾计算组成试验性的 TE 重写。
-重建后程序中的静态检查与差分数值测量决定是否接受；拒绝时保留源归约链。
-这将代数证明与可执行浮点形式的评估分开。
-\end{minipage}\hfill
-\begin{paperdiagram}
-\captionsetup{type=figure}
+\begin{wrapfigure}{r}{0.48\textwidth}
 \centering
 \input{figures/pipeline.tikz}
-\caption{End-to-end derivation. Failed proofs retry synthesis; search exhaustion or numerical rejection retains the source.}
+\caption{End-to-end derivation.}
 \label{fig:pipeline}
-\end{paperdiagram}
-\end{minipage}\par\medskip
+\end{wrapfigure}
+\sys 以 TVM Tensor Expressions（TE）表示的程序及其声明的输入域为输入。
+如 \cref{fig:pipeline} 所示，它首先提取沿同一轴执行的依赖归约链（\cref{sec:input-chains}），再为各条链推导单遍替代程序。
+对于每条提取出的链，代数分析将每个归约的上下文与依赖输入的项分离。
+得到的参考状态可以独立合并并确定输出，由此建立状态数上界，作为状态选择的默认限制（\cref{sec:existence}）。
+
+执行其展开公式可能丢失源程序的中心化和缩放，因此选择过程以原有归约结果作为维护状态的起点。
+若某个源结果在合法非空分区上无定义，则尝试提取导致定义域问题的上下文、保留其系数，以获得有定义的表示。
+为发现缺失的信息，分析器推导将局部上下文替换为更大分区的上下文时，每个保留结果如何变化。
+这些修正的系数提供候选辅助状态。
+过程首先检查源状态自身，然后检查加入全部可用修正系数后的元组，即重定基闭包。
+只有这两个元组都无法在状态数限制内成功时，语法引导合成才搜索这些特征的组合，随后将参考状态也加入搜索。
+因此，修正分析可以直接提供所需辅助状态；当这些初始选择不足以满足要求时，合成进一步寻找紧凑的组合（\cref{sec:selection,sec:synthesis}）。
+
+对于每个提出的维护元组，验证过程构造表达式，恢复用于表示其状态及所需输出的完整参考元组，并证明其恒等关系及在合法分区上的有定义性。
+由此定义符号形式的合并操作：恢复两个分区的参考状态，分别组合，再将结果表示为维护状态。
+验证确立合并后的元组等于并集的状态；证明未成功时，在搜索限制内返回状态选择。
+随后，将已验证的合并重写为维护状态上的直接修正，尽可能保留中心化和缩放，以保持源程序的数值行为（\crefrange{sec:recovery}{sec:rebase}）。
+
+后端生成 TE 程序，为每个输入元素计算叶状态元组，合并这些元组，再通过收尾计算产生所需输出。
+针对归约器的静态检查与重建程序上的差分数值测量决定是否接受这一浮点实现（\cref{sec:accuracy,sec:impl}）。
+若未找到通过验证的构造，或代码生成、数值检查失败，则保留源归约链。

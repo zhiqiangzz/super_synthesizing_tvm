@@ -1,8 +1,16 @@
-\section{Dependent Reduction Chains}
+\reservewrapspace{28\baselineskip}
+\section{System Overview}
 \label{sec:chains}
 
-本节定义 \sys 所融合的程序，以及这些程序的单遍计算形式。
-\Cref{fig:grammar} 给出了归约体的语言。
+\subsection{Derivation Pipeline}
+
+\input{zh/sections/03-pipeline}
+
+\subsection{Input Reduction Chains}
+\label{sec:input-chains}
+
+提取出的链包含沿同一轴执行的归约及其间计算。
+\Cref{fig:grammar} 给出了归约体的语言；以下定义说明链内依赖及其在分区上的语义。
 
 \begin{figure}[htbp]
 \small
@@ -42,9 +50,15 @@ m \;::=\;& \textstyle\bigoplus_{j} f \mid g(\ctx_1,\dots,\ctx_p)
 即使完整输入的输出有定义，某个原始成员仍可能在这样的分区上无定义；维护状态则必须在每个合法分区上都有定义。
 单遍算法必须从逐个分区收集的信息中，在源输出有定义的地方得到 $m(\Ax)$。
 
+\subsection{Single-Pass Reducer Contract}
+
+生成的程序必须从每个元素初始化状态元组，在不重新访问输入的情况下合并这些元组，并恢复所需输出。
+以下约定给出每次合并在实数语义下必须保持的关系。
+
 \begin{definition}[Single-pass reducer]
 \label{def:reducer}
 非空分区上的函数元组 $\st=(\st_1,\dots,\st_k)$ 称为\emph{状态映射}。
+固定非归约索引后，每个函数的值均为标量，给定归约器的元组大小 $k$ 固定，不随归约长度 $N$ 增长。
 归约链的\emph{单遍归约器}是由叶状态 $\leaf(x_j)=\st(\{j\})$、二元操作 $\Mrg$ 和收尾计算 $\epi$ 构成的元组 $(\leaf,\Mrg,\epi)$，对任意不相交的非空分区 $\pa$ 和 $\pb$，满足
 \begin{equation}
 \label{eq:invariant}
@@ -56,7 +70,7 @@ m \;::=\;& \textstyle\bigoplus_{j} f \mid g(\ctx_1,\dots,\ctx_p)
 
 生成的归约从第一个叶状态开始，随后折叠其余叶状态。
 没有数值状态代表空分区：执行时跳过空分区，且输入轴必须非空。
-\cref{eq:invariant} 中的合并不变量将所选摘要与原程序联系起来。
+\cref{eq:invariant} 中的合并不变量将维护状态元组与原程序联系起来。
 
 \begin{lemma}[Laws from the invariant]
 \label{lem:laws}
@@ -75,10 +89,8 @@ $\Mrg(\st(\pa),\st(\pb))=\st(\pa\dunion\pb)=\st(\pb\dunion\pa)=\Mrg(\st(\pb),\st
 这一并行结构来自不变量，而不依赖某个特定调度。
 
 用程序演算的术语来说，$S\mapsto\st(S)$ 是从以 $\dunion$ 为运算的有限非空多重集到以 $\Mrg$ 为运算的状态的同态，即合并与顺序无关的列表同态~\citep{bird87,gibbons96}。
-用数据库的术语来说，该链是一个\emph{代数型}聚合，可由固定数量的\emph{分配型}聚合计算得到~\citep{datacube}。
+用数据库的术语来说，具有无上下文参考构造的链是一个\emph{代数型}聚合，可由固定数量的\emph{分配型}聚合计算得到~\citep{datacube}。
 空分区由控制流处理，不属于代数合并的约定范围。
 
 \paragraph{Problem.}
 给定一个依赖归约链，建立单遍归约器的充分条件，构造归约器，证明 \cref{eq:invariant}，并且仅当浮点计算在检查的输入上不引入额外的非有限结果、测得误差相对于原程序保持在规定界限内时接受融合。
-
-\input{zh/sections/03-pipeline}

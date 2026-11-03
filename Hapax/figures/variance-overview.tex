@@ -1,37 +1,35 @@
 % Shared English visual; both prose editions include this source.
-\par\medskip
-\noindent\begin{minipage}{\linewidth}
-\captionsetup{type=figure}
+\begin{figure}[t]
 \centering
 \begin{tikzpicture}[
   summary/.style={draw=rulegray,rounded corners=2pt,fill=boxgray!45,
-    text width=3.75cm,minimum height=4.3cm,inner sep=5pt,
+    text width=3.75cm,minimum height=3.9cm,inner sep=4pt,
     align=center,font=\small},
   heading/.style={font=\sffamily\small\bfseries,anchor=south}]
 \node[summary] (source) at (0,0) {
-  $\displaystyle t=\sum_j x_j,\quad \mu=t/N$\\[5pt]
-  $\displaystyle ss=\sum_j(x_j-\mu)^2$\\[9pt]
-  Full row: $ss=\orig{\exTwoPass}$.\\[4pt]
-  Adding local results:\\[2pt]
-  $ss_\pa+ss_\pb=\stale{\exNaive}$
+  $\displaystyle t=\sum_j x_j,\quad \mu=t/N$\\[3pt]
+  $\displaystyle ss=\sum_j(x_j-\mu)^2$\\[5pt]
+  Full row: $ss=\orig{\exTwoPass}$.\\[3pt]
+  Source reduction: $\oplus=+$\\[2pt]
+  $ss_\pa\oplus ss_\pb=\stale{\exNaive}$
 };
 \node[summary] (reference) at (4.55,0) {
-  Reference state tuple: $(t,q,n)$\\[5pt]
+  Reference state tuple: $(t,q,n)$\\[3pt]
   $\begin{aligned}
-    t&=\textstyle\sum_j x_j\\[2pt]
-    q&=\textstyle\sum_j x_j^2\\[2pt]
+    t&=\textstyle\sum_j x_j\\[1pt]
+    q&=\textstyle\sum_j x_j^2\\[1pt]
     n&=\textstyle\sum_j 1
-  \end{aligned}$\\[5pt]
-  Componentwise join\\[3pt]
-  $ss=q-t^2/n$\\[5pt]
+  \end{aligned}$\\[3pt]
+  Componentwise join\\[2pt]
+  $ss=q-t^2/n$\\[3pt]
   Shifted float32: $\stale{\exTextbookFloat}$
 };
 \node[summary] (maintained) at (9.1,0) {
-  Maintained state tuple: $(t,ss,\aux{n})$\\[5pt]
-  $\mu=t/n,\quad \mu_p=t_p/n_p$\\[5pt]
-  $ss=ss_\pa+ss_\pb+\Delta$\\[3pt]
-  $\displaystyle\Delta=\sum_{p\in\{\pa,\pb\}}n_p(\mu-\mu_p)^2$\\[7pt]
-  Shifted float32: $\fix{\exTwoPassFloat}$
+  Maintained state tuple: $(t,ss,\aux{n})$\\[3pt]
+  $\mu=t/n,\quad \mu_p=t_p/n_p$\\[3pt]
+  $ss=ss_\pa+ss_\pb+\Delta$\\[2pt]
+  $\displaystyle\Delta=\sum_{p\in\{\pa,\pb\}}n_p(\mu-\mu_p)^2$\\[4pt]
+  Shifted float32: $\fix{\exMergedFloat}$
 };
 \node[heading,text=origblue] at ([yshift=3pt]source.north) {(a) Two-pass source};
 \node[heading] at ([yshift=3pt]reference.north) {(b) Reference states};
@@ -40,9 +38,7 @@
 \draw[flow,draw=fixgreen] (reference.east) -- (maintained.west);
 \end{tikzpicture}
 \caption{Deriving a single-pass variance reducer.
-For $\pa=(1,3)$ and $\pb=(2,6)$, adding locally centred results loses the change of mean.
-The reference state tuple establishes a three-state bound; the maintained state tuple retains $t$ and $ss$ and adds \aux{$n$} for the correction.
-The shifted results report $ss$ after adding $10^4$ to every input.}
+Inputs: $\pa=(1,3)$, $\pb=(2,6)$; shifted inputs: $x_j+10^4$.}
 \label{fig:variance}
 % src: data/illus.json variance_exact and variance_float32
-\end{minipage}\par\medskip
+\end{figure}

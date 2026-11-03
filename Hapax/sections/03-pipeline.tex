@@ -1,27 +1,27 @@
-\noindent\begin{minipage}{\linewidth}
-\begin{minipage}[t]{0.50\linewidth}
-\vspace{0pt}
-\paragraph{Execution overview.}
-The derivation starts from a TE chain and its declared input domain, as shown in \cref{fig:pipeline}.
-The algebraic analysis separates reduction bodies from their contexts, producing a reference state tuple whose components join independently and determine the outputs.
-Its size gives a state-count upper bound, used as the default selection limit.
-
-Selection retains the source reduction results, repairs demonstrated domain failures, and extracts features from their context-correction formulas.
-Syntax-guided synthesis combines these features into auxiliary states.
-For each candidate tuple, verification establishes recovery of all context-free coordinates used by its states and outputs, with operations defined on legal partitions.
-An unsuccessful proof leads to another synthesized tuple within the search limits.
-
-Verified recovery enables the procedure to derive a join satisfying the partition-summary invariant.
-The join is rewritten into direct corrections on maintained states, retaining centring and scaling where possible to stay close to the source program's numerical behaviour.
-The emitted leaf, tuple join and epilogue form a trial TE rewrite.
-Static checks and differential numerical measurements in the rebuilt program decide acceptance; rejection retains the source chain.
-This separates the algebraic proof from assessment of the executable floating-point formulation.
-\end{minipage}\hfill
-\begin{paperdiagram}
-\captionsetup{type=figure}
+\begin{wrapfigure}{r}{0.48\textwidth}
 \centering
 \input{figures/pipeline.tikz}
-\caption{End-to-end derivation. Failed proofs retry synthesis; search exhaustion or numerical rejection retains the source.}
+\caption{End-to-end derivation.}
 \label{fig:pipeline}
-\end{paperdiagram}
-\end{minipage}\par\medskip
+\end{wrapfigure}
+\sys takes a program expressed in TVM Tensor Expressions (TE) and the declared domain of its inputs.
+As shown in \cref{fig:pipeline}, it first extracts dependent reduction chains over a shared axis (\cref{sec:input-chains}) and then derives a single-pass replacement for each chain.
+For each extracted chain, algebraic analysis separates each reduction's context from its input-dependent terms.
+The resulting reference states join independently and determine the outputs, establishing a state-count upper bound used as the default selection limit (\cref{sec:existence}).
+
+Executing their expanded formulas can lose the source program's centring and scaling, so selection instead starts with its original reduction results as the maintained states.
+For a source result that is undefined on a legal non-empty partition, the procedure seeks a defined representation by extracting the offending context and retaining its coefficients.
+To discover missing information, the analyser derives how each retained result changes when its local context is replaced by the context of a larger partition.
+The coefficients of these corrections provide candidate auxiliary states.
+The procedure first checks the source states alone, then the tuple augmented with all admissible correction coefficients, called the rebase closure.
+Only if neither tuple succeeds within the state limit does syntax-guided synthesis search combinations of these features and, subsequently, reference states.
+Thus correction analysis can supply the required auxiliary states directly, while synthesis seeks compact combinations when those initial choices do not suffice (\cref{sec:selection,sec:synthesis}).
+
+For each proposed maintained tuple, verification constructs expressions recovering the full reference tuple needed to express its states and the required outputs, and proves their identities and definedness on legal partitions.
+This recovery defines a symbolic join: recover the reference states of the two parts, combine them independently, and express the result in maintained states.
+Verification establishes that the joined tuple is the state of the union; unsuccessful proofs return to state selection within the search limits.
+The verified join is then rewritten as direct corrections on maintained states, retaining centring and scaling where possible to preserve the source program's numerical behaviour (\crefrange{sec:recovery}{sec:rebase}).
+
+The backend emits a TE program that computes a leaf state tuple for each input element, joins the tuples, and evaluates an epilogue that produces the required outputs.
+Static checks on the reducer and differential numerical measurements in the rebuilt program determine acceptance of this floating-point implementation (\cref{sec:accuracy,sec:impl}).
+If no verified construction is found, or emission or numerical checks fail, the source chain is retained.

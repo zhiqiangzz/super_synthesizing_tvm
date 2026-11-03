@@ -58,15 +58,10 @@ Before collecting atoms, every read of the reduction-axis extent as a value is n
 Extracting a constant term from a sum can expose the same atom.
 Both occurrences enter the same collection and are shared by canonical equality; no atom is added unless a required expression uses it.
 
-\noindent\begin{minipage}{\linewidth}
-\begin{minipage}[t]{0.50\linewidth}
-\vspace{0pt}
-\Cref{alg:judge} visits every required member and its dependencies, processing each member once.
-It replaces each context by a symbol constant along the axis, rewrites the body with \cref{tab:rules}, and collects the remaining atoms in $\mathcal Q$.
-An atom that still reads a context is \emph{stuck}: the rules could not free it.
-Otherwise the collected atoms constitute the reference state tuple, with one state per distinct atom.
-\end{minipage}\hfill
-\begin{paperdiagram}
+\begingroup
+\setlength{\intextsep}{2pt}
+\reservewrapspace{16\baselineskip}
+\begin{wrapfigure}{r}{0.48\textwidth}
 \begin{minipage}{\linewidth}
 \begin{algorithm}[H]
 \small
@@ -87,13 +82,19 @@ $W\leftarrow \mathit{req}$;\ $\mathcal Q\leftarrow\emptyset$\;
 \Return \textsc{Fusible}$(\mathcal Q)$\;
 \end{algorithm}
 \end{minipage}
-\end{paperdiagram}
-\end{minipage}\par\medskip
+\end{wrapfigure}
+\Cref{alg:judge} visits every required member and its dependencies, processing each member once.
+It replaces each context by a symbol constant along the axis, rewrites the body with \cref{tab:rules}, and collects the remaining atoms in $\mathcal Q$.
+An atom that still reads a context is \emph{stuck}: the rules could not free it.
+Otherwise the collected atoms constitute the reference state tuple, with one state per distinct atom.
 
 The construction gives a finite summary whose components join independently and whose values determine the required outputs.
 Its size bounds the number of states in this construction; selection uses that bound as its default state limit.
 It also identifies the context-free quantities against which a selected representation can be verified.
 These roles are distinct: the existence of this construction does not establish that every representation preserving the original results fits the same limit.
+
+\finishwrapspace
+\endgroup
 
 \begin{theorem}[Existence]
 \label{thm:existence}

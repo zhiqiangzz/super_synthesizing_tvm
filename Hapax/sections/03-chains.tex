@@ -1,8 +1,16 @@
-\section{Dependent Reduction Chains}
+\reservewrapspace{28\baselineskip}
+\section{System Overview}
 \label{sec:chains}
 
-This section defines the programs \sys fuses and what a single pass is for them.
-\Cref{fig:grammar} gives the language of reduction bodies.
+\subsection{Derivation Pipeline}
+
+\input{sections/03-pipeline}
+
+\subsection{Input Reduction Chains}
+\label{sec:input-chains}
+
+The extracted chains contain reductions and intervening computations over a shared axis.
+\Cref{fig:grammar} gives the language of reduction bodies; the definitions below specify the dependencies within a chain and its meaning on a partition.
 
 \begin{figure}[htbp]
 \small
@@ -42,9 +50,15 @@ A legal partition is any non-empty part of an input satisfying these constraints
 An original member may be undefined on such a part even when the full-input output is defined; a maintained state must be defined on every legal partition.
 A single pass must produce $m(\Ax)$, wherever the source output is defined, from information gathered part by part.
 
+\subsection{Single-Pass Reducer Contract}
+
+The generated program must initialise a state tuple from each element, join these tuples without revisiting the input, and recover the required outputs.
+The following contract states the relation that each join must preserve over the reals.
+
 \begin{definition}[Single-pass reducer]
 \label{def:reducer}
 A \emph{state map} is a tuple $\st=(\st_1,\dots,\st_k)$ of functions of non-empty parts.
+For fixed non-reduction indices, each function is scalar-valued, and the tuple size $k$ is fixed for a given reducer, independently of the reduction length $N$.
 A \emph{single-pass reducer} for a chain is a tuple $(\leaf,\Mrg,\epi)$ of a leaf $\leaf(x_j)=\st(\{j\})$, a binary operation $\Mrg$ and an epilogue $\epi$ such that, for all disjoint non-empty parts $\pa$ and $\pb$,
 \begin{equation}
 \label{eq:invariant}
@@ -56,7 +70,7 @@ The \emph{required} members are those the rest of the program reads.
 
 The generated reduction starts from the first leaf and folds the remaining leaves.
 No numerical state represents an empty partition: execution skips empty partitions, and the input axis must be non-empty.
-The join invariant of \cref{eq:invariant} connects the chosen summary to the original program.
+The join invariant of \cref{eq:invariant} connects the maintained state tuple to the original program.
 
 \begin{lemma}[Laws from the invariant]
 \label{lem:laws}
@@ -75,10 +89,8 @@ A tree of joins combines these tuples without another traversal of the partition
 This parallel structure follows from the invariant, independently of a particular schedule.
 
 In the vocabulary of program calculation, $S\mapsto\st(S)$ is a homomorphism from finite non-empty bags under $\dunion$ to the states under $\Mrg$: a list homomorphism~\citep{bird87,gibbons96} whose join is order-free.
-In the vocabulary of databases, the chain is an \emph{algebraic} aggregate, computable from a fixed number of \emph{distributive} ones~\citep{datacube}.
+In the vocabulary of databases, a chain with a context-free reference construction is an \emph{algebraic} aggregate, computable from a fixed number of \emph{distributive} ones~\citep{datacube}.
 Empty partitions are handled by control flow, outside the algebraic join contract.
 
 \paragraph{Problem.}
 Given a dependent chain, establish a sufficient condition for a single-pass reducer, construct one, prove \cref{eq:invariant}, and accept it only if in floating point it introduces no additional non-finite result on the checked inputs and its measured error stays within a stated bound of the program's.
-
-\input{sections/03-pipeline}

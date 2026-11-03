@@ -5,7 +5,7 @@ Fusion requires retaining enough information for a join to correct partial resul
 We present \sys, which adapts state synthesis and join construction from automated divide-and-conquer parallelisation to fuse dependent reductions.
 Algebraic analysis exposes reference states that combine independently and determine the required results.
 Directly executing this representation can expand the source centring and scaling, introducing cancellation or overflow.
-\sys therefore uses syntax-guided synthesis to augment source results with auxiliary states built from quantities exposed by context-correction analysis.
+\sys therefore augments source results with auxiliary states exposed by context-correction analysis, using syntax-guided synthesis when combinations of these quantities are needed.
 The resulting maintained state tuple must support recovery of the reference states.
 Verified transformations between these representations yield a correct join over the reals.
 The join is rewritten to retain source centring and scaling where possible, aiming to preserve numerical accuracy.

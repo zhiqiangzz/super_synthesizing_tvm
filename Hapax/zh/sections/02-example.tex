@@ -1,16 +1,12 @@
-% Introduce the source program before the overview, without fixing a page boundary.
-\section{From Dependent Reductions to a Single Pass}
+% Allow the overview to float near the section opening without blocking prose.
+\input{figures/variance-overview}
+\begingroup
+\setlength{\intextsep}{2pt}
+\reservewrapspace{12\baselineskip}
+\section{Motivating Example}
 \label{sec:example}
 
-\noindent\begin{minipage}{\linewidth}
-\begin{minipage}[t]{0.50\linewidth}
-\vspace{0pt}
-方差展示了如何将具有依赖关系的归约转化为单遍计算。
-\Cref{lst:variance-before} 给出长度为 $N$ 的一行数据对应的源程序。
-它先计算总和 $t$ 并得到均值 $\mu=t/N$，再累加中心化平方和 $ss$；方差为 $ss/N$。
-第二次遍历需要第一次遍历得到的最终均值，因此常规循环融合无法消除这一依赖。
-\end{minipage}\hfill
-\begin{paperdiagram}
+\begin{wrapfigure}{r}{0.48\textwidth}
 \begin{lstlisting}[style=pseudocode,caption={Two-pass source program.},label={lst:variance-before}]
 Input: $x_0,\ldots,x_{N-1}$, $N>0$
 $t\gets0$
@@ -22,46 +18,52 @@ for $j=0,\ldots,N-1$:
     $ss\gets ss+(x_j-\mu)^2$
 return $\;ss/N$
 \end{lstlisting}
-\end{paperdiagram}
-\end{minipage}\par\medskip
+\end{wrapfigure}
+方差展示了融合必须消除的依赖。
+对于长度为 $N$ 的一行数据，\cref{lst:variance-before} 中的源程序先计算总和 $t$ 与均值 $\mu=t/N$，再累加中心化平方和 $ss$；方差为 $ss/N$。
+只有第一次遍历得到最终均值后，第二次遍历才能开始原有计算。
 
-\input{figures/variance-overview}
+为将这一依赖转化为合并操作，我们先考察使用局部均值计算的结果。
+对于非空分区 $S$，令 $t_S$ 和 $ss_S$ 为源程序在该分区上的归约结果，$\mu_S$ 为该分区的均值。
+直接计算这些结果仍需遍历该分区两次。
+对于不相交分区 $\pa$ 和 $\pb$，沿用源归约运算（本例为 $\oplus=+$）得到 $ss_\pa\oplus ss_\pb=ss_\pa+ss_\pb$。
+它通常不等于并集的中心化平方和，因为两个局部结果使用不同的均值，如 \cref{fig:variance}(a) 所示。
+正确的合并操作必须处理均值变为共同均值时带来的变化。
 
-仅在两个分区上独立执行该程序，并不能解决问题。
-每个分区都使用自身的均值，直接相加局部中心化结果，会得到 \cref{fig:variance}(a) 中的错误值。
-因此，推导首先确定一个充分的摘要。
-将均值从归约体中分离，得到子图 (b) 中的参考状态：这些坐标可以独立合并并确定最终输出，从而确立三个状态的上界。
-但直接执行这一表示，需要通过两个可能很大且彼此接近的量相减来重构 $ss$。
-在 float32 中，将图示数据平移 $10^4$ 后，它返回 $\stale{\exTextbookFloat}$，而两遍源程序返回 $\exTwoPassFloat$。
-为保留中心化计算，\sys 保留源结果 $t$ 和 $ss$，并补充参考中已有的常量体求和 $n$。
-为推导修正，令 $\mu$ 为并集的均值，$\delta_\pa=\mu-\mu_\pa$ 为 $\pa$ 上的均值变化。
+因此，我们首先寻找无需共享均值即可组合的状态。
+展开中心化归约，可以显式分离其对 $\mu_S$ 的依赖：
+\begin{equation}
+\label{eq:variance-reference}
+ss_S=\sum_{j\in S}(x_j-\mu_S)^2
+=\underbracket{\colorbox{boxgray}{$\displaystyle\sum_{j\in S}x_j^2$}}_{q_S}
+ -2\mu_S\underbracket{\colorbox{boxgray}{$\displaystyle\sum_{j\in S}x_j$}}_{t_S}
+ +\mu_S^2\underbracket{\colorbox{boxgray}{$\displaystyle\sum_{j\in S}1$}}_{n_S}.
+\end{equation}
+高亮的归约均不读取 $\mu_S$：它们分别是平方和 $q_S$、总和 $t_S$ 与计数 $n_S$。
+它们构成子图 (b) 中的参考状态元组 $(t_S,q_S,n_S)$。
+每个状态都可以通过加法组合，三者共同通过 $\mu_S=t_S/n_S$ 和 $ss_S=q_S-t_S^2/n_S$ 恢复源结果。
+这就确立了一个状态数与输入长度无关的充分三状态表示。
+
+参考表示说明单遍计算在代数上可行，但它重构 $ss$ 时需要对两个可能很大且彼此接近的量做减法。
+\cref{fig:variance} 中平移后的 float32 输入展示了由此产生的相消。
+为保留中心化计算，\sys 转而从源结果 $(t,ss)$ 出发，分析修正这些结果需要哪些信息。
+令 $\mu$ 为并集的均值，$\delta_\pa=\mu-\mu_\pa$ 为 $\pa$ 上的均值变化。
 围绕局部均值展开可得
 \begin{equation}
 \label{eq:variance-rebase}
-\begin{aligned}
 \sum_{j\in\pa}(x_j-\mu)^2
-&=ss_\pa-2\delta_\pa\sum_{j\in\pa}(x_j-\mu_\pa)+\delta_\pa^2 n_\pa\\
-&=ss_\pa+\delta_\pa^2 n_\pa.
-\end{aligned}
+=ss_\pa-2\delta_\pa\sum_{j\in\pa}(x_j-\mu_\pa)+\delta_\pa^2 n_\pa
+=ss_\pa+\delta_\pa^2 n_\pa.
 \end{equation}
 由于相对于分区自身均值的偏差之和为零，一次项消失。
-剩余项依赖 $n_\pa$，它提供了原始结果中缺失的修正权重。
-对两个分区应用同一推导，即得到子图 (c)，其中仍存储总和 $t$，并从总和与计数计算均值。
-\sys 验证这一合并将不相交非空分区的摘要映射为并集的摘要。
-随后将生成程序的精度与源程序比较；图示的中心化合并在平移后数据上返回 $\exTwoPassFloat$。
+剩余修正项以 $n_\pa$ 加权，它表示中心发生变化的元素数量。
+源结果 $(t_\pa,ss_\pa)$ 并未保留这一计数。
+因此，上下文修正分析将 $n$ 识别为所选表示缺失的信息，\sys 随后将其作为辅助状态进行检验。
+在本例中，仅这个系数就足以补全表示：由于 $n_S>0$，维护状态元组 $(t_S,ss_S,n_S)$ 可以恢复 $q_S=ss_S+t_S^2/n_S$，其余参考状态则可直接读取。
+状态选择过程验证这一恢复关系后，才接受该元组。
 
-\medskip
-\noindent\begin{minipage}{\linewidth}
-\begin{minipage}[t]{0.50\linewidth}
-\vspace{0pt}
-\Cref{lst:variance-after} 展示所得单遍程序。
-维护元组为 $(t,ss,n)$；下标标识两个输入元组的对应分量。
-每个叶子为 $(x_j,0,1)$，顺序折叠从第一个叶子开始。
-在实数上，经验证的并集性质还允许各分区独立计算，再通过分治合并树组合。
-这恢复了 \citet{chan} 的成对方差公式，而顺序折叠则得到 Welford 更新~\citep{welford}。
-参考构造提供信息要求，保留的源结果则指导数值形式。
-\end{minipage}\hfill
-\begin{paperdiagram}
+\reservewrapspace{14\baselineskip}
+\begin{wrapfigure}{r}{0.48\textwidth}
 \begin{lstlisting}[style=pseudocode,caption={Fused single-pass program.},label={lst:variance-after}]
 $\leaf(x)=(x,0,1)$
 function $\Mrg(\pa,\pb)$:
@@ -75,5 +77,18 @@ for $j=1,\ldots,N-1$:
     $(t,ss,n)\gets\Mrg((t,ss,n),\leaf(x_j))$
 return $\;ss/n$
 \end{lstlisting}
-\end{paperdiagram}
-\end{minipage}\par
+\end{wrapfigure}
+利用恢复关系推导合并，再围绕局部均值组织计算，便得到子图 (c)。
+合并操作对总和及计数做加法，并在相加之前，将每个局部中心化平方和修正到组合后的均值。
+\sys 验证所得结果正是并集的维护状态元组。
+在图示的平移输入上，修正后的合并与两遍程序的结果一致。
+
+为将这一合并转化为融合，令每个分区恰好包含一个元素。
+此时均值为 $x_j$，中心化平方和为零，计数为一，因此可直接得到维护状态元组 $\leaf(x_j)=(x_j,0,1)$。
+\Cref{lst:variance-after} 从第一个元素初始化累积元组，之后每读入一个元素，就计算其元组并立即合并。
+这同时消除了分区内部的多次遍历和对全局均值的依赖：输入只读取一次，最终方差为 $ss/n$。
+伪代码中的下标标识两个输入元组的对应分量。
+
+在实数语义下，所得合并恢复了 \citet{chan} 的成对方差公式；逐元素应用时，它在代数上等价于 Welford 更新~\citep{welford}。
+同一并集性质还允许通过并行归约树组合。
+\endgroup
