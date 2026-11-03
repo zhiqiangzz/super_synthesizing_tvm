@@ -1,0 +1,28 @@
+% Shared unchanged by both prose editions.
+\begin{wrapfigure}{r}{0.33\textwidth}
+\vspace{-6pt}
+\centering
+\captionsetup{skip=3pt}
+\begin{tikzpicture}[x=1cm,y=1cm,
+ instance/.style={draw=origblue,rounded corners=2pt,fill=boxgray,inner sep=2pt,font=\scriptsize},
+ carry/.style={->,draw=rulegray},
+ dependency/.style={->,draw=staleorange,semithick}]
+\node[instance] (a) at (0,0) {$I_1(0)$};
+\node[instance] (b) at (1.15,0) {$I_1(1)$};
+\node[font=\scriptsize,inner sep=1pt] (gap1) at (2.10,0) {$\cdots$};
+\node[instance] (c) at (3.15,0) {$I_1(N-1)$};
+\node[instance] (d) at (0,-0.95) {$I_2(0)$};
+\node[instance] (e) at (1.15,-0.95) {$I_2(1)$};
+\node[font=\scriptsize,inner sep=1pt] (gap2) at (2.10,-0.95) {$\cdots$};
+\node[instance] (f) at (3.15,-0.95) {$I_2(N-1)$};
+\node[font=\scriptsize,anchor=south west,inner sep=0pt]
+  at ([yshift=2pt]a.north west) {Loop 1};
+\node[font=\scriptsize,anchor=south west,inner sep=0pt]
+  at ([yshift=2pt]d.north west) {Loop 2};
+\foreach \s/\t in {a/b,b/gap1,gap1/c,d/e,e/gap2,gap2/f} \draw[carry] (\s) -- (\t);
+\foreach \t in {d,e,f} \draw[dependency] (c.south) -- (\t.north);
+\end{tikzpicture}
+\caption{Schematic of dependent reductions.}
+\label{fig:dependent-loops}
+\vspace{-6pt}
+\end{wrapfigure}

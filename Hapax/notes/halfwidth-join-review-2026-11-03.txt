@@ -1,0 +1,31 @@
+Fig.2 and join terminology revision — 2026-11-03
+
+Implemented scope
+- Fig.2 now contains two symbolic partitions feeding Join. Panel B, local/combined tuple labels, and Local contexts subtitle removed.
+- Diagram occupies right 0.48 linewidth, explanatory prose left 0.50 linewidth. Caption: Partitioned computation.
+- Iteration endpoints a,b and c,d with ellipses; 3 cm boxes, 0.4 cm gap, 0.95 cm row spacing, 1.2 mm arrowheads.
+- Adjacent prose explains local contexts, corrective joining of partition states, then the singleton-partition fused traversal. Fig.2 reference attaches to the union construction.
+- Conceptual operation is join in abstract, sections, headings, tables, shared figures, pseudocode and supplement. Shared mathematical macro renders operatorname{join}; internal macro and reference names are retained.
+- Chinese prose is synchronized; headings, figures, equations, tables and footnotes remain shared English content. First conceptual introduction annotates 合并 with join.
+- Original generated code/API names and comments remain verbatim. Fig.1 is byte-for-byte unchanged.
+
+Read-through
+- A fresh agent without conversation context read the abstract/introduction and audited terminology across the paper.
+- It found the divide-and-conquer synthesis -> corrected join -> singleton partitions -> fused traversal explanation understandable without panel B, with no substantive readability issue.
+- Replaced the redundant rendered phrase a join join by a binary operation join. Reformatted the supplement associativity display for the longer operator.
+
+Validation
+- Cached Tectonic builds completed: main.tex, main-zh.tex, supplement.tex, pipeline.tex.
+- check_zh.py --pdf passed, including source fingerprints, protected content, math, headings, citations and numerical macros.
+- Citation audit: 47 cited keys, all verified; no undefined references.
+- Logs contain no overfull boxes, missing glyphs or undefined-reference diagnostics.
+- PDF text contains no replacement characters or unresolved ?? markers.
+- Fonts embedded, no Type 3; main and supplement anonymous and correct page geometry.
+- PDF terminology scan: main, main-zh and pipeline contain no old conceptual merge wording. Supplement retains one original generated-code comment, # Merge operands..., intentionally.
+- Visually checked Fig.2 in both editions, main pseudocode and invariant formulas, state-recovery figure, and supplement associativity proof.
+
+Remaining draft status
+- English: 24 PDF pages, body ends on page 21 (20-page body limit still exceeded by one page).
+- Chinese: 20 PDF pages, body ends on page 18.
+- Supplement: 11 pages; standalone pipeline: 1 page.
+- Two existing GPU-performance placeholders remain. No experimental data or compiler code was changed.

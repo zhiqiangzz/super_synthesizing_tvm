@@ -1,0 +1,22 @@
+{
+  "sections/00-abstract.tex": "18141e31cfa0872416d17ed8bc366b9bdb1b791780a140fe9708b5badb01aa9e",
+  "sections/01-intro.tex": "5ffb277179a2446b2043735bca63c4e68d8a19ee3076acd254451ac47d74e950",
+  "sections/02-example.tex": "ee719559d3024110030a193500361e0edf2740dd8ebbdc8002d79e7f7550c27b",
+  "sections/03-chains.tex": "635af7d720853d6c199fbaeb52c758a40114c81e4a5e58fca58f985230222c24",
+  "sections/04-existence.tex": "62e7bf6da307e84f29d0dbcd1a8ac1af1f9173ae31c8cd5220bed7bb9ceda388",
+  "sections/05-derivation.tex": "eab8dd5ae6c0783c88b6dec5300d486361f123e00ff29584aeca1e47c285fa10",
+  "sections/06-accuracy.tex": "8d35643e6f6cf706bda4886711191a272e679a25ce021f9cdb41191f36668a7c",
+  "sections/07-implementation.tex": "9a3f75ae5395ed368686d94d356d0f55312125ed6e77f6a0bac129385b735474",
+  "sections/08-evaluation.tex": "6a44893bb85593b2ff0acd6881709dbabc2172c568901308e42a5202981df057",
+  "sections/09-related.tex": "ffbee23443126466989408d1fdbf801ae15866e7a722c3b1ffa02e389a77706c",
+  "sections/10-conclusion.tex": "08326482917289510254e8d56f5f51aed9b1671c2fd2d13ffaf6e57de08a7516",
+  "sections/90-ai-use.tex": "fba9b1777f5ba5bc2b296eae933a4e1bdff1095b7c5b3bb9eda574ceb6096972",
+  "sections/91-data-availability.tex": "7ae4c08b208143dd969c7b03f0a0ab18ea2f1b5159986b40132e341326f7bbc7",
+  "sections/03-pipeline.tex": "f77ca4dcf3baf40b6d495b1823bfdec6c69599d6036ed292aa7d52c844490450",
+  "figures/variance-overview.tex": "967e1096dcc6cffbfd7c6b334006474df44f64c775a9dff8d2b22d19ecfc73c5",
+  "figures/recovery-square.tikz": "c3e4a66e191f8d5aa3fb48d72c7b918879858df9479b3c75be8d3fbfa2e1dcb2",
+  "figures/recovery-overview.tex": "f4a21e344f1a51df95952ca1b898e5903bc90c56484db997a0ba5992f1e91e88",
+  "figures/pipeline.tikz": "6a607936b0a68cbab48b93454341d99b127d678147de35d10dea391ca6b32d4d",
+  "figures/dependent-loops.tex": "90242091cc9ce91e24f765b3e87ce8fa2c0085085e317b6a6b9abc80f3fd0e02",
+  "figures/divide-conquer-fusion.tex": "cee7f5e5104bd1a6abbfdd5833c5b1eba38e964a781c9ff68d367f41492168a3"
+}

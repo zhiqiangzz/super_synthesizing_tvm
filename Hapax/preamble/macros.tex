@@ -1,0 +1,53 @@
+% ---------------------------------------------------------------- names
+\newcommand{\sys}{Hapax\xspace}
+\newcommand{\Neptune}{Neptune\xspace}
+\newcommand{\RedFuser}{RedFuser\xspace}
+\newcommand{\TE}{TE\xspace}
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\commreducer}{\code{te.comm\_reducer}\xspace}
+
+% ---------------------------------------------------------------- notation
+\newcommand{\Ax}{J}                       % the reduction axis
+\newcommand{\pa}{A}                       % parts
+\newcommand{\pb}{B}
+\newcommand{\dunion}{\uplus}
+\newcommand{\st}{I}                       % state map S -> I(S)
+\newcommand{\Mrg}{\operatorname{join}}
+\newcommand{\ident}{e}
+\newcommand{\leaf}{L}
+\newcommand{\epi}{E}
+\newcommand{\red}{\oplus}
+\newcommand{\ctx}{\kappa}
+\newcommand{\cnt}{n}
+\newcommand{\Judged}{\mathcal{A}}         % the judgement's tuple of reductions
+\newcommand{\Own}{\mathcal{B}}            % the program's own loop results
+\newcommand{\Cls}[1]{\mathcal{C}_{\mathrm{#1}}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\sem}[1]{\llbracket #1 \rrbracket}
+\newcommand{\maxop}{\operatorname{max}}
+\newcommand{\Sum}{\textstyle\sum}
+\DeclareMathOperator*{\bigred}{\bigoplus}
+
+% ---------------------------------------------------------------- marks
+\newcommand{\cmark}{\textcolor{fixgreen}{\ding{51}}}
+\newcommand{\xmark}{\textcolor{staleorange}{\ding{55}}}
+\newcommand{\pmark}{\textcolor{rulegray}{$\circ$}}       % partial
+\newcommand{\nr}{\textcolor{rulegray}{n.r.}}            % not reported
+\newcommand{\markRefused}{\textcolor{staleorange}{\ding{55}}}
+\newcommand{\markFrontend}{\textcolor{rulegray}{\ding{55}}}
+\newcommand{\tagP}{\textsc{p}}            % proven
+\newcommand{\tagM}{\textsc{m}}            % measured
+\newcommand{\tagS}{\textsc{s}}            % sampled
+
+% ---------------------------------------------------------------- drafting
+\newif\ifperf          % \perftrue once GPU numbers exist (Section 8.5, 7.2)
+\perffalse
+\newif\ifsubmit
+\submitfalse
+\newcounter{placeholders}
+\newcommand{\placeholder}[1]{%
+  \stepcounter{placeholders}%
+  \ifsubmit\errmessage{placeholder left in a submission build: #1}\fi
+  \par\noindent\fcolorbox{staleorange}{white}{\parbox{\dimexpr\linewidth-2\fboxsep-2\fboxrule}{%
+    \small\textcolor{staleorange}{\textbf{Placeholder.}} #1}}\par}
+\newcommand{\todo}[1]{\textcolor{staleorange}{[\textbf{TODO}: #1]}}

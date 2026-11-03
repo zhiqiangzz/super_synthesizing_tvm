@@ -1,0 +1,55 @@
+{
+ "meta": {
+  "commit": "6c46fb1b025bd61316935f07529fac25365138dd",
+  "commit_date": "2026-11-02T02:10:24-08:00",
+  "dirty": false,
+  "generated": "2026-11-02T10:33:12+00:00",
+  "script": "listings.py",
+  "python": "3.12.14",
+  "numpy": "2.2.6",
+  "sympy": "1.14.0",
+  "z3": "5.3.3",
+  "cvc5": "1.4.2",
+  "machine": "x86_64",
+  "cpu": "Intel(R) Xeon(R) Platinum 8468H"
+ },
+ "files": {
+  "softmax": {
+   "before_lines": 7,
+   "after_lines": 40,
+   "before_width": 71,
+   "after_width": 89
+  },
+  "variance": {
+   "before_lines": 11,
+   "after_lines": 47,
+   "before_width": 83,
+   "after_width": 142
+  },
+  "layernorm": {
+   "before_lines": 15,
+   "after_lines": 48,
+   "before_width": 85,
+   "after_width": 142
+  },
+  "attention": {
+   "before_lines": 42,
+   "after_lines": 47,
+   "before_width": 80,
+   "after_width": 110
+  },
+  "kurtosis": {
+   "before_lines": 18,
+   "after_lines": 62,
+   "before_width": 84,
+   "after_width": 261
+  },
+  "max_abs_deviation": {
+   "before_lines": 6,
+   "after_lines": 56,
+   "before_width": 90,
+   "after_width": 630
+  },
+  "variance_tvmscript_lines": 56
+ }
+}

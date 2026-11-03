@@ -1,0 +1,78 @@
+% Colours: one meaning each, used in figures, equations and captions alike
+% (Okabe-Ito, distinguishable in grayscale by the line style that goes with it).
+\definecolor{origblue}{HTML}{0072B2}   % the original program, original values
+\definecolor{staleorange}{HTML}{D55E00} % stale or wrong values (naive fusion)
+\definecolor{fixgreen}{HTML}{009E73}   % values corrected by the derived join
+\definecolor{auxpurple}{HTML}{8E5AA8}  % states the program does not compute
+\definecolor{boxgray}{HTML}{F2F2F2}
+\definecolor{rulegray}{HTML}{8C8C8C}
+\definecolor{codebg}{HTML}{F7F7F7}
+\definecolor{kwgreen}{HTML}{1B7837}
+\definecolor{strred}{HTML}{B2182B}
+\definecolor{cmtgray}{HTML}{6E6E6E}
+
+\newcommand{\orig}[1]{\textcolor{origblue}{#1}}
+\newcommand{\stale}[1]{\textcolor{staleorange}{#1}}
+\newcommand{\fix}[1]{\textcolor{fixgreen}{#1}}
+\newcommand{\aux}[1]{\textcolor{auxpurple}{#1}}
+
+% TikZ styles
+\tikzset{
+  >={Stealth[length=2mm]},
+  artifact/.style={draw, rounded corners=2pt, fill=white, font=\sffamily\small,
+    inner sep=3pt, align=center},
+  stage/.style={draw, rounded corners=2pt, fill=boxgray, font=\sffamily\small,
+    inner sep=4pt, align=center, minimum height=7mm},
+  future/.style={draw, dashed, rounded corners=2pt, font=\sffamily\small,
+    inner sep=4pt, align=center, text=rulegray},
+  flow/.style={->, thick, draw=origblue},
+  weak/.style={->, densely dashed, draw=rulegray},
+  cell/.style={draw, minimum width=7mm, minimum height=6mm, font=\small, inner sep=1pt},
+  tmpcell/.style={cell, densely dashed},
+  lbl/.style={font=\sffamily\scriptsize, text=cmtgray},
+}
+
+% Code listings (TE is Python)
+\lstdefinestyle{te}{
+  language=Python,
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{kwgreen}\bfseries,
+  stringstyle=\color{strred},
+  commentstyle=\color{cmtgray},
+  morekeywords={te,tir},
+  columns=fullflexible,
+  keepspaces=true,
+  breaklines=true,
+  breakatwhitespace=false,
+  postbreak=\mbox{\textcolor{rulegray}{$\hookrightarrow$}\space},
+  showstringspaces=false,
+  frame=tb,
+  framerule=0.4pt,
+  rulecolor=\color{rulegray},
+  aboveskip=2pt,
+  belowskip=2pt,
+  xleftmargin=2pt,
+  numbers=none,
+  escapeinside={(*@}{@*)},
+}
+\lstset{style=te}
+
+% algorithm2e: procedure names in small caps, as in the reference papers
+\SetKwProg{Fn}{function}{}{}
+\SetFuncSty{textsc}
+\SetArgSty{textup}
+\DontPrintSemicolon
+
+
+% Illustrative program forms use the Listing counter, separately from method algorithms.
+\lstdefinestyle{pseudocode}{
+  style=te,
+  language={},
+  basicstyle=\small\rmfamily,
+  keywordstyle=\bfseries,
+  morekeywords={for,return,function},
+  mathescape=true,
+  captionpos=t,
+  numbers=none,
+  xleftmargin=0pt,
+}

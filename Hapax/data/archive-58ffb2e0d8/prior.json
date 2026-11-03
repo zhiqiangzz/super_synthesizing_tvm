@@ -1,0 +1,949 @@
+{
+ "meta": {
+  "commit": "58ffb2e0d837879f5b298d6cd738bbd730b389a1",
+  "commit_date": "2026-10-28T23:08:16-07:00",
+  "dirty": false,
+  "generated": "2026-10-29T06:18:58+00:00",
+  "script": "collect_prior.py",
+  "python": "3.12.14",
+  "numpy": "2.2.6",
+  "sympy": "1.14.0",
+  "machine": "x86_64",
+  "cpu": "Intel(R) Xeon(R) Platinum 8468H",
+  "limit": 300
+ },
+ "rows": [
+  {
+   "key": "global",
+   "paper": "Neptune",
+   "where": "Tab. 1 p.16; Fig. 12 p.26",
+   "what": "Global attention",
+   "spelling": "as written",
+   "before_te": "q = te.placeholder((B, N, QS, H), name=\"q\")\nk = te.placeholder((B, N, KVS, H), name=\"k\")\nv = te.placeholder((B, N, KVS, H), name=\"v\")\nr = te.reduce_axis((0, H), \"r\")\np = te.compute((B, N, QS, KVS), lambda bb, n, i, j: te.sum(q[bb, n, i, r] * k[bb, n, j, r], axis=r), name=\"p\")\nscore_mod = te.compute((B, N, QS, KVS), lambda i0, i1, i2, i3: p[i0, i1, i2, i3], name=\"score_mod\")\nj = te.reduce_axis((0, KVS), \"j\")\nsoftmax_maxelem = te.compute((B, N, QS), lambda bb, n, i: te.max(score_mod[bb, n, i, j], axis=j), name=\"softmax_maxelem\")\nsoftmax_exp = te.compute((B, N, QS, KVS), lambda bb, n, i, j: tir.exp(score_mod[bb, n, i, j] - softmax_maxelem[bb, n, i]), name=\"softmax_exp\")\nj = te.reduce_axis((0, KVS), \"j\")\nsv = te.compute((B, N, QS, H), lambda bb, n, i, e: te.sum(softmax_exp[bb, n, i, j] * v[bb, n, j, e], axis=j), name=\"sv\")\nj = te.reduce_axis((0, KVS), \"j\")\nsoftmax_expsum = te.compute((B, N, QS), lambda bb, n, i: te.sum(softmax_exp[bb, n, i, j], axis=j), name=\"softmax_expsum\")\nsoftmax_norm = te.compute((B, N, QS, H), lambda bb, n, i, e: sv[bb, n, i, e] / softmax_expsum[bb, n, i], name=\"softmax_norm\")\n# outputs: softmax_norm",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    3
+   ],
+   "theory": [
+    "a single pass with 3 state(s) exists, keeping Σ_j v[bb, n, j, e]·exp(p[bb, n, i, j]), Σ_j exp(p[bb, n, i, j]), max_j p[bb, n, i, j]"
+   ],
+   "seconds": 0.8147535120006069,
+   "fused": true,
+   "summary": "chain over j (softmax_maxelem, sv, softmax_expsum): fused into 3 states (softmax_maxelem, sv, softmax_expsum)\n  theory: a single pass with 3 state(s) exists, keeping Σ_j v[bb, n, j, e]·exp(p[bb, n, i, j]), Σ_j exp(p[bb, n, i, j]), max_j p[bb, n, i, j]\naccurate: unit: 4.9e-06 (original 4.9e-06, inherent 1.6e-06); offset: 0.00021 (original 0.00021, inherent 1.2e-07); wide: 1.8e-05 (original 1.8e-05, inherent 1e-05); tiny: 4.7e-07 (original 4.7e-07, inherent 1.2e-07)",
+   "chains": [
+    {
+     "members": [
+      "softmax_maxelem",
+      "sv",
+      "softmax_expsum"
+     ],
+     "fused": true,
+     "states": [
+      "softmax_maxelem",
+      "sv",
+      "softmax_expsum"
+     ],
+     "auxiliaries": [],
+     "reason": "",
+     "selection": []
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over j (softmax_maxelem, sv, softmax_expsum): fused into 3 states (softmax_maxelem, sv, softmax_expsum)\ndef merge_j(a, b):\n    t0 = tir.max(a[0], b[0])\n    t1 = tir.exp((-(t0 - a[0])))\n    t2 = tir.exp((-(t0 - b[0])))\n    return (\n        t0,  # softmax_maxelem\n        ((t1 * a[1]) + (t2 * b[1])),  # sv\n        ((t1 * a[2]) + (t2 * b[2])),  # softmax_expsum_s\n    )\n\ndef identity_j(t0, t1, t2):\n    return (tir.min_value(ty=t0), tir.const(0.0, t1), tir.const(0.0, t2))\n\nfused_j = te.comm_reducer(merge_j, identity_j, name=\"fused_j\")\nj = te.reduce_axis((0, KVS), name=\"j\")\nsoftmax_maxelem, sv, softmax_expsum_s = te.compute(\n    (B, N, QS, H),\n    lambda bb, n, i, e: fused_j(\n        (\n            p[bb, n, i, j],  # softmax_maxelem\n            v[bb, n, j, e],  # sv\n            tir.const(1.0, \"float32\"),  # softmax_expsum_s\n        ),\n        axis=j,\n    ),\n    name=\"fused_softmax_maxelem_sv_softmax_expsum\",\n)\nsoftmax_expsum = te.compute((B, N, QS), lambda bb, n, i: softmax_expsum_s[bb, n, i, 0], name=\"softmax_expsum\")"
+  },
+  {
+   "key": "causal",
+   "paper": "Neptune",
+   "where": "Tab. 1 p.16; Fig. 12 p.26",
+   "what": "Causal attention",
+   "spelling": "as written",
+   "text_raised": "OverflowError: cannot convert float infinity to integer",
+   "judged": [],
+   "judged_states": [],
+   "theory": [],
+   "seconds": 0.0024626730009913445,
+   "fused": false,
+   "summary": "softmax_maxelem, sv, softmax_expsum: not fused -- intrinsic prim.if_then_else",
+   "chains": [],
+   "skipped": [
+    {
+     "members": [
+      "softmax_maxelem",
+      "sv",
+      "softmax_expsum"
+     ],
+     "reason": "intrinsic prim.if_then_else"
+    }
+   ]
+  },
+  {
+   "key": "causal_data",
+   "paper": "Neptune",
+   "where": "Tab. 1 p.16",
+   "what": "Causal attention, mask tensor",
+   "spelling": "as data",
+   "before_te": "q = te.placeholder((B, N, QS, H), name=\"q\")\nk = te.placeholder((B, N, KVS, H), name=\"k\")\nv = te.placeholder((B, N, KVS, H), name=\"v\")\nmask = te.placeholder((QS, KVS), name=\"mask\")\nr = te.reduce_axis((0, H), \"r\")\np = te.compute((B, N, QS, KVS), lambda bb, n, i, j: te.sum(q[bb, n, i, r] * k[bb, n, j, r], axis=r), name=\"p\")\nscore_mod = te.compute((B, N, QS, KVS), lambda bb, n, i, j: p[bb, n, i, j] + mask[i, j], name=\"score_mod\")\nj = te.reduce_axis((0, KVS), \"j\")\nsoftmax_maxelem = te.compute((B, N, QS), lambda bb, n, i: te.max(score_mod[bb, n, i, j], axis=j), name=\"softmax_maxelem\")\nsoftmax_exp = te.compute((B, N, QS, KVS), lambda bb, n, i, j: tir.exp(score_mod[bb, n, i, j] - softmax_maxelem[bb, n, i]), name=\"softmax_exp\")\nj = te.reduce_axis((0, KVS), \"j\")\nsv = te.compute((B, N, QS, H), lambda bb, n, i, e: te.sum(softmax_exp[bb, n, i, j] * v[bb, n, j, e], axis=j), name=\"sv\")\nj = te.reduce_axis((0, KVS), \"j\")\nsoftmax_expsum = te.compute((B, N, QS), lambda bb, n, i: te.sum(softmax_exp[bb, n, i, j], axis=j), name=\"softmax_expsum\")\nsoftmax_norm = te.compute((B, N, QS, H), lambda bb, n, i, e: sv[bb, n, i, e] / softmax_expsum[bb, n, i], name=\"softmax_norm\")\n# outputs: softmax_norm",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    3
+   ],
+   "theory": [
+    "a single pass with 3 state(s) exists, keeping Σ_j v[bb, n, j, e]·exp(p[bb, n, i, j] + mask[i, j]), Σ_j exp(p[bb, n, i, j] + mask[i, j]), max_j (p[bb, n, i, j] + mask[i, j])"
+   ],
+   "seconds": 0.79144049599563,
+   "fused": true,
+   "summary": "chain over j (softmax_maxelem, sv, softmax_expsum): fused into 3 states (softmax_maxelem, sv, softmax_expsum)\n  theory: a single pass with 3 state(s) exists, keeping Σ_j v[bb, n, j, e]·exp(p[bb, n, i, j] + mask[i, j]), Σ_j exp(p[bb, n, i, j] + mask[i, j]), max_j (p[bb, n, i, j] + mask[i, j])\naccurate: unit: 4.1e-06 (original 4.1e-06, inherent 1.5e-06); offset: 0 (original 0, inherent 1.2e-07); wide: 1.4e-07 (original 1.4e-07, inherent 1.2e-07); tiny: 5.6e-07 (original 5.6e-07, inherent 1.1e-07)",
+   "chains": [
+    {
+     "members": [
+      "softmax_maxelem",
+      "sv",
+      "softmax_expsum"
+     ],
+     "fused": true,
+     "states": [
+      "softmax_maxelem",
+      "sv",
+      "softmax_expsum"
+     ],
+     "auxiliaries": [],
+     "reason": "",
+     "selection": []
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over j (softmax_maxelem, sv, softmax_expsum): fused into 3 states (softmax_maxelem, sv, softmax_expsum)\ndef merge_j(a, b):\n    t0 = tir.max(a[0], b[0])\n    t1 = tir.exp((-(t0 - a[0])))\n    t2 = tir.exp((-(t0 - b[0])))\n    return (\n        t0,  # softmax_maxelem\n        ((t1 * a[1]) + (t2 * b[1])),  # sv\n        ((t1 * a[2]) + (t2 * b[2])),  # softmax_expsum_s\n    )\n\ndef identity_j(t0, t1, t2):\n    return (tir.min_value(ty=t0), tir.const(0.0, t1), tir.const(0.0, t2))\n\nfused_j = te.comm_reducer(merge_j, identity_j, name=\"fused_j\")\nj = te.reduce_axis((0, KVS), name=\"j\")\nsoftmax_maxelem, sv, softmax_expsum_s = te.compute(\n    (B, N, QS, H),\n    lambda bb, n, i, e: fused_j(\n        (\n            (p[bb, n, i, j] + mask[i, j]),  # softmax_maxelem\n            v[bb, n, j, e],  # sv\n            tir.const(1.0, \"float32\"),  # softmax_expsum_s\n        ),\n        axis=j,\n    ),\n    name=\"fused_softmax_maxelem_sv_softmax_expsum\",\n)\nsoftmax_expsum = te.compute((B, N, QS), lambda bb, n, i: softmax_expsum_s[bb, n, i, 0], name=\"softmax_expsum\")"
+  },
+  {
+   "key": "alibi",
+   "paper": "Neptune",
+   "where": "Tab. 1 p.16; Fig. 12 p.26",
+   "what": "ALiBi attention",
+   "spelling": "as written",
+   "before_te": "q = te.placeholder((B, N, QS, H), name=\"q\")\nk = te.placeholder((B, N, KVS, H), name=\"k\")\nv = te.placeholder((B, N, KVS, H), name=\"v\")\nslope = te.placeholder((N,), name=\"slope\")\nr = te.reduce_axis((0, H), \"r\")\np = te.compute((B, N, QS, KVS), lambda bb, n, i, j: te.sum(q[bb, n, i, r] * k[bb, n, j, r], axis=r), name=\"p\")\nscore_mod = te.compute((B, N, QS, KVS), lambda bb, n, i, j: p[bb, n, i, j] - slope[n] * (i - j), name=\"score_mod\")\nj = te.reduce_axis((0, KVS), \"j\")\nsoftmax_maxelem = te.compute((B, N, QS), lambda bb, n, i: te.max(score_mod[bb, n, i, j], axis=j), name=\"softmax_maxelem\")\nsoftmax_exp = te.compute((B, N, QS, KVS), lambda bb, n, i, j: tir.exp(score_mod[bb, n, i, j] - softmax_maxelem[bb, n, i]), name=\"softmax_exp\")\nj = te.reduce_axis((0, KVS), \"j\")\nsv = te.compute((B, N, QS, H), lambda bb, n, i, e: te.sum(softmax_exp[bb, n, i, j] * v[bb, n, j, e], axis=j), name=\"sv\")\nj = te.reduce_axis((0, KVS), \"j\")\nsoftmax_expsum = te.compute((B, N, QS), lambda bb, n, i: te.sum(softmax_exp[bb, n, i, j], axis=j), name=\"softmax_expsum\")\nsoftmax_norm = te.compute((B, N, QS, H), lambda bb, n, i, e: sv[bb, n, i, e] / softmax_expsum[bb, n, i], name=\"softmax_norm\")\n# outputs: softmax_norm",
+   "judged": [],
+   "judged_states": [],
+   "theory": [],
+   "seconds": 0.0025285470037488267,
+   "fused": false,
+   "summary": "softmax_maxelem, sv, softmax_expsum: not fused -- loop variable used as a real value",
+   "chains": [],
+   "skipped": [
+    {
+     "members": [
+      "softmax_maxelem",
+      "sv",
+      "softmax_expsum"
+     ],
+     "reason": "loop variable used as a real value"
+    }
+   ]
+  },
+  {
+   "key": "alibi_data",
+   "paper": "Neptune",
+   "where": "Tab. 1 p.16",
+   "what": "ALiBi attention, bias tensor",
+   "spelling": "as data",
+   "before_te": "q = te.placeholder((B, N, QS, H), name=\"q\")\nk = te.placeholder((B, N, KVS, H), name=\"k\")\nv = te.placeholder((B, N, KVS, H), name=\"v\")\nalibi = te.placeholder((N, QS, KVS), name=\"alibi\")\nr = te.reduce_axis((0, H), \"r\")\np = te.compute((B, N, QS, KVS), lambda bb, n, i, j: te.sum(q[bb, n, i, r] * k[bb, n, j, r], axis=r), name=\"p\")\nscore_mod = te.compute((B, N, QS, KVS), lambda bb, n, i, j: p[bb, n, i, j] + alibi[n, i, j], name=\"score_mod\")\nj = te.reduce_axis((0, KVS), \"j\")\nsoftmax_maxelem = te.compute((B, N, QS), lambda bb, n, i: te.max(score_mod[bb, n, i, j], axis=j), name=\"softmax_maxelem\")\nsoftmax_exp = te.compute((B, N, QS, KVS), lambda bb, n, i, j: tir.exp(score_mod[bb, n, i, j] - softmax_maxelem[bb, n, i]), name=\"softmax_exp\")\nj = te.reduce_axis((0, KVS), \"j\")\nsv = te.compute((B, N, QS, H), lambda bb, n, i, e: te.sum(softmax_exp[bb, n, i, j] * v[bb, n, j, e], axis=j), name=\"sv\")\nj = te.reduce_axis((0, KVS), \"j\")\nsoftmax_expsum = te.compute((B, N, QS), lambda bb, n, i: te.sum(softmax_exp[bb, n, i, j], axis=j), name=\"softmax_expsum\")\nsoftmax_norm = te.compute((B, N, QS, H), lambda bb, n, i, e: sv[bb, n, i, e] / softmax_expsum[bb, n, i], name=\"softmax_norm\")\n# outputs: softmax_norm",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    3
+   ],
+   "theory": [
+    "a single pass with 3 state(s) exists, keeping Σ_j v[bb, n, j, e]·exp(p[bb, n, i, j] + alibi[n, i, j]), Σ_j exp(p[bb, n, i, j] + alibi[n, i, j]), max_j (p[bb, n, i, j] + alibi[n, i, j])"
+   ],
+   "seconds": 0.7880819459969644,
+   "fused": true,
+   "summary": "chain over j (softmax_maxelem, sv, softmax_expsum): fused into 3 states (softmax_maxelem, sv, softmax_expsum)\n  theory: a single pass with 3 state(s) exists, keeping Σ_j v[bb, n, j, e]·exp(p[bb, n, i, j] + alibi[n, i, j]), Σ_j exp(p[bb, n, i, j] + alibi[n, i, j]), max_j (p[bb, n, i, j] + alibi[n, i, j])\naccurate: unit: 3.9e-06 (original 3.9e-06, inherent 3.2e-06); offset: 0.00043 (original 0.00043, inherent 1.2e-07); wide: 3.5e-07 (original 3.5e-07, inherent 1.9e-07); tiny: 4.5e-07 (original 4.5e-07, inherent 1.2e-07)",
+   "chains": [
+    {
+     "members": [
+      "softmax_maxelem",
+      "sv",
+      "softmax_expsum"
+     ],
+     "fused": true,
+     "states": [
+      "softmax_maxelem",
+      "sv",
+      "softmax_expsum"
+     ],
+     "auxiliaries": [],
+     "reason": "",
+     "selection": []
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over j (softmax_maxelem, sv, softmax_expsum): fused into 3 states (softmax_maxelem, sv, softmax_expsum)\ndef merge_j(a, b):\n    t0 = tir.max(a[0], b[0])\n    t1 = tir.exp((-(t0 - a[0])))\n    t2 = tir.exp((-(t0 - b[0])))\n    return (\n        t0,  # softmax_maxelem\n        ((t1 * a[1]) + (t2 * b[1])),  # sv\n        ((t1 * a[2]) + (t2 * b[2])),  # softmax_expsum_s\n    )\n\ndef identity_j(t0, t1, t2):\n    return (tir.min_value(ty=t0), tir.const(0.0, t1), tir.const(0.0, t2))\n\nfused_j = te.comm_reducer(merge_j, identity_j, name=\"fused_j\")\nj = te.reduce_axis((0, KVS), name=\"j\")\nsoftmax_maxelem, sv, softmax_expsum_s = te.compute(\n    (B, N, QS, H),\n    lambda bb, n, i, e: fused_j(\n        (\n            (p[bb, n, i, j] + alibi[n, i, j]),  # softmax_maxelem\n            v[bb, n, j, e],  # sv\n            tir.const(1.0, \"float32\"),  # softmax_expsum_s\n        ),\n        axis=j,\n    ),\n    name=\"fused_softmax_maxelem_sv_softmax_expsum\",\n)\nsoftmax_expsum = te.compute((B, N, QS), lambda bb, n, i: softmax_expsum_s[bb, n, i, 0], name=\"softmax_expsum\")"
+  },
+  {
+   "key": "softcap",
+   "paper": "Neptune",
+   "where": "Tab. 1 p.16; Fig. 12 p.26",
+   "what": "Soft-capped attention",
+   "spelling": "as written",
+   "before_te": "q = te.placeholder((B, N, QS, H), name=\"q\")\nk = te.placeholder((B, N, KVS, H), name=\"k\")\nv = te.placeholder((B, N, KVS, H), name=\"v\")\nr = te.reduce_axis((0, H), \"r\")\np = te.compute((B, N, QS, KVS), lambda bb, n, i, j: te.sum(q[bb, n, i, r] * k[bb, n, j, r], axis=r), name=\"p\")\nscore_mod = te.compute((B, N, QS, KVS), lambda i0, i1, i2, i3: 50.0 * tir.tanh(p[i0, i1, i2, i3] / 50.0), name=\"score_mod\")\nj = te.reduce_axis((0, KVS), \"j\")\nsoftmax_maxelem = te.compute((B, N, QS), lambda bb, n, i: te.max(score_mod[bb, n, i, j], axis=j), name=\"softmax_maxelem\")\nsoftmax_exp = te.compute((B, N, QS, KVS), lambda bb, n, i, j: tir.exp(score_mod[bb, n, i, j] - softmax_maxelem[bb, n, i]), name=\"softmax_exp\")\nj = te.reduce_axis((0, KVS), \"j\")\nsv = te.compute((B, N, QS, H), lambda bb, n, i, e: te.sum(softmax_exp[bb, n, i, j] * v[bb, n, j, e], axis=j), name=\"sv\")\nj = te.reduce_axis((0, KVS), \"j\")\nsoftmax_expsum = te.compute((B, N, QS), lambda bb, n, i: te.sum(softmax_exp[bb, n, i, j], axis=j), name=\"softmax_expsum\")\nsoftmax_norm = te.compute((B, N, QS, H), lambda bb, n, i, e: sv[bb, n, i, e] / softmax_expsum[bb, n, i], name=\"softmax_norm\")\n# outputs: softmax_norm",
+   "judged": [],
+   "judged_states": [],
+   "theory": [],
+   "seconds": 0.0025025100039783865,
+   "fused": false,
+   "summary": "softmax_maxelem, sv, softmax_expsum: not fused -- intrinsic prim.tanh",
+   "chains": [],
+   "skipped": [
+    {
+     "members": [
+      "softmax_maxelem",
+      "sv",
+      "softmax_expsum"
+     ],
+     "reason": "intrinsic prim.tanh"
+    }
+   ]
+  },
+  {
+   "key": "softcap_data",
+   "paper": "Neptune",
+   "where": "Tab. 1 p.16",
+   "what": "Soft-capped attention, capped scores as input",
+   "spelling": "as data",
+   "before_te": "q = te.placeholder((B, N, QS, H), name=\"q\")\nk = te.placeholder((B, N, KVS, H), name=\"k\")\nv = te.placeholder((B, N, KVS, H), name=\"v\")\ncapped = te.placeholder((B, N, QS, KVS), name=\"capped\")\nj = te.reduce_axis((0, KVS), \"j\")\nsoftmax_maxelem = te.compute((B, N, QS), lambda bb, n, i: te.max(capped[bb, n, i, j], axis=j), name=\"softmax_maxelem\")\nsoftmax_exp = te.compute((B, N, QS, KVS), lambda bb, n, i, j: tir.exp(capped[bb, n, i, j] - softmax_maxelem[bb, n, i]), name=\"softmax_exp\")\nj = te.reduce_axis((0, KVS), \"j\")\nsv = te.compute((B, N, QS, H), lambda bb, n, i, e: te.sum(softmax_exp[bb, n, i, j] * v[bb, n, j, e], axis=j), name=\"sv\")\nj = te.reduce_axis((0, KVS), \"j\")\nsoftmax_expsum = te.compute((B, N, QS), lambda bb, n, i: te.sum(softmax_exp[bb, n, i, j], axis=j), name=\"softmax_expsum\")\nsoftmax_norm = te.compute((B, N, QS, H), lambda bb, n, i, e: sv[bb, n, i, e] / softmax_expsum[bb, n, i], name=\"softmax_norm\")\n# outputs: softmax_norm",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    3
+   ],
+   "theory": [
+    "a single pass with 3 state(s) exists, keeping Σ_j v[bb, n, j, e]·exp(capped[bb, n, i, j]), Σ_j exp(capped[bb, n, i, j]), max_j capped[bb, n, i, j]"
+   ],
+   "seconds": 0.3071230539935641,
+   "fused": true,
+   "summary": "chain over j (softmax_maxelem, sv, softmax_expsum): fused into 3 states (softmax_maxelem, sv, softmax_expsum)\n  theory: a single pass with 3 state(s) exists, keeping Σ_j v[bb, n, j, e]·exp(capped[bb, n, i, j]), Σ_j exp(capped[bb, n, i, j]), max_j capped[bb, n, i, j]\naccurate: unit: 7.8e-07 (original 5.9e-07, inherent 3.2e-07); offset: 8.1e-07 (original 9.1e-07, inherent 7.7e-08); wide: 2.7e-07 (original 2.7e-07, inherent 1.8e-06); huge: 0 (original 0, inherent 1.2e-07); tiny: 6.5e-07 (original 6.5e-07, inherent 1.5e-07)",
+   "chains": [
+    {
+     "members": [
+      "softmax_maxelem",
+      "sv",
+      "softmax_expsum"
+     ],
+     "fused": true,
+     "states": [
+      "softmax_maxelem",
+      "sv",
+      "softmax_expsum"
+     ],
+     "auxiliaries": [],
+     "reason": "",
+     "selection": []
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over j (softmax_maxelem, sv, softmax_expsum): fused into 3 states (softmax_maxelem, sv, softmax_expsum)\ndef merge_j(a, b):\n    t0 = tir.max(a[0], b[0])\n    t1 = tir.exp((-(t0 - a[0])))\n    t2 = tir.exp((-(t0 - b[0])))\n    return (\n        t0,  # softmax_maxelem\n        ((t1 * a[1]) + (t2 * b[1])),  # sv\n        ((t1 * a[2]) + (t2 * b[2])),  # softmax_expsum_s\n    )\n\ndef identity_j(t0, t1, t2):\n    return (tir.min_value(ty=t0), tir.const(0.0, t1), tir.const(0.0, t2))\n\nfused_j = te.comm_reducer(merge_j, identity_j, name=\"fused_j\")\nj = te.reduce_axis((0, KVS), name=\"j\")\nsoftmax_maxelem, sv, softmax_expsum_s = te.compute(\n    (B, N, QS, H),\n    lambda bb, n, i, e: fused_j(\n        (\n            capped[bb, n, i, j],  # softmax_maxelem\n            v[bb, n, j, e],  # sv\n            tir.const(1.0, \"float32\"),  # softmax_expsum_s\n        ),\n        axis=j,\n    ),\n    name=\"fused_softmax_maxelem_sv_softmax_expsum\",\n)\nsoftmax_expsum = te.compute((B, N, QS), lambda bb, n, i: softmax_expsum_s[bb, n, i, 0], name=\"softmax_expsum\")"
+  },
+  {
+   "key": "window",
+   "paper": "Neptune",
+   "where": "Tab. 1 p.16; Fig. 12 p.26",
+   "what": "Sliding-window attention",
+   "spelling": "as written",
+   "text_raised": "OverflowError: cannot convert float infinity to integer",
+   "judged": [],
+   "judged_states": [],
+   "theory": [],
+   "seconds": 0.0025028840027516708,
+   "fused": false,
+   "summary": "softmax_maxelem, sv, softmax_expsum: not fused -- intrinsic prim.if_then_else",
+   "chains": [],
+   "skipped": [
+    {
+     "members": [
+      "softmax_maxelem",
+      "sv",
+      "softmax_expsum"
+     ],
+     "reason": "intrinsic prim.if_then_else"
+    }
+   ]
+  },
+  {
+   "key": "gqa",
+   "paper": "Neptune",
+   "where": "Tab. 1 p.16",
+   "what": "Grouped-query attention, head n // G",
+   "spelling": "as written",
+   "before_te": "q = te.placeholder((B, N, QS, H), name=\"q\")\nk = te.placeholder((B, N // 4, KVS, H), name=\"k\")\nv = te.placeholder((B, N // 4, KVS, H), name=\"v\")\nr = te.reduce_axis((0, H), \"r\")\np = te.compute((B, N, QS, KVS), lambda bb, n, i, j: te.sum(q[bb, n, i, r] * k[bb, n // 4, j, r], axis=r), name=\"p\")\nj = te.reduce_axis((0, KVS), \"j\")\nsmax = te.compute((B, N, QS), lambda bb, n, i: te.max(p[bb, n, i, j], axis=j), name=\"smax\")\nj = te.reduce_axis((0, KVS), \"j\")\nsv = te.compute((B, N, QS, H), lambda bb, n, i, e: te.sum(tir.exp(p[bb, n, i, j] - smax[bb, n, i]) * v[bb, n // 4, j, e], axis=j), name=\"sv\")\nj = te.reduce_axis((0, KVS), \"j\")\nssum = te.compute((B, N, QS), lambda bb, n, i: te.sum(tir.exp(p[bb, n, i, j] - smax[bb, n, i]), axis=j), name=\"ssum\")\no = te.compute((B, N, QS, H), lambda bb, n, i, e: sv[bb, n, i, e] / ssum[bb, n, i], name=\"o\")\n# outputs: o",
+   "judged": [],
+   "judged_states": [],
+   "theory": [],
+   "seconds": 0.0012825169978896156,
+   "fused": false,
+   "summary": "smax, sv, ssum: not fused -- non-trivial index expression n // 4",
+   "chains": [],
+   "skipped": [
+    {
+     "members": [
+      "smax",
+      "sv",
+      "ssum"
+     ],
+     "reason": "non-trivial index expression n // 4"
+    }
+   ]
+  },
+  {
+   "key": "gqa_grouped",
+   "paper": "Neptune",
+   "where": "Tab. 1 p.16",
+   "what": "Grouped-query attention, (kv head, group) layout",
+   "spelling": "as data",
+   "before_te": "q = te.placeholder((B, KH, G, QS, H), name=\"q\")\nk = te.placeholder((B, KH, KVS, H), name=\"k\")\nv = te.placeholder((B, KH, KVS, H), name=\"v\")\nr = te.reduce_axis((0, H), \"r\")\np = te.compute((B, KH, G, QS, KVS), lambda bb, n, gg, i, j: te.sum(q[bb, n, gg, i, r] * k[bb, n, j, r], axis=r), name=\"p\")\nj = te.reduce_axis((0, KVS), \"j\")\nsmax = te.compute((B, KH, G, QS), lambda bb, n, gg, i: te.max(p[bb, n, gg, i, j], axis=j), name=\"smax\")\ne = te.compute((B, KH, G, QS, KVS), lambda bb, n, gg, i, j: tir.exp(p[bb, n, gg, i, j] - smax[bb, n, gg, i]), name=\"e\")\nj = te.reduce_axis((0, KVS), \"j\")\nsv = te.compute((B, KH, G, QS, H), lambda bb, n, gg, i, c: te.sum(e[bb, n, gg, i, j] * v[bb, n, j, c], axis=j), name=\"sv\")\nj = te.reduce_axis((0, KVS), \"j\")\nssum = te.compute((B, KH, G, QS), lambda bb, n, gg, i: te.sum(e[bb, n, gg, i, j], axis=j), name=\"ssum\")\no = te.compute((B, KH, G, QS, H), lambda bb, n, gg, i, c: sv[bb, n, gg, i, c] / ssum[bb, n, gg, i], name=\"o\")\n# outputs: o",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    3
+   ],
+   "theory": [
+    "a single pass with 3 state(s) exists, keeping Σ_j v[bb, n, j, c]·exp(p[bb, n, gg, i, j]), Σ_j exp(p[bb, n, gg, i, j]), max_j p[bb, n, gg, i, j]"
+   ],
+   "seconds": 1.4929164960049093,
+   "fused": true,
+   "summary": "chain over j (smax, sv, ssum): fused into 3 states (smax, sv, ssum)\n  theory: a single pass with 3 state(s) exists, keeping Σ_j v[bb, n, j, c]·exp(p[bb, n, gg, i, j]), Σ_j exp(p[bb, n, gg, i, j]), max_j p[bb, n, gg, i, j]\naccurate: unit: 8.2e-06 (original 8.2e-06, inherent 3e-06); offset: 0.0004 (original 0.0004, inherent 1.2e-07); wide: 3.5e-06 (original 3.5e-06, inherent 2.3e-06); tiny: 4.3e-07 (original 4.3e-07, inherent 1.2e-07)",
+   "chains": [
+    {
+     "members": [
+      "smax",
+      "sv",
+      "ssum"
+     ],
+     "fused": true,
+     "states": [
+      "smax",
+      "sv",
+      "ssum"
+     ],
+     "auxiliaries": [],
+     "reason": "",
+     "selection": []
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over j (smax, sv, ssum): fused into 3 states (smax, sv, ssum)\ndef merge_j(a, b):\n    t0 = tir.max(a[0], b[0])\n    t1 = tir.exp((-(t0 - a[0])))\n    t2 = tir.exp((-(t0 - b[0])))\n    return (\n        t0,  # smax\n        ((t1 * a[1]) + (t2 * b[1])),  # sv\n        ((t1 * a[2]) + (t2 * b[2])),  # ssum_s\n    )\n\ndef identity_j(t0, t1, t2):\n    return (tir.min_value(ty=t0), tir.const(0.0, t1), tir.const(0.0, t2))\n\nfused_j = te.comm_reducer(merge_j, identity_j, name=\"fused_j\")\nj = te.reduce_axis((0, KVS), name=\"j\")\nsmax, sv, ssum_s = te.compute(\n    (B, KH, G, QS, H),\n    lambda bb, n, gg, i, c: fused_j(\n        (\n            p[bb, n, gg, i, j],  # smax\n            v[bb, n, j, c],  # sv\n            tir.const(1.0, \"float32\"),  # ssum_s\n        ),\n        axis=j,\n    ),\n    name=\"fused_smax_sv_ssum\",\n)\nssum = te.compute((B, KH, G, QS), lambda bb, n, gg, i: ssum_s[bb, n, gg, i, 0], name=\"ssum\")"
+  },
+  {
+   "key": "stable_l2",
+   "paper": "Neptune",
+   "where": "Sec. 4.4 p.13",
+   "what": "Numerically stable L2 norm",
+   "spelling": "as written",
+   "before_te": "x = te.placeholder((n, m), name=\"x\")\nj = te.reduce_axis((0, m), \"j\")\nmx = te.compute((n,), lambda i: te.max(tir.abs(x[i, j]), axis=j), name=\"mx\")\nj = te.reduce_axis((0, m), \"j\")\nss = te.compute((n,), lambda i: te.sum(x[i, j] / mx[i] * (x[i, j] / mx[i]), axis=j), name=\"ss\")\nnrm = te.compute((n,), lambda i: mx[i] * tir.sqrt(ss[i]), name=\"nrm\")\n# outputs: nrm",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    3
+   ],
+   "theory": [
+    "a single pass with 3 state(s) exists, keeping max_j -x[i, j], max_j x[i, j], Σ_j x[i, j]^2"
+   ],
+   "seconds": 0.12136215499776881,
+   "fused": false,
+   "summary": "chain over j (mx, ss): not fused -- the reducer of (mx.m0, mx.m1, ss.h0) is refused: REJECTED: unit: 6.1e-08 (original 1.5e-07, inherent 1.3e-08); offset: 2.7e-07 (original 2.2e-07, inherent 1e-08); wide: 1.6e-07 (original 1.6e-07, inherent 2.4e-08); huge: inf (original 1.1e-07, inherent 2.1e-08) (!); tiny: 0.64 (original 2.6e-07, inherent 1.9e-08) (!)\n  theory: a single pass with 3 state(s) exists, keeping max_j -x[i, j], max_j x[i, j], Σ_j x[i, j]^2",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "ss"
+     ],
+     "fused": false,
+     "states": [],
+     "auxiliaries": [],
+     "reason": "the reducer of (mx.m0, mx.m1, ss.h0) is refused: REJECTED: unit: 6.1e-08 (original 1.5e-07, inherent 1.3e-08); offset: 2.7e-07 (original 2.2e-07, inherent 1e-08); wide: 1.6e-07 (original 1.6e-07, inherent 2.4e-08); huge: inf (original 1.1e-07, inherent 2.1e-08) (!); tiny: 0.64 (original 2.6e-07, inherent 1.9e-08) (!)",
+     "selection": [
+      "parts mx: no reduction it is made of can be read back from it",
+      "hoist mx out of ss: ss: it divides by mx[i], which is not proven to be non-zero"
+     ]
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "rmsnorm_max",
+   "paper": "Neptune",
+   "where": "Sec. 4.4 p.13",
+   "what": "RMSNorm, then the row max",
+   "spelling": "as written",
+   "before_te": "x = te.placeholder((n, m), name=\"x\")\nj = te.reduce_axis((0, m), \"j\")\nssq = te.compute((n,), lambda i: te.sum(x[i, j] * x[i, j], axis=j), name=\"ssq\")\ns = te.compute((n,), lambda i: ssq[i] / m.astype(\"float32\"), name=\"s\")\ny = te.compute((n, m), lambda i, j: x[i, j] / tir.sqrt(s[i] + 1e-06), name=\"y\")\nj = te.reduce_axis((0, m), \"j\")\nymax = te.compute((n,), lambda i: te.max(y[i, j], axis=j), name=\"ymax\")\n# outputs: ymax, y",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    3
+   ],
+   "theory": [
+    "a single pass with 3 state(s) exists, keeping max_j x[i, j], Σ_j x[i, j]^2, the count"
+   ],
+   "seconds": 0.13498437499947613,
+   "fused": true,
+   "summary": "chain over j (ssq, ymax): fused into 2 states (ssq, ymax.h0); derived: ymax.h0\n  theory: a single pass with 3 state(s) exists, keeping max_j x[i, j], Σ_j x[i, j]^2, the count\naccurate: unit: 8.5e-08 (original 8.5e-08, inherent 1.3e-07); offset: 3.3e-07 (original 3.3e-07, inherent 1.3e-07); wide: 2.3e-07 (original 2.3e-07, inherent 1.3e-07); tiny: 6.9e-08 (original 6.9e-08, inherent 1.2e-07)",
+   "chains": [
+    {
+     "members": [
+      "ssq",
+      "s",
+      "ymax"
+     ],
+     "fused": true,
+     "states": [
+      "ssq",
+      "ymax.h0"
+     ],
+     "auxiliaries": [
+      "ymax.h0"
+     ],
+     "reason": "",
+     "selection": [
+      "hoist ymax.ctx0 out of ymax: ymax: it does not re-base: neither a shift nor a scale of ymax.ctx0 leaves its reduction"
+     ]
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over j (ssq, ymax): fused into 2 states (ssq, ymax.h0); derived: ymax.h0\n#   ymax.h0 = max_j x[i, j]    (left when the contexts of ymax are taken out of its reduction)\ndef merge_j(a, b):\n    return (\n        (a[0] + b[0]),  # ssq\n        tir.max(a[1], b[1]),  # ymax_h0\n    )\n\ndef identity_j(t0, t1):\n    return (tir.const(0.0, t0), tir.min_value(ty=t1))\n\nfused_j = te.comm_reducer(merge_j, identity_j, name=\"fused_j\")\nj = te.reduce_axis((0, m), name=\"j\")\nssq, ymax_h0 = te.compute(\n    (n,),\n    lambda i: fused_j(\n        (\n            (x[i, j] * x[i, j]),  # ssq\n            x[i, j],  # ymax_h0\n        ),\n        axis=j,\n    ),\n    name=\"fused_ssq_ymax\",\n)\ns = te.compute((n,), lambda i: (ssq[i] / m.astype(\"float32\")), name=\"s\")\nymax = te.compute((n,), lambda i: (ymax_h0[i] / (tir.sqrt((tir.const(1e-06, \"float32\") + (ssq[i] / m.astype(\"float32\")))))), name=\"ymax\")"
+  },
+  {
+   "key": "performer_g1",
+   "paper": "Neptune",
+   "where": "App. C p.29",
+   "what": "Performer reduction pattern g1",
+   "spelling": "as written",
+   "before_te": "c1 = te.placeholder((n, m), name=\"c1\")\nc2 = te.placeholder((n, m), name=\"c2\")\nj = te.reduce_axis((0, m), \"j\")\nr1 = te.compute((n,), lambda i: te.max(c1[i, j], axis=j), name=\"r1\")\nj = te.reduce_axis((0, m), \"j\")\nt = te.compute((n,), lambda i: te.sum(0.125 * tir.exp(c1[i, j] - r1[i] - 0.5 * c2[i, j]), axis=j), name=\"t\")\n# outputs: t",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    2
+   ],
+   "theory": [
+    "a single pass with 2 state(s) exists, keeping Σ_j exp(c1[i, j] - 1/2·c2[i, j]), max_j c1[i, j]"
+   ],
+   "seconds": 0.1333540539999376,
+   "fused": true,
+   "summary": "chain over j (r1, t): fused into 2 states (r1, t)\n  theory: a single pass with 2 state(s) exists, keeping Σ_j exp(c1[i, j] - 1/2·c2[i, j]), max_j c1[i, j]\naccurate: unit: 2.6e-07 (original 2.9e-07, inherent 2.9e-07); offset: 0 (original 0, inherent 0); wide: 1.9e-07 (original 3.1e-07, inherent 6.6e-06); tiny: 0 (original 0, inherent 0)",
+   "chains": [
+    {
+     "members": [
+      "r1",
+      "t"
+     ],
+     "fused": true,
+     "states": [
+      "r1",
+      "t"
+     ],
+     "auxiliaries": [],
+     "reason": "",
+     "selection": []
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over j (r1, t): fused into 2 states (r1, t)\ndef merge_j(a, b):\n    t0 = tir.max(a[0], b[0])\n    return (\n        t0,  # r1\n        (((tir.exp((-(t0 - a[0])))) * a[1]) + ((tir.exp((-(t0 - b[0])))) * b[1])),  # t\n    )\n\ndef identity_j(t0, t1):\n    return (tir.min_value(ty=t0), tir.const(0.0, t1))\n\nfused_j = te.comm_reducer(merge_j, identity_j, name=\"fused_j\")\nj = te.reduce_axis((0, m), name=\"j\")\nr1, t = te.compute(\n    (n,),\n    lambda i: fused_j(\n        (\n            c1[i, j],  # r1\n            (tir.const(0.125, \"float32\") * (tir.exp((tir.const(-0.5, \"float32\") * c2[i, j])))),  # t\n        ),\n        axis=j,\n    ),\n    name=\"fused_r1_t\",\n)"
+  },
+  {
+   "key": "performer_g2",
+   "paper": "Neptune",
+   "where": "App. C p.29",
+   "what": "Performer reduction pattern g2",
+   "spelling": "as written",
+   "before_te": "c1 = te.placeholder((n, m), name=\"c1\")\nc2 = te.placeholder((n, m), name=\"c2\")\nc3 = te.placeholder((n, m), name=\"c3\")\nj = te.reduce_axis((0, m), \"j\")\nr1 = te.compute((n,), lambda i: te.max(c1[i, j], axis=j), name=\"r1\")\nj = te.reduce_axis((0, m), \"j\")\nt = te.compute((n,), lambda i: te.sum(0.125 * c3[i, j] * tir.exp(c1[i, j] - r1[i] - 0.5 * c2[i, j]), axis=j), name=\"t\")\n# outputs: t",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    2
+   ],
+   "theory": [
+    "a single pass with 2 state(s) exists, keeping Σ_j c3[i, j]·exp(c1[i, j] - 1/2·c2[i, j]), max_j c1[i, j]"
+   ],
+   "seconds": 0.15343197899346706,
+   "fused": true,
+   "summary": "chain over j (r1, t): fused into 2 states (r1, t)\n  theory: a single pass with 2 state(s) exists, keeping Σ_j c3[i, j]·exp(c1[i, j] - 1/2·c2[i, j]), max_j c1[i, j]\naccurate: unit: 2.1e-07 (original 4.2e-07, inherent 6.5e-07); offset: 0 (original 0, inherent 0); wide: 9.7e-08 (original 9.7e-08, inherent 6.9e-06); tiny: 8e-08 (original 8e-08, inherent 1.9e-07)",
+   "chains": [
+    {
+     "members": [
+      "r1",
+      "t"
+     ],
+     "fused": true,
+     "states": [
+      "r1",
+      "t"
+     ],
+     "auxiliaries": [],
+     "reason": "",
+     "selection": []
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over j (r1, t): fused into 2 states (r1, t)\ndef merge_j(a, b):\n    t0 = tir.max(a[0], b[0])\n    return (\n        t0,  # r1\n        (((tir.exp((-(t0 - a[0])))) * a[1]) + ((tir.exp((-(t0 - b[0])))) * b[1])),  # t\n    )\n\ndef identity_j(t0, t1):\n    return (tir.min_value(ty=t0), tir.const(0.0, t1))\n\nfused_j = te.comm_reducer(merge_j, identity_j, name=\"fused_j\")\nj = te.reduce_axis((0, m), name=\"j\")\nr1, t = te.compute(\n    (n,),\n    lambda i: fused_j(\n        (\n            c1[i, j],  # r1\n            (tir.const(0.125, \"float32\") * c3[i, j] * (tir.exp((tir.const(-0.5, \"float32\") * c2[i, j])))),  # t\n        ),\n        axis=j,\n    ),\n    name=\"fused_r1_t\",\n)"
+  },
+  {
+   "key": "performer_g3",
+   "paper": "Neptune",
+   "where": "App. C p.29",
+   "what": "Performer reduction pattern g3",
+   "spelling": "as written",
+   "before_te": "c1 = te.placeholder((n, m), name=\"c1\")\nc2 = te.placeholder((n, m), name=\"c2\")\nc3 = te.placeholder((n, m), name=\"c3\")\nj = te.reduce_axis((0, m), \"j\")\nr1 = te.compute((n,), lambda i: te.max(c1[i, j], axis=j), name=\"r1\")\nj = te.reduce_axis((0, m), \"j\")\nr2 = te.compute((n,), lambda i: te.sum(tir.exp(c1[i, j] - r1[i]), axis=j), name=\"r2\")\nj = te.reduce_axis((0, m), \"j\")\nt = te.compute((n,), lambda i: te.sum(0.125 * tir.exp(c1[i, j] - r1[i] - 0.5 * c2[i, j] * c3[i, j]) / r2[i], axis=j), name=\"t\")\n# outputs: t",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    3
+   ],
+   "theory": [
+    "a single pass with 3 state(s) exists, keeping Σ_j exp(c1[i, j] - 1/2·c2[i, j]·c3[i, j]), max_j c1[i, j], Σ_j exp(c1[i, j])"
+   ],
+   "seconds": 0.16913293700054055,
+   "fused": true,
+   "summary": "chain over j (r1, r2, t): fused into 3 states (r1, r2, t)\n  theory: a single pass with 3 state(s) exists, keeping Σ_j exp(c1[i, j] - 1/2·c2[i, j]·c3[i, j]), max_j c1[i, j], Σ_j exp(c1[i, j])\naccurate: unit: 2.2e-07 (original 4e-07, inherent 4.5e-08); offset: 0 (original 0, inherent 0); wide: inf (original inf, inherent 0.0001); tiny: 0 (original 0, inherent 0)",
+   "chains": [
+    {
+     "members": [
+      "r1",
+      "r2",
+      "t"
+     ],
+     "fused": true,
+     "states": [
+      "r1",
+      "r2",
+      "t"
+     ],
+     "auxiliaries": [],
+     "reason": "",
+     "selection": []
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over j (r1, r2, t): fused into 3 states (r1, r2, t)\ndef merge_j(a, b):\n    t0 = tir.max(a[0], b[0])\n    t1 = tir.exp((-(t0 - a[0])))\n    t2 = tir.exp((-(t0 - b[0])))\n    t3 = ((t1 * a[1]) + (t2 * b[1]))\n    return (\n        t0,  # r1\n        t3,  # r2\n        ((((a[1] / t3) * t1) * a[2]) + (((b[1] / t3) * t2) * b[2])),  # t\n    )\n\ndef identity_j(t0, t1, t2):\n    return (tir.min_value(ty=t0), tir.const(0.0, t1), tir.const(0.0, t2))\n\nfused_j = te.comm_reducer(merge_j, identity_j, name=\"fused_j\")\nj = te.reduce_axis((0, m), name=\"j\")\nr1, r2, t = te.compute(\n    (n,),\n    lambda i: fused_j(\n        (\n            c1[i, j],  # r1\n            tir.const(1.0, \"float32\"),  # r2\n            (tir.const(0.125, \"float32\") * (tir.exp((tir.const(-0.5, \"float32\") * c2[i, j] * c3[i, j])))),  # t\n        ),\n        axis=j,\n    ),\n    name=\"fused_r1_r2_t\",\n)"
+  },
+  {
+   "key": "safe_softmax",
+   "paper": "RedFuser",
+   "where": "Sec. 2.2 p.3",
+   "what": "Safe softmax",
+   "spelling": "as written",
+   "before_te": "x = te.placeholder((n, m), name=\"x\")\nj = te.reduce_axis((0, m), \"j\")\nmx = te.compute((n,), lambda i: te.max(x[i, j], axis=j), name=\"mx\")\nj = te.reduce_axis((0, m), \"j\")\nt = te.compute((n,), lambda i: te.sum(tir.exp(x[i, j] - mx[i]), axis=j), name=\"t\")\ny = te.compute((n, m), lambda i, j: tir.exp(x[i, j] - mx[i]) / t[i], name=\"y\")\n# outputs: y",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    2
+   ],
+   "theory": [
+    "a single pass with 2 state(s) exists, keeping max_j x[i, j], Σ_j exp(x[i, j])"
+   ],
+   "seconds": 0.12246682700060774,
+   "fused": true,
+   "summary": "chain over j (mx, t): fused into 2 states (mx, t)\n  theory: a single pass with 2 state(s) exists, keeping max_j x[i, j], Σ_j exp(x[i, j])\naccurate: unit: 2.9e-07 (original 3.5e-07, inherent 3.5e-07); offset: 3.4e-07 (original 3.4e-07, inherent 0.0012); wide: 4.5e-07 (original 4.5e-07, inherent 4.9e-07); huge: 0 (original 0, inherent 0); tiny: 0 (original 0, inherent 0)",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "t"
+     ],
+     "fused": true,
+     "states": [
+      "mx",
+      "t"
+     ],
+     "auxiliaries": [],
+     "reason": "",
+     "selection": []
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over j (mx, t): fused into 2 states (mx, t)\ndef merge_j(a, b):\n    t0 = tir.max(a[0], b[0])\n    return (\n        t0,  # mx\n        (((tir.exp((-(t0 - a[0])))) * a[1]) + ((tir.exp((-(t0 - b[0])))) * b[1])),  # t\n    )\n\ndef identity_j(t0, t1):\n    return (tir.min_value(ty=t0), tir.const(0.0, t1))\n\nfused_j = te.comm_reducer(merge_j, identity_j, name=\"fused_j\")\nj = te.reduce_axis((0, m), name=\"j\")\nmx, t = te.compute(\n    (n,),\n    lambda i: fused_j(\n        (\n            x[i, j],  # mx\n            tir.const(1.0, \"float32\"),  # t\n        ),\n        axis=j,\n    ),\n    name=\"fused_mx_t\",\n)"
+  },
+  {
+   "key": "mha",
+   "paper": "RedFuser",
+   "where": "Sec. 5.2; Tab. 2a",
+   "what": "Multi-head attention",
+   "spelling": "as written",
+   "before_te": "q = te.placeholder((B, N, QS, H), name=\"q\")\nk = te.placeholder((B, N, KVS, H), name=\"k\")\nv = te.placeholder((B, N, KVS, H), name=\"v\")\nr = te.reduce_axis((0, H), \"r\")\np = te.compute((B, N, QS, KVS), lambda bb, n, i, j: te.sum(q[bb, n, i, r] * k[bb, n, j, r], axis=r), name=\"p\")\nscore_mod = te.compute((B, N, QS, KVS), lambda i0, i1, i2, i3: p[i0, i1, i2, i3] * (1.0 / tir.sqrt(H.astype(\"float32\"))), name=\"score_mod\")\nj = te.reduce_axis((0, KVS), \"j\")\nsoftmax_maxelem = te.compute((B, N, QS), lambda bb, n, i: te.max(score_mod[bb, n, i, j], axis=j), name=\"softmax_maxelem\")\nsoftmax_exp = te.compute((B, N, QS, KVS), lambda bb, n, i, j: tir.exp(score_mod[bb, n, i, j] - softmax_maxelem[bb, n, i]), name=\"softmax_exp\")\nj = te.reduce_axis((0, KVS), \"j\")\nsv = te.compute((B, N, QS, H), lambda bb, n, i, e: te.sum(softmax_exp[bb, n, i, j] * v[bb, n, j, e], axis=j), name=\"sv\")\nj = te.reduce_axis((0, KVS), \"j\")\nsoftmax_expsum = te.compute((B, N, QS), lambda bb, n, i: te.sum(softmax_exp[bb, n, i, j], axis=j), name=\"softmax_expsum\")\nsoftmax_norm = te.compute((B, N, QS, H), lambda bb, n, i, e: sv[bb, n, i, e] / softmax_expsum[bb, n, i], name=\"softmax_norm\")\n# outputs: softmax_norm",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    3
+   ],
+   "theory": [
+    "a single pass with 3 state(s) exists, keeping Σ_j v[bb, n, j, e]·exp(p[bb, n, i, j] / H^1/2), Σ_j exp(p[bb, n, i, j] / H^1/2), max_j p[bb, n, i, j]"
+   ],
+   "seconds": 0.7972636010017595,
+   "fused": true,
+   "summary": "chain over j (softmax_maxelem, sv, softmax_expsum): fused into 3 states (softmax_maxelem, sv, softmax_expsum)\n  theory: a single pass with 3 state(s) exists, keeping Σ_j v[bb, n, j, e]·exp(p[bb, n, i, j] / H^1/2), Σ_j exp(p[bb, n, i, j] / H^1/2), max_j p[bb, n, i, j]\naccurate: unit: 1.1e-06 (original 1e-06, inherent 3.9e-07); offset: 0.00021 (original 0.00021, inherent 1.2e-07); wide: 9.9e-06 (original 9.9e-06, inherent 5.5e-06); tiny: 4.7e-07 (original 4.7e-07, inherent 1.2e-07)",
+   "chains": [
+    {
+     "members": [
+      "softmax_maxelem",
+      "sv",
+      "softmax_expsum"
+     ],
+     "fused": true,
+     "states": [
+      "softmax_maxelem",
+      "sv",
+      "softmax_expsum"
+     ],
+     "auxiliaries": [],
+     "reason": "",
+     "selection": []
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over j (softmax_maxelem, sv, softmax_expsum): fused into 3 states (softmax_maxelem, sv, softmax_expsum)\ndef merge_j(a, b):\n    t0 = tir.max(a[0], b[0])\n    t1 = tir.exp((-(t0 - a[0])))\n    t2 = tir.exp((-(t0 - b[0])))\n    return (\n        t0,  # softmax_maxelem\n        ((t1 * a[1]) + (t2 * b[1])),  # sv\n        ((t1 * a[2]) + (t2 * b[2])),  # softmax_expsum_s\n    )\n\ndef identity_j(t0, t1, t2):\n    return (tir.min_value(ty=t0), tir.const(0.0, t1), tir.const(0.0, t2))\n\nfused_j = te.comm_reducer(merge_j, identity_j, name=\"fused_j\")\nj = te.reduce_axis((0, KVS), name=\"j\")\nsoftmax_maxelem, sv, softmax_expsum_s = te.compute(\n    (B, N, QS, H),\n    lambda bb, n, i, e: fused_j(\n        (\n            (p[bb, n, i, j] / tir.sqrt(H.astype(\"float32\"))),  # softmax_maxelem\n            v[bb, n, j, e],  # sv\n            tir.const(1.0, \"float32\"),  # softmax_expsum_s\n        ),\n        axis=j,\n    ),\n    name=\"fused_softmax_maxelem_sv_softmax_expsum\",\n)\nsoftmax_expsum = te.compute((B, N, QS), lambda bb, n, i: softmax_expsum_s[bb, n, i, 0], name=\"softmax_expsum\")"
+  },
+  {
+   "key": "mla",
+   "paper": "RedFuser",
+   "where": "A.5.1; Tab. 2b",
+   "what": "Multi-latent attention, decoding",
+   "spelling": "as written",
+   "before_te": "q_c = te.placeholder((bs, hn, q, hd), name=\"q_c\")\nq_pe = te.placeholder((bs, hn, q, ped), name=\"q_pe\")\nc = te.placeholder((bs, kv, hd), name=\"c\")\nk_pe = te.placeholder((bs, kv, ped), name=\"k_pe\")\nr = te.reduce_axis((0, hd), \"r\")\ns_c = te.compute((bs, hn, q, kv), lambda bb, n, i, j: te.sum(q_c[bb, n, i, r] * c[bb, j, r], axis=r), name=\"s_c\")\ns = te.reduce_axis((0, ped), \"s\")\ns_pe = te.compute((bs, hn, q, kv), lambda bb, n, i, j: te.sum(q_pe[bb, n, i, s] * k_pe[bb, j, s], axis=s), name=\"s_pe\")\nscore = te.compute((bs, hn, q, kv), lambda bb, n, i, j: s_c[bb, n, i, j] + s_pe[bb, n, i, j], name=\"score\")\nj = te.reduce_axis((0, kv), \"j\")\nmx = te.compute((bs, hn, q), lambda bb, n, i: te.max(score[bb, n, i, j], axis=j), name=\"mx\")\nj = te.reduce_axis((0, kv), \"j\")\nden = te.compute((bs, hn, q), lambda bb, n, i: te.sum(tir.exp(score[bb, n, i, j] - mx[bb, n, i]), axis=j), name=\"den\")\nj = te.reduce_axis((0, kv), \"j\")\no = te.compute((bs, hn, q, hd), lambda bb, n, i, e: te.sum(tir.exp(score[bb, n, i, j] - mx[bb, n, i]) / den[bb, n, i] * c[bb, j, e], axis=j), name=\"o\")\n# outputs: o",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    3
+   ],
+   "theory": [
+    "a single pass with 3 state(s) exists, keeping Σ_j c[bb, j, e]·exp(s_c[bb, n, i, j] + s_pe[bb, n, i, j]), max_j (s_c[bb, n, i, j] + s_pe[bb, n, i, j]), Σ_j exp(s_c[bb, n, i, j] + s_pe[bb, n, i, j])"
+   ],
+   "seconds": 0.8937945930010756,
+   "fused": true,
+   "summary": "chain over j (mx, den, o): fused into 3 states (mx, den, o)\n  theory: a single pass with 3 state(s) exists, keeping Σ_j c[bb, j, e]·exp(s_c[bb, n, i, j] + s_pe[bb, n, i, j]), max_j (s_c[bb, n, i, j] + s_pe[bb, n, i, j]), Σ_j exp(s_c[bb, n, i, j] + s_pe[bb, n, i, j])\naccurate: unit: 5.4e-06 (original 5.4e-06, inherent 2.2e-06); offset: 0 (original 0, inherent 1.2e-07); wide: 7.1e-05 (original 7.1e-05, inherent 3.5e-05); tiny: 6.2e-07 (original 3.5e-07, inherent 9e-08)",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "den",
+      "o"
+     ],
+     "fused": true,
+     "states": [
+      "mx",
+      "den",
+      "o"
+     ],
+     "auxiliaries": [],
+     "reason": "",
+     "selection": []
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over j (mx, den, o): fused into 3 states (mx, den, o)\ndef merge_j(a, b):\n    t0 = tir.max(a[0], b[0])\n    t1 = tir.exp((-(t0 - a[0])))\n    t2 = tir.exp((-(t0 - b[0])))\n    t3 = ((t1 * a[1]) + (t2 * b[1]))\n    return (\n        t0,  # mx\n        t3,  # den\n        ((((a[1] / t3) * t1) * a[2]) + (((b[1] / t3) * t2) * b[2])),  # o\n    )\n\ndef identity_j(t0, t1, t2):\n    return (tir.min_value(ty=t0), tir.const(0.0, t1), tir.const(0.0, t2))\n\nfused_j = te.comm_reducer(merge_j, identity_j, name=\"fused_j\")\nj = te.reduce_axis((0, kv), name=\"j\")\nmx, den, o = te.compute(\n    (bs, hn, q, hd),\n    lambda bb, n, i, e: fused_j(\n        (\n            (s_c[bb, n, i, j] + s_pe[bb, n, i, j]),  # mx\n            tir.const(1.0, \"float32\"),  # den\n            c[bb, j, e],  # o\n        ),\n        axis=j,\n    ),\n    name=\"fused_mx_den_o\",\n)"
+  },
+  {
+   "key": "moe",
+   "paper": "RedFuser",
+   "where": "A.2.2 Eq. 35",
+   "what": "MoE routing without TopK",
+   "spelling": "as written",
+   "before_te": "x = te.placeholder((s, hd), name=\"x\")\nw = te.placeholder((hd, en), name=\"w\")\nr = te.reduce_axis((0, hd), \"r\")\nlogits = te.compute((s, en), lambda i, e: te.sum(x[i, r] * w[r, e], axis=r), name=\"logits\")\nj = te.reduce_axis((0, en), \"j\")\nm = te.compute((s,), lambda i: te.max(logits[i, j], axis=j), name=\"m\")\nj = te.reduce_axis((0, en), \"j\")\nt = te.compute((s,), lambda i: te.sum(tir.exp(logits[i, j] - m[i]), axis=j), name=\"t\")\np = te.compute((s, en), lambda i, e: tir.exp(logits[i, e] - m[i]) / t[i], name=\"p\")\n# outputs: p",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    2
+   ],
+   "theory": [
+    "a single pass with 2 state(s) exists, keeping max_j logits[i, j], Σ_j exp(logits[i, j])"
+   ],
+   "seconds": 0.18511442499584518,
+   "fused": true,
+   "summary": "chain over j (m, t): fused into 2 states (m, t)\n  theory: a single pass with 2 state(s) exists, keeping max_j logits[i, j], Σ_j exp(logits[i, j])\naccurate: unit: 2.9e-07 (original 2.9e-07, inherent 2e-07); offset: 0 (original 0, inherent 0); wide: 3.4e-168 (original 3.4e-168, inherent 1.7e-171); tiny: 0 (original 0, inherent 0)",
+   "chains": [
+    {
+     "members": [
+      "m",
+      "t"
+     ],
+     "fused": true,
+     "states": [
+      "m",
+      "t"
+     ],
+     "auxiliaries": [],
+     "reason": "",
+     "selection": []
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over j (m, t): fused into 2 states (m, t)\ndef merge_j(a, b):\n    t0 = tir.max(a[0], b[0])\n    return (\n        t0,  # m\n        (((tir.exp((-(t0 - a[0])))) * a[1]) + ((tir.exp((-(t0 - b[0])))) * b[1])),  # t\n    )\n\ndef identity_j(t0, t1):\n    return (tir.min_value(ty=t0), tir.const(0.0, t1))\n\nfused_j = te.comm_reducer(merge_j, identity_j, name=\"fused_j\")\nj = te.reduce_axis((0, en), name=\"j\")\nm, t = te.compute(\n    (s,),\n    lambda i: fused_j(\n        (\n            logits[i, j],  # m\n            tir.const(1.0, \"float32\"),  # t\n        ),\n        axis=j,\n    ),\n    name=\"fused_m_t\",\n)"
+  },
+  {
+   "key": "fp8_quant_gemm",
+   "paper": "RedFuser",
+   "where": "Sec. 3.4 Eq. 17 p.6",
+   "what": "FP8 per-token quantization + GEMM",
+   "spelling": "as written",
+   "before_te": "A = te.placeholder((M, K), name=\"A\")\nW = te.placeholder((K, N), name=\"W\")\nl = te.reduce_axis((0, K), \"l\")\nm = te.compute((M,), lambda i: te.max(tir.abs(A[i, l]), axis=l), name=\"m\")\nl = te.reduce_axis((0, K), \"l\")\nc = te.compute((M, N), lambda i, n: te.sum(448.0 * A[i, l] / m[i] * W[l, n], axis=l), name=\"c\")\n# outputs: c",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    3
+   ],
+   "theory": [
+    "a single pass with 3 state(s) exists, keeping Σ_l A[i, l]·W[l, n], max_l -A[i, l], max_l A[i, l]"
+   ],
+   "seconds": 0.13214242800313514,
+   "fused": false,
+   "summary": "chain over l (m, c): not fused -- the reducer of (m.m0, m.m1, c.h0) is refused: REJECTED: unit: 1.5e-07 (original 3.2e-07, inherent 2.6e-07); offset: 4.2e-07 (original 5.9e-07, inherent 1.4e-07); wide: 2.4e-07 (original 2.8e-07, inherent 1.9e-07); huge: inf (original 4e-07, inherent 2.5e-07) (!); tiny: 1 (original 4.2e-07, inherent 3.8e-07) (!)\n  theory: a single pass with 3 state(s) exists, keeping Σ_l A[i, l]·W[l, n], max_l -A[i, l], max_l A[i, l]",
+   "chains": [
+    {
+     "members": [
+      "m",
+      "c"
+     ],
+     "fused": false,
+     "states": [],
+     "auxiliaries": [],
+     "reason": "the reducer of (m.m0, m.m1, c.h0) is refused: REJECTED: unit: 1.5e-07 (original 3.2e-07, inherent 2.6e-07); offset: 4.2e-07 (original 5.9e-07, inherent 1.4e-07); wide: 2.4e-07 (original 2.8e-07, inherent 1.9e-07); huge: inf (original 4e-07, inherent 2.5e-07) (!); tiny: 1 (original 4.2e-07, inherent 3.8e-07) (!)",
+     "selection": [
+      "parts m: no reduction it is made of can be read back from it",
+      "hoist m out of c: c: it divides by m[i], which is not proven to be non-zero"
+     ]
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "sum_sum",
+   "paper": "RedFuser",
+   "where": "A.2.3 Eq. 39 p.16",
+   "what": "Sum + Sum",
+   "spelling": "as written",
+   "before_te": "x1 = te.placeholder((n, m), name=\"x1\")\nx2 = te.placeholder((n, m), name=\"x2\")\nj = te.reduce_axis((0, m), \"j\")\nmsum = te.compute((n,), lambda i: te.sum(x1[i, j] * x1[i, j], axis=j), name=\"msum\")\nj = te.reduce_axis((0, m), \"j\")\ns = te.compute((n,), lambda i: te.sum(x1[i, j] * x2[i, j] / tir.sqrt(tir.max(msum[i] - 10.0, 1e-06)), axis=j), name=\"s\")\n# outputs: s",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    2
+   ],
+   "theory": [
+    "a single pass with 2 state(s) exists, keeping Σ_j x1[i, j]·x2[i, j], Σ_j x1[i, j]^2"
+   ],
+   "seconds": 0.11848771099903388,
+   "fused": true,
+   "summary": "chain over j (msum, s): fused into 2 states (msum, s.h0); derived: s.h0\n  theory: a single pass with 2 state(s) exists, keeping Σ_j x1[i, j]·x2[i, j], Σ_j x1[i, j]^2\naccurate: unit: 5.8e-07 (original 6.2e-07, inherent 1.2e-07); offset: 3.6e-07 (original 4.2e-07, inherent 1.2e-08); wide: 1.5e-07 (original 1.4e-07, inherent 1.7e-07)",
+   "chains": [
+    {
+     "members": [
+      "msum",
+      "s"
+     ],
+     "fused": true,
+     "states": [
+      "msum",
+      "s.h0"
+     ],
+     "auxiliaries": [
+      "s.h0"
+     ],
+     "reason": "",
+     "selection": [
+      "hoist s.ctx0 out of s: s: it divides by s.ctx0[i], which is not proven to be non-zero; it takes a root of max(10, msum[i]) - 10 (through s.ctx0), which is not proven to be non-negative"
+     ]
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over j (msum, s): fused into 2 states (msum, s.h0); derived: s.h0\n#   s.h0 = Σ_j x1[i, j]·x2[i, j]    (left when the contexts of s are taken out of its reduction)\ndef merge_j(a, b):\n    return (\n        (a[0] + b[0]),  # msum\n        (a[1] + b[1]),  # s_h0\n    )\n\ndef identity_j(t0, t1):\n    return (tir.const(0.0, t0), tir.const(0.0, t1))\n\nfused_j = te.comm_reducer(merge_j, identity_j, name=\"fused_j\")\nj = te.reduce_axis((0, m), name=\"j\")\nmsum, s_h0 = te.compute(\n    (n,),\n    lambda i: fused_j(\n        (\n            (x1[i, j] * x1[i, j]),  # msum\n            (x1[i, j] * x2[i, j]),  # s_h0\n        ),\n        axis=j,\n    ),\n    name=\"fused_msum_s\",\n)\ns = te.compute((n,), lambda i: (s_h0[i] / (tir.sqrt((tir.max(tir.const(10.000001, \"float32\"), msum[i]) - tir.const(10.0, \"float32\"))))), name=\"s\")"
+  },
+  {
+   "key": "variance",
+   "paper": "RedFuser",
+   "where": "A.6 Eq. 44 p.17",
+   "what": "Variance",
+   "spelling": "as written",
+   "before_te": "x = te.placeholder((n, m), name=\"x\")\nj = te.reduce_axis((0, m), \"j\")\ntot = te.compute((n,), lambda i: te.sum(x[i, j], axis=j), name=\"tot\")\nmean = te.compute((n,), lambda i: tot[i] / m.astype(\"float32\"), name=\"mean\")\nj = te.reduce_axis((0, m), \"j\")\nss = te.compute((n,), lambda i: te.sum((x[i, j] - mean[i]) * (x[i, j] - mean[i]), axis=j), name=\"ss\")\nvar = te.compute((n,), lambda i: ss[i] / m.astype(\"float32\"), name=\"var\")\n# outputs: var",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    3
+   ],
+   "theory": [
+    "a single pass with 3 state(s) exists, keeping Σ_j x[i, j]^2, Σ_j x[i, j], the count"
+   ],
+   "seconds": 0.14126223000494065,
+   "fused": true,
+   "summary": "chain over j (tot, ss): fused into 3 states (mean, ss, count); derived: count\n  theory: a single pass with 3 state(s) exists, keeping Σ_j x[i, j]^2, Σ_j x[i, j], the count\naccurate: unit: 5e-07 (original 1.1e-07, inherent 2.4e-08); offset: 0.0008 (original 1e-06, inherent 0.00021); wide: 6.9e-07 (original 2.7e-07, inherent 4.7e-08)",
+   "chains": [
+    {
+     "members": [
+      "tot",
+      "mean",
+      "ss"
+     ],
+     "fused": true,
+     "states": [
+      "mean",
+      "ss",
+      "count"
+     ],
+     "auxiliaries": [
+      "count"
+     ],
+     "reason": "",
+     "selection": [
+      "promote mean in place of tot: ss: merged with an empty part it is NaN, through mean there; it is a function of tot alone",
+      "supplement count = Σ_j 1: mean needs Σ_j 1"
+     ]
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over j (tot, ss): fused into 3 states (mean, ss, count); derived: count\n#   count = Σ_j 1    (the extent of the axis, as far as it has been reduced)\ndef merge_j(a, b):\n    t0 = (a[2] + b[2])\n    t1 = (((a[0] * a[2]) + (b[0] * b[2])) / t0)\n    return (\n        t1,  # mean\n        (a[1] + b[1] + (((t1 - a[0]) * (t1 - a[0])) * a[2]) + (((t1 - b[0]) * (t1 - b[0])) * b[2])),  # ss\n        t0,  # count\n    )\n\ndef identity_j(t0, t1, t2):\n    return (tir.const(0.0, t0), tir.const(0.0, t1), tir.const(0.0, t2))\n\nfused_j = te.comm_reducer(merge_j, identity_j, name=\"fused_j\")\nj = te.reduce_axis((0, m), name=\"j\")\nmean, ss, count = te.compute(\n    (n,),\n    lambda i: fused_j(\n        (\n            x[i, j],  # mean\n            tir.const(0.0, \"float32\"),  # ss\n            tir.const(1.0, \"float32\"),  # count\n        ),\n        axis=j,\n    ),\n    name=\"fused_tot_ss\",\n)"
+  },
+  {
+   "key": "inertia",
+   "paper": "RedFuser",
+   "where": "A.6 Eq. 45 p.17",
+   "what": "Moment of inertia, per coordinate",
+   "spelling": "as written",
+   "before_te": "mass = te.placeholder((bs, n), name=\"mass\")\nx0 = te.placeholder((bs, n), name=\"x0\")\nx1 = te.placeholder((bs, n), name=\"x1\")\nx2 = te.placeholder((bs, n), name=\"x2\")\nl = te.reduce_axis((0, n), \"l\")\ns0 = te.compute((bs,), lambda i: te.sum(mass[i, l] * x0[i, l], axis=l), name=\"s0\")\nl = te.reduce_axis((0, n), \"l\")\nM = te.compute((bs,), lambda i: te.sum(mass[i, l], axis=l), name=\"M\")\nc0 = te.compute((bs,), lambda i: s0[i] / M[i], name=\"c0\")\nl = te.reduce_axis((0, n), \"l\")\ns1 = te.compute((bs,), lambda i: te.sum(mass[i, l] * x1[i, l], axis=l), name=\"s1\")\nc1 = te.compute((bs,), lambda i: s1[i] / M[i], name=\"c1\")\nl = te.reduce_axis((0, n), \"l\")\ns2 = te.compute((bs,), lambda i: te.sum(mass[i, l] * x2[i, l], axis=l), name=\"s2\")\nc2 = te.compute((bs,), lambda i: s2[i] / M[i], name=\"c2\")\nl = te.reduce_axis((0, n), \"l\")\nI = te.compute((bs,), lambda i: te.sum(mass[i, l] * ((x0[i, l] - c0[i]) * (x0[i, l] - c0[i]) + (x1[i, l] - c1[i]) * (x1[i, l] - c1[i]) + (x2[i, l] - c2[i]) * (x2[i, l] - c2[i])), axis=l), name=\"I\")\n# outputs: I",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    7
+   ],
+   "theory": [
+    "a single pass with 7 state(s) exists, keeping Σ_l mass[i, l]·x2[i, l]^2, Σ_l mass[i, l]·x1[i, l]^2, Σ_l mass[i, l]·x0[i, l]^2, Σ_l mass[i, l], Σ_l mass[i, l]·x2[i, l], Σ_l mass[i, l]·x1[i, l], Σ_l mass[i, l]·x0[i, l]"
+   ],
+   "seconds": 0.27438953099772334,
+   "fused": true,
+   "summary": "chain over l (s0, M, s1, s2, I): fused into 5 states (c0, M, c1, c2, I)\n  theory: a single pass with 7 state(s) exists, keeping Σ_l mass[i, l]·x2[i, l]^2, Σ_l mass[i, l]·x1[i, l]^2, Σ_l mass[i, l]·x0[i, l]^2, Σ_l mass[i, l], Σ_l mass[i, l]·x2[i, l], Σ_l mass[i, l]·x1[i, l], Σ_l mass[i, l]·x0[i, l]\naccurate: unit: 8.7e-07 (original 3e-07, inherent 5.1e-08); offset: 0.00022 (original 2.3e-05, inherent 0.00013); wide: 6.5e-07 (original 4.7e-07, inherent 3.4e-08)",
+   "chains": [
+    {
+     "members": [
+      "s0",
+      "M",
+      "c0",
+      "s1",
+      "c1",
+      "s2",
+      "c2",
+      "I"
+     ],
+     "fused": true,
+     "states": [
+      "c0",
+      "M",
+      "c1",
+      "c2",
+      "I"
+     ],
+     "auxiliaries": [],
+     "reason": "",
+     "selection": [
+      "promote c2 in place of s2: I: merged with an empty part it is NaN, through c2, c1, c0 there; it is a function of s2 alone",
+      "promote c1 in place of s1: I: merged with an empty part it is NaN, through c2, c1, c0 there; it is a function of s1 alone",
+      "promote c0 in place of s0: I: merged with an empty part it is NaN, through c2, c1, c0 there; it is a function of s0 alone"
+     ]
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over l (s0, M, s1, s2, I): fused into 5 states (c0, M, c1, c2, I)\ndef merge_l(a, b):\n    t0 = (a[1] + b[1])\n    t1 = (((a[0] * a[1]) + (b[0] * b[1])) / t0)\n    t2 = (((a[1] * a[2]) + (b[1] * b[2])) / t0)\n    t3 = (((a[1] * a[3]) + (b[1] * b[3])) / t0)\n    return (\n        t1,  # c0\n        t0,  # M\n        t2,  # c1\n        t3,  # c2\n        (a[4] + b[4] + (((t3 - a[3]) * (t3 - a[3])) * a[1]) + (((t3 - b[3]) * (t3 - b[3])) * b[1]) + (((t2 - a[2]) * (t2 - a[2])) * a[1]) + (((t2 - b[2]) * (t2 - b[2])) * b[1]) + (((t1 - a[0]) * (t1 - a[0])) * a[1]) + (((t1 - b[0]) * (t1 - b[0])) * b[1])),  # I\n    )\n\ndef identity_l(t0, t1, t2, t3, t4):\n    return (tir.const(0.0, t0), tir.const(0.0, t1), tir.const(0.0, t2), tir.const(0.0, t3), tir.const(0.0, t4))\n\nfused_l = te.comm_reducer(merge_l, identity_l, name=\"fused_l\")\nl = te.reduce_axis((0, n), name=\"l\")\nc0, M, c1, c2, I = te.compute(\n    (bs,),\n    lambda i: fused_l(\n        (\n            x0[i, l],  # c0\n            mass[i, l],  # M\n            x1[i, l],  # c1\n            x2[i, l],  # c2\n            tir.const(0.0, \"float32\"),  # I\n        ),\n        axis=l,\n    ),\n    name=\"fused_s0_M_s1_s2_I\",\n)"
+  },
+  {
+   "key": "inertia_joint",
+   "paper": "RedFuser",
+   "where": "A.6 Eq. 45 p.17",
+   "what": "Moment of inertia, joint (n, dim) reduction",
+   "spelling": "as written",
+   "before_te": "mass = te.placeholder((bs, n), name=\"mass\")\nx = te.placeholder((bs, n, dim), name=\"x\")\nl = te.reduce_axis((0, n), \"l\")\ns = te.compute((bs, dim), lambda i, d: te.sum(mass[i, l] * x[i, l, d], axis=l), name=\"s\")\nl = te.reduce_axis((0, n), \"l\")\nM = te.compute((bs,), lambda i: te.sum(mass[i, l], axis=l), name=\"M\")\nc = te.compute((bs, dim), lambda i, d: s[i, d] / M[i], name=\"c\")\nl = te.reduce_axis((0, n), \"l\")\nd = te.reduce_axis((0, dim), \"d\")\nI = te.compute((bs,), lambda i: te.sum(mass[i, l] * (x[i, l, d] - c[i, d]) * (x[i, l, d] - c[i, d]), axis=l, d), name=\"I\")\n# outputs: I",
+   "judged": [],
+   "judged_states": [],
+   "theory": [],
+   "seconds": 0.00035023599775740877,
+   "fused": false,
+   "summary": "no reduction chain in the program",
+   "chains": [],
+   "skipped": []
+  },
+  {
+   "key": "a1_program",
+   "paper": "RedFuser",
+   "where": "A.1 p.15 (our counterexample)",
+   "what": "s = sum u, y = sum v s",
+   "spelling": "as written",
+   "before_te": "u = te.placeholder((n, m), name=\"u\")\nv = te.placeholder((n, m), name=\"v\")\nj = te.reduce_axis((0, m), \"j\")\ns = te.compute((n,), lambda i: te.sum(u[i, j], axis=j), name=\"s\")\nj = te.reduce_axis((0, m), \"j\")\ny = te.compute((n,), lambda i: te.sum(v[i, j] * s[i], axis=j), name=\"y\")\n# outputs: y",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    2
+   ],
+   "theory": [
+    "a single pass with 2 state(s) exists, keeping Σ_j v[i, j], Σ_j u[i, j]"
+   ],
+   "seconds": 0.1127431790009723,
+   "fused": true,
+   "summary": "chain over j (s, y): fused into 2 states (s, y.h0); derived: y.h0\n  theory: a single pass with 2 state(s) exists, keeping Σ_j v[i, j], Σ_j u[i, j]\naccurate: unit: 2.8e-06 (original 2.7e-06, inherent 1.1e-06); offset: 9.2e-07 (original 4.4e-07, inherent 2e-08); wide: 1.4e-06 (original 6e-07, inherent 7.9e-07)",
+   "chains": [
+    {
+     "members": [
+      "s",
+      "y"
+     ],
+     "fused": true,
+     "states": [
+      "s",
+      "y.h0"
+     ],
+     "auxiliaries": [
+      "y.h0"
+     ],
+     "reason": "",
+     "selection": [
+      "hoist s out of y: y: reading Σ_j v[i, j] back from it divides by Σ_j u[i, j], which is 0 where u[i, j] is"
+     ]
+    }
+   ],
+   "skipped": [],
+   "after_te": "# chain over j (s, y): fused into 2 states (s, y.h0); derived: y.h0\n#   y.h0 = Σ_j v[i, j]    (left when the contexts of y are taken out of its reduction)\ndef merge_j(a, b):\n    return (\n        (a[0] + b[0]),  # s\n        (a[1] + b[1]),  # y_h0\n    )\n\ndef identity_j(t0, t1):\n    return (tir.const(0.0, t0), tir.const(0.0, t1))\n\nfused_j = te.comm_reducer(merge_j, identity_j, name=\"fused_j\")\nj = te.reduce_axis((0, m), name=\"j\")\ns, y_h0 = te.compute(\n    (n,),\n    lambda i: fused_j(\n        (\n            u[i, j],  # s\n            v[i, j],  # y_h0\n        ),\n        axis=j,\n    ),\n    name=\"fused_s_y\",\n)\ny = te.compute((n,), lambda i: (s[i] * y_h0[i]), name=\"y\")",
+   "a1_numbers": {
+    "u": [
+     [
+      1.0,
+      -1.0,
+      3.0,
+      0.0
+     ]
+    ],
+    "v": [
+     [
+      1.0,
+      1.0,
+      1.0,
+      0.0
+     ]
+    ],
+    "truth": 9.0,
+    "fused": [
+     9.0
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Run python against this worktree's sources: python/tvm from the tree, the compiled
+# libraries from the worktree venv (see the repository's worktree env notes).
+#
+#   Hapax/scripts/py <script.py> [args...]      (from anywhere)
+set -eo pipefail
+WT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+export PYTHONPATH="$WT/python"
+export TVM_LIBRARY_PATH="$WT/.venv/lib/python3.12/site-packages/tvm/lib"
+export PYTHONDONTWRITEBYTECODE=1
+cd "$WT"
+exec "$WT/.venv/bin/python" "$@"

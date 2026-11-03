@@ -1,0 +1,2568 @@
+{
+ "neptune": {
+  "source": "crossref",
+  "query": "Neptune: Advanced ML Operator Fusion for Locality and Parallelism on GPUs",
+  "matches": [
+   {
+    "title": "Neptune: Advanced ML Operator Fusion for Locality and Parallelism on GPUs",
+    "authors": [
+     "Yifan Zhao",
+     "Egan Johnson",
+     "Prasanth Chatarasi",
+     "Vikram Adve",
+     "Sasa Misailovic"
+    ],
+    "venue": "Proceedings of the ACM on Programming Languages",
+    "year": 2026,
+    "volume": "10",
+    "issue": "PLDI",
+    "pages": "1278-1302",
+    "doi": "10.1145/3808298",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery (ACM)"
+   },
+   {
+    "title": "LaPerm: Locality Aware Scheduler for Dynamic Parallelism on GPUs",
+    "authors": [
+     "Jin Wang",
+     "Norm Rubin",
+     "Albert Sidelnik",
+     "Sudhakar Yalamanchili"
+    ],
+    "venue": "2016 ACM/IEEE 43rd Annual International Symposium on Computer Architecture (ISCA)",
+    "year": 2016,
+    "volume": null,
+    "issue": null,
+    "pages": "583-595",
+    "doi": "10.1109/isca.2016.57",
+    "type": "proceedings-article",
+    "publisher": "IEEE"
+   },
+   {
+    "title": "LaPerm",
+    "authors": [
+     "Jin Wang",
+     "Norm Rubin",
+     "Albert Sidelnik",
+     "Sudhakar Yalamanchili"
+    ],
+    "venue": "ACM SIGARCH Computer Architecture News",
+    "year": 2016,
+    "volume": "44",
+    "issue": "3",
+    "pages": "583-595",
+    "doi": "10.1145/3007787.3001199",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery (ACM)"
+   }
+  ]
+ },
+ "redfuser": {
+  "source": "crossref",
+  "query": "RedFuser: An Automatic Operator Fusion Framework for Cascaded Reductions on AI Accelerators",
+  "matches": [
+   {
+    "title": "RedFuser: An Automatic Operator Fusion Framework for Cascaded Reductions on AI Accelerators",
+    "authors": [
+     "Xinsheng Tang",
+     "Yangcheng Li",
+     "Nan Wang",
+     "Zhiyi Shu",
+     "Xingyu Ling",
+     "Junna Xing",
+     "Peng Zhou",
+     "Qiang Liu"
+    ],
+    "venue": "Proceedings of the 31st ACM International Conference on Architectural Support for Programming Languages and Operating Systems, Volume 2",
+    "year": 2026,
+    "volume": null,
+    "issue": null,
+    "pages": "1566-1588",
+    "doi": "10.1145/3779212.3790209",
+    "type": "proceedings-article",
+    "publisher": "ACM"
+   },
+   {
+    "title": "",
+    "authors": [],
+    "venue": "",
+    "year": 2026,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.3030/101248531",
+    "type": "grant",
+    "publisher": "Publications Office of the European Union"
+   },
+   {
+    "title": "Specification for approval testing of welding procedures",
+    "authors": [],
+    "venue": "",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.3403/00177321u",
+    "type": "standard",
+    "publisher": "BSI British Standards"
+   }
+  ]
+ },
+ "mirage": {
+  "source": "crossref",
+  "query": "Mirage: A Multi-Level Superoptimizer for Tensor Programs",
+  "matches": [
+   {
+    "title": "Compact Multi-level-prior Tensor Representation for Hyperspectral Image Super-resolution_supp1-3737830.pdf",
+    "authors": [
+     "Li Wei"
+    ],
+    "venue": "",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.1109/tgrs.2026.3737830/mm1",
+    "type": "component",
+    "publisher": "Institute of Electrical and Electronics Engineers (IEEE)"
+   },
+   {
+    "title": "Tensor Recovery from Noisy and Multi-Level Quantized Measurements",
+    "authors": [
+     "Ren Wang",
+     "Meng Wang",
+     "Jinjun Xiong"
+    ],
+    "venue": "",
+    "year": 2020,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.21203/rs.3.rs-20952/v2",
+    "type": "posted-content",
+    "publisher": "Springer Science and Business Media LLC"
+   },
+   {
+    "title": "Tensor Recovery from Noisy and Multi-Level Quantized Measurements",
+    "authors": [
+     "Ren Wang",
+     "Meng Wang",
+     "Jinjun Xiong"
+    ],
+    "venue": "",
+    "year": 2020,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.21203/rs.3.rs-20952/v1",
+    "type": "posted-content",
+    "publisher": "Springer Science and Business Media LLC"
+   }
+  ]
+ },
+ "stenso": {
+  "source": "crossref",
+  "query": "Tensor Program Superoptimization through Cost-Guided Symbolic Program Synthesis",
+  "matches": [
+   {
+    "title": "Tensor Program Superoptimization through Cost-Guided Symbolic Program Synthesis",
+    "authors": [
+     "Alexander Brauckmann",
+     "Aarsh Chaube",
+     "José W. De Souza Magalhães",
+     "Elizabeth Polgreen",
+     "Michael F. P. O’Boyle"
+    ],
+    "venue": "2026 IEEE/ACM International Symposium on Code Generation and Optimization (CGO)",
+    "year": 2026,
+    "volume": null,
+    "issue": null,
+    "pages": "683-695",
+    "doi": "10.1109/cgo68049.2026.11395198",
+    "type": "proceedings-article",
+    "publisher": "IEEE"
+   },
+   {
+    "title": "Effective fuzz testing via model-guided program synthesis",
+    "authors": [
+     "",
+     "Cen Zhang"
+    ],
+    "venue": "",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.32657/10356/169112",
+    "type": "dissertation",
+    "publisher": "Nanyang Technological University"
+   },
+   {
+    "title": "Pattern-guided program synthesis",
+    "authors": [
+     "Krzysztof Krawiec"
+    ],
+    "venue": "Studies in Computational Intelligence",
+    "year": 2015,
+    "volume": null,
+    "issue": null,
+    "pages": "77-88",
+    "doi": "10.1007/978-3-319-27565-9_7",
+    "type": "book-chapter",
+    "publisher": "Springer International Publishing"
+   }
+  ]
+ },
+ "halide": {
+  "source": "crossref",
+  "query": "Halide: a language and compiler for optimizing parallelism, locality, and recomputation in image processing pipelines",
+  "matches": [
+   {
+    "title": "Halide",
+    "authors": [
+     "Jonathan Ragan-Kelley",
+     "Connelly Barnes",
+     "Andrew Adams",
+     "Sylvain Paris",
+     "Frédo Durand",
+     "Saman Amarasinghe"
+    ],
+    "venue": "Proceedings of the 34th ACM SIGPLAN Conference on Programming Language Design and Implementation",
+    "year": 2013,
+    "volume": null,
+    "issue": null,
+    "pages": "519-530",
+    "doi": "10.1145/2491956.2462176",
+    "type": "proceedings-article",
+    "publisher": "ACM"
+   },
+   {
+    "title": "Halide",
+    "authors": [
+     "Jonathan Ragan-Kelley",
+     "Connelly Barnes",
+     "Andrew Adams",
+     "Sylvain Paris",
+     "Frédo Durand",
+     "Saman Amarasinghe"
+    ],
+    "venue": "ACM SIGPLAN Notices",
+    "year": 2013,
+    "volume": "48",
+    "issue": "6",
+    "pages": "519-530",
+    "doi": "10.1145/2499370.2462176",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery (ACM)"
+   },
+   {
+    "title": "Compiler algorithms for optimizing locality and parallelism on shared and distributed memory machines",
+    "authors": [
+     "M. Kandemir",
+     "J. Ramanujam",
+     "A. Choudhary"
+    ],
+    "venue": "Proceedings 1997 International Conference on Parallel Architectures and Compilation Techniques",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": "236-247",
+    "doi": "10.1109/pact.1997.644019",
+    "type": "proceedings-article",
+    "publisher": "IEEE Comput. Soc"
+   }
+  ]
+ },
+ "rfactor": {
+  "source": "crossref",
+  "query": "Parallel associative reductions in Halide",
+  "matches": [
+   {
+    "title": "Parallel associative reductions in Halide",
+    "authors": [
+     "Patricia Suriana",
+     "Andrew Adams",
+     "Shoaib Kamil"
+    ],
+    "venue": "2017 IEEE/ACM International Symposium on Code Generation and Optimization (CGO)",
+    "year": 2017,
+    "volume": null,
+    "issue": null,
+    "pages": "281-291",
+    "doi": "10.1109/cgo.2017.7863747",
+    "type": "proceedings-article",
+    "publisher": "IEEE"
+   },
+   {
+    "title": "Influence of the Halogen in Titanocene Halide Promoted Reductions",
+    "authors": [],
+    "venue": "",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.1021/om049257m.s001",
+    "type": "component",
+    "publisher": "American Chemical Society (ACS)"
+   },
+   {
+    "title": "Revelation of the Nature of the Reducing Species in Titanocene Halide-Promoted Reductions",
+    "authors": [],
+    "venue": "",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.1021/ja0491230.s001",
+    "type": "component",
+    "publisher": "American Chemical Society (ACS)"
+   }
+  ]
+ },
+ "tensorir": {
+  "source": "crossref",
+  "query": "TensorIR: An Abstraction for Automatic Tensorized Program Optimization",
+  "matches": [
+   {
+    "title": "TensorIR: An Abstraction for Automatic Tensorized Program Optimization",
+    "authors": [
+     "Siyuan Feng",
+     "Bohan Hou",
+     "Hongyi Jin",
+     "Wuwei Lin",
+     "Junru Shao",
+     "Ruihang Lai",
+     "Zihao Ye",
+     "Lianmin Zheng",
+     "Cody Hao Yu",
+     "Yong Yu",
+     "Tianqi Chen"
+    ],
+    "venue": "Proceedings of the 28th ACM International Conference on Architectural Support for Programming Languages and Operating Systems, Volume 2",
+    "year": 2023,
+    "volume": null,
+    "issue": null,
+    "pages": "804-817",
+    "doi": "10.1145/3575693.3576933",
+    "type": "proceedings-article",
+    "publisher": "ACM"
+   },
+   {
+    "title": "Bayesian tensorized neural networks with automatic rank selection",
+    "authors": [
+     "Cole Hawkins",
+     "Zheng Zhang"
+    ],
+    "venue": "Neurocomputing",
+    "year": 2021,
+    "volume": "453",
+    "issue": null,
+    "pages": "172-180",
+    "doi": "10.1016/j.neucom.2021.04.117",
+    "type": "journal-article",
+    "publisher": "Elsevier BV"
+   },
+   {
+    "title": "Construct Abstraction for Automatic Information Abstraction from Digital Images",
+    "authors": [
+     "Masanori Sugisaka",
+     "Jeffrey Johnson"
+    ],
+    "venue": "",
+    "year": 2006,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.21236/ada455945",
+    "type": "report",
+    "publisher": "Defense Technical Information Center"
+   }
+  ]
+ },
+ "triton": {
+  "source": "crossref",
+  "query": "Triton: an intermediate language and compiler for tiled neural network computations",
+  "matches": [
+   {
+    "title": "Triton: an intermediate language and compiler for tiled neural network computations",
+    "authors": [
+     "Philippe Tillet",
+     "H. T. Kung",
+     "David Cox"
+    ],
+    "venue": "Proceedings of the 3rd ACM SIGPLAN International Workshop on Machine Learning and Programming Languages",
+    "year": 2019,
+    "volume": null,
+    "issue": null,
+    "pages": "10-19",
+    "doi": "10.1145/3315508.3329973",
+    "type": "proceedings-article",
+    "publisher": "ACM"
+   },
+   {
+    "title": "Using Intrinsically-Typed Definitional Interpreters to Verify Compiler Optimizations in a Monadic Intermediate Language",
+    "authors": [
+     "",
+     "Dani Barrack"
+    ],
+    "venue": "",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.15760/etd.7794",
+    "type": "dissertation",
+    "publisher": "Portland State University Library"
+   },
+   {
+    "title": "NNC",
+    "authors": [
+     "Alex Silva Torres"
+    ],
+    "venue": "",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.47749/t/unicamp.2019.1095870",
+    "type": "dissertation",
+    "publisher": "Universidade Estadual de Campinas"
+   }
+  ]
+ },
+ "welford": {
+  "source": "crossref",
+  "query": "Note on a Method for Calculating Corrected Sums of Squares and Products",
+  "matches": [
+   {
+    "title": "Note on a Method for Calculating Corrected Sums of Squares and Products",
+    "authors": [
+     "B. P. Welford"
+    ],
+    "venue": "Technometrics",
+    "year": 1962,
+    "volume": "4",
+    "issue": "3",
+    "pages": "419-420",
+    "doi": "10.1080/00401706.1962.10490022",
+    "type": "journal-article",
+    "publisher": "Informa UK Limited"
+   },
+   {
+    "title": "The Rolling Totals Method of Computing Sums, Sums of Squares, and Sums of Cross-Products",
+    "authors": [
+     "J. Douglas Ayers",
+     "J. Perham Stanley"
+    ],
+    "venue": "Psychometrika",
+    "year": 1952,
+    "volume": "17",
+    "issue": "3",
+    "pages": "305-310",
+    "doi": "10.1007/bf02288761",
+    "type": "journal-article",
+    "publisher": "Cambridge University Press (CUP)"
+   },
+   {
+    "title": "A simplified method of obtaining sums of squares and sums of products for use in statistical formulae. (Proj. No. NM 001 057.16.03).",
+    "authors": [
+     "Margaret G. Crawley",
+     "Woodbury Johnson"
+    ],
+    "venue": "PsycEXTRA Dataset",
+    "year": 1953,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.1037/e406612004-001",
+    "type": "dataset",
+    "publisher": "American Psychological Association (APA)"
+   }
+  ]
+ },
+ "west": {
+  "source": "crossref",
+  "query": "Updating mean and variance estimates: an improved method",
+  "matches": [
+   {
+    "title": "Updating mean and variance estimates",
+    "authors": [
+     "D. H. D. West"
+    ],
+    "venue": "Communications of the ACM",
+    "year": 1979,
+    "volume": "22",
+    "issue": "9",
+    "pages": "532-535",
+    "doi": "10.1145/359146.359153",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery (ACM)"
+   },
+   {
+    "title": "Theoretical and Empirical Estimates of Mean-Variance Portfolio Sensitivity",
+    "authors": [
+     "Andrzej Palczewski",
+     "Jan Palczewski"
+    ],
+    "venue": "",
+    "year": 2010,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.2139/ssrn.1553073",
+    "type": "posted-content",
+    "publisher": "Elsevier BV"
+   },
+   {
+    "title": "Mean-Variance Optimization Using Forward-Looking Return Estimates",
+    "authors": [
+     "Patrick Bielstein",
+     "Matthias Xaver Hanauer"
+    ],
+    "venue": "",
+    "year": 2017,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.2139/ssrn.3046258",
+    "type": "posted-content",
+    "publisher": "Elsevier BV"
+   }
+  ]
+ },
+ "chan": {
+  "source": "crossref",
+  "query": "Algorithms for Computing the Sample Variance: Analysis and Recommendations",
+  "matches": [
+   {
+    "title": "Algorithms for Computing the Sample Variance: Analysis and Recommendations",
+    "authors": [
+     "Tony F. Chan",
+     "Gene H. Golub",
+     "Randall J. Leveque"
+    ],
+    "venue": "The American Statistician",
+    "year": 1983,
+    "volume": "37",
+    "issue": "3",
+    "pages": "242-247",
+    "doi": "10.1080/00031305.1983.10483115",
+    "type": "journal-article",
+    "publisher": "Informa UK Limited"
+   },
+   {
+    "title": "Analysis of Variance, Sample of Categories",
+    "authors": [],
+    "venue": "Analysis of Variance",
+    "year": 1987,
+    "volume": null,
+    "issue": null,
+    "pages": "70-78",
+    "doi": "10.4135/9781412983327.n4",
+    "type": "book-chapter",
+    "publisher": "SAGE Publications, Inc."
+   },
+   {
+    "title": "Sample selection and variance discriminant analysis for sample-based face detection",
+    "authors": [
+     "Wei Yu"
+    ],
+    "venue": "",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.32657/10356/14803",
+    "type": "dissertation",
+    "publisher": "Nanyang Technological University"
+   }
+  ]
+ },
+ "pebay": {
+  "source": "crossref",
+  "query": "Numerically stable, scalable formulas for parallel and online computation of higher-order multivariate central moments with arbitrary weights",
+  "matches": [
+   {
+    "title": "Numerically stable, scalable formulas for parallel and online computation of higher-order multivariate central moments with arbitrary weights",
+    "authors": [
+     "Philippe Pébay",
+     "Timothy B. Terriberry",
+     "Hemanth Kolla",
+     "Janine Bennett"
+    ],
+    "venue": "Computational Statistics",
+    "year": 2016,
+    "volume": "31",
+    "issue": "4",
+    "pages": "1305-1325",
+    "doi": "10.1007/s00180-015-0637-z",
+    "type": "journal-article",
+    "publisher": "Springer Science and Business Media LLC"
+   },
+   {
+    "title": "Formulas for robust, one-pass parallel computation of covariances and arbitrary-order statistical moments.",
+    "authors": [
+     "Philippe Pebay"
+    ],
+    "venue": "",
+    "year": 2008,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.2172/1028931",
+    "type": "report",
+    "publisher": "Office of Scientific and Technical Information (OSTI)"
+   },
+   {
+    "title": "Formulas for robust, parallel computation of arbitrary-order, arbitrary-variate, statistical moments with arbitrary weights and compounding",
+    "authors": [
+     "",
+     "Philippe Pebay",
+     "",
+     "",
+     "",
+     "Timothy Terriberry",
+     "Hemanth Kolla",
+     "Janine Bennett"
+    ],
+    "venue": "",
+    "year": 2015,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.2172/1504207",
+    "type": "report",
+    "publisher": "Office of Scientific and Technical Information (OSTI)"
+   }
+  ]
+ },
+ "higham": {
+  "source": "crossref",
+  "query": "Accuracy and Stability of Numerical Algorithms Higham",
+  "matches": [
+   {
+    "title": "Accuracy and Stability of Numerical Algorithms",
+    "authors": [
+     "Nicholas J. Higham"
+    ],
+    "venue": "",
+    "year": 2002,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.1137/1.9780898718027",
+    "type": "monograph",
+    "publisher": "Society for Industrial and Applied Mathematics"
+   },
+   {
+    "title": "Notes on Accuracy and Stability of Algorithms in Numerical Linear Algebra",
+    "authors": [
+     "Nicholas J. Higham"
+    ],
+    "venue": "Springer Series in Computational Mathematics",
+    "year": 1999,
+    "volume": null,
+    "issue": null,
+    "pages": "47-82",
+    "doi": "10.1007/978-3-662-03972-4_2",
+    "type": "book-chapter",
+    "publisher": "Springer Berlin Heidelberg"
+   },
+   {
+    "title": "Accuracy and Stability of Numerical Algorithms",
+    "authors": [
+     "Robert L. Strawderman",
+     "Nicholas J. Higham"
+    ],
+    "venue": "Journal of the American Statistical Association",
+    "year": 1999,
+    "volume": "94",
+    "issue": "445",
+    "pages": "349",
+    "doi": "10.2307/2669725",
+    "type": "journal-article",
+    "publisher": "JSTOR"
+   }
+  ]
+ },
+ "blanchard": {
+  "source": "crossref",
+  "query": "Accurately computing the log-sum-exp and softmax functions",
+  "matches": [
+   {
+    "title": "Accurately computing the log-sum-exp and softmax functions",
+    "authors": [
+     "Pierre Blanchard",
+     "Desmond J Higham",
+     "Nicholas J Higham"
+    ],
+    "venue": "IMA Journal of Numerical Analysis",
+    "year": 2020,
+    "volume": "41",
+    "issue": "4",
+    "pages": "2311-2330",
+    "doi": "10.1093/imanum/draa038",
+    "type": "journal-article",
+    "publisher": "Oxford University Press (OUP)"
+   },
+   {
+    "title": "Global solutions to nonconvex optimization of 4th-order polynomial and log-sum-exp functions",
+    "authors": [
+     "Yi Chen",
+     "David Y. Gao"
+    ],
+    "venue": "Journal of Global Optimization",
+    "year": 2014,
+    "volume": "64",
+    "issue": "3",
+    "pages": "417-431",
+    "doi": "10.1007/s10898-014-0244-5",
+    "type": "journal-article",
+    "publisher": "Springer Science and Business Media LLC"
+   },
+   {
+    "title": "Figure 1: Exp-G-softmax DDG framework.",
+    "authors": [],
+    "venue": "",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.7717/peerj-cs.3481/fig-1",
+    "type": "component",
+    "publisher": "PeerJ"
+   }
+  ]
+ },
+ "goldberg": {
+  "source": "crossref",
+  "query": "What every computer scientist should know about floating-point arithmetic",
+  "matches": [
+   {
+    "title": "What every computer scientist should know about floating-point arithmetic",
+    "authors": [
+     "David Goldberg"
+    ],
+    "venue": "ACM Computing Surveys",
+    "year": 1991,
+    "volume": "23",
+    "issue": "1",
+    "pages": "5-48",
+    "doi": "10.1145/103162.103163",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery (ACM)"
+   },
+   {
+    "title": "What every agent-based modeller should know about floating point arithmetic",
+    "authors": [
+     "J. Gary Polhill",
+     "Luis R. Izquierdo",
+     "Nicholas M. Gotts"
+    ],
+    "venue": "Environmental Modelling &amp; Software",
+    "year": 2006,
+    "volume": "21",
+    "issue": "3",
+    "pages": "283-309",
+    "doi": "10.1016/j.envsoft.2004.10.011",
+    "type": "journal-article",
+    "publisher": "Elsevier BV"
+   },
+   {
+    "title": "What Every Engineer, Scientist, and Technologist Should Know About Finance",
+    "authors": [
+     "Phillip A. Laplante"
+    ],
+    "venue": "",
+    "year": 2026,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.1201/9781003733850",
+    "type": "monograph",
+    "publisher": "CRC Press"
+   }
+  ]
+ },
+ "herbie": {
+  "source": "crossref",
+  "query": "Automatically improving accuracy for floating point expressions",
+  "matches": [
+   {
+    "title": "Automatically improving accuracy for floating point expressions",
+    "authors": [
+     "Pavel Panchekha",
+     "Alex Sanchez-Stern",
+     "James R. Wilcox",
+     "Zachary Tatlock"
+    ],
+    "venue": "ACM SIGPLAN Notices",
+    "year": 2015,
+    "volume": "50",
+    "issue": "6",
+    "pages": "1-11",
+    "doi": "10.1145/2813885.2737959",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery (ACM)"
+   },
+   {
+    "title": "Automatically improving accuracy for floating point expressions",
+    "authors": [
+     "Pavel Panchekha",
+     "Alex Sanchez-Stern",
+     "James R. Wilcox",
+     "Zachary Tatlock"
+    ],
+    "venue": "Proceedings of the 36th ACM SIGPLAN Conference on Programming Language Design and Implementation",
+    "year": 2015,
+    "volume": null,
+    "issue": null,
+    "pages": "1-11",
+    "doi": "10.1145/2737924.2737959",
+    "type": "proceedings-article",
+    "publisher": "ACM"
+   },
+   {
+    "title": "Improving the Numerical Accuracy of Floating-Point Programs with Automatic Code Transformation Methods",
+    "authors": [
+     "Nasrine Damouche"
+    ],
+    "venue": "",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.70675/ec894455zce5bz47e3zbf93zbc060237ac84",
+    "type": "dissertation",
+    "publisher": "Agence Bibliographique de l'Enseignement Supérieur"
+   }
+  ]
+ },
+ "blue": {
+  "source": "crossref",
+  "query": "A Portable Fortran Program to Find the Euclidean Norm of a Vector",
+  "matches": [
+   {
+    "title": "A Portable Fortran Program to Find the Euclidean Norm of a Vector",
+    "authors": [
+     "James L. Blue"
+    ],
+    "venue": "ACM Transactions on Mathematical Software",
+    "year": 1978,
+    "volume": "4",
+    "issue": "1",
+    "pages": "15-23",
+    "doi": "10.1145/355769.355771",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery (ACM)"
+   },
+   {
+    "title": "A FORTRAN PROGRAM FOR PERMUTATION COVARIATE ANALYSES OF RESIDUALS BASED ON EUCLIDEAN DISTANCE",
+    "authors": [
+     "KENNETH J. BERRY"
+    ],
+    "venue": "Psychological Reports",
+    "year": 1998,
+    "volume": "82",
+    "issue": "2",
+    "pages": "371",
+    "doi": "10.2466/pr0.82.2.371-375",
+    "type": "journal-article",
+    "publisher": "SAGE Publications"
+   },
+   {
+    "title": "Portable FORTRAN contour-plotting subprogram",
+    "authors": [
+     "K.H. Haskell"
+    ],
+    "venue": "",
+    "year": 1983,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.2172/5843330",
+    "type": "report",
+    "publisher": "Office of Scientific and Technical Information (OSTI)"
+   }
+  ]
+ },
+ "bird87": {
+  "source": "crossref",
+  "query": "An Introduction to the Theory of Lists Bird",
+  "matches": [
+   {
+    "title": "An Introduction to the Theory of Lists",
+    "authors": [
+     "Richard S. Bird"
+    ],
+    "venue": "Logic of Programming and Calculi of Discrete Design",
+    "year": 1987,
+    "volume": null,
+    "issue": null,
+    "pages": "5-42",
+    "doi": "10.1007/978-3-642-87374-4_1",
+    "type": "book-chapter",
+    "publisher": "Springer Berlin Heidelberg"
+   },
+   {
+    "title": "1. Introduction",
+    "authors": [
+     "Gemma Bird"
+    ],
+    "venue": "Critiquing the Canon: Political Theory",
+    "year": 2024,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.1093/hepl/9780191982064.003.0001",
+    "type": "book-chapter",
+    "publisher": "Oxford University Press"
+   },
+   {
+    "title": "McAtte's Spring Bird Lists Ten Spring Bird Lists Made near Washington, D. C. W. L. McAtee",
+    "authors": [],
+    "venue": "The Auk",
+    "year": 1922,
+    "volume": "39",
+    "issue": "2",
+    "pages": "282-282",
+    "doi": "10.2307/4074002",
+    "type": "journal-article",
+    "publisher": "Oxford University Press (OUP)"
+   }
+  ]
+ },
+ "gibbons96": {
+  "source": "crossref",
+  "query": "The third homomorphism theorem Gibbons",
+  "matches": [
+   {
+    "title": "Functional Pearls",
+    "authors": [
+     "Jeremy Gibbons"
+    ],
+    "venue": "Journal of Functional Programming",
+    "year": 1996,
+    "volume": "6",
+    "issue": "4",
+    "pages": "657-665",
+    "doi": "10.1017/s0956796800001908",
+    "type": "journal-article",
+    "publisher": "Cambridge University Press (CUP)"
+   },
+   {
+    "title": "Generalising and dualising the third list-homomorphism theorem",
+    "authors": [
+     "Shin-Cheng Mu",
+     "Akimasa Morihata"
+    ],
+    "venue": "ACM SIGPLAN Notices",
+    "year": 2011,
+    "volume": "46",
+    "issue": "9",
+    "pages": "385-391",
+    "doi": "10.1145/2034574.2034824",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery (ACM)"
+   },
+   {
+    "title": "Generalising and dualising the third list-homomorphism theorem",
+    "authors": [
+     "Shin-Cheng Mu",
+     "Akimasa Morihata"
+    ],
+    "venue": "Proceedings of the 16th ACM SIGPLAN international conference on Functional programming",
+    "year": 2011,
+    "volume": null,
+    "issue": null,
+    "pages": "385-391",
+    "doi": "10.1145/2034773.2034824",
+    "type": "proceedings-article",
+    "publisher": "ACM"
+   }
+  ]
+ },
+ "meijer91": {
+  "source": "crossref",
+  "query": "Functional programming with bananas, lenses, envelopes and barbed wire",
+  "matches": [
+   {
+    "title": "Functional programming with bananas, lenses, envelopes and barbed wire",
+    "authors": [
+     "Erik Meijer",
+     "Maarten Fokkinga",
+     "Ross Paterson"
+    ],
+    "venue": "Lecture Notes in Computer Science",
+    "year": 1991,
+    "volume": null,
+    "issue": null,
+    "pages": "124-144",
+    "doi": "10.1007/3540543961_7",
+    "type": "book-chapter",
+    "publisher": "Springer Berlin Heidelberg"
+   },
+   {
+    "title": "Stochastic synthesis of recursive functions made easy with bananas, lenses, envelopes and barbed wire",
+    "authors": [
+     "Jerry Swan",
+     "Krzysztof Krawiec",
+     "Zoltan A Kocsis"
+    ],
+    "venue": "Genetic Programming and Evolvable Machines",
+    "year": 2019,
+    "volume": "20",
+    "issue": "3",
+    "pages": "327-350",
+    "doi": "10.1007/s10710-019-09347-3",
+    "type": "journal-article",
+    "publisher": "Springer Science and Business Media LLC"
+   },
+   {
+    "title": "Nature Behind Barbed Wire",
+    "authors": [
+     "Connie Y. Chiang"
+    ],
+    "venue": "Oxford Scholarship Online",
+    "year": 2018,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.1093/oso/9780190842062.001.0001",
+    "type": "edited-book",
+    "publisher": "Oxford University Press"
+   }
+  ]
+ },
+ "hu96": {
+  "source": "crossref",
+  "query": "Construction of list homomorphisms by tupling and fusion",
+  "matches": [
+   {
+    "title": "Construction of list homomorphisms by tupling and fusion",
+    "authors": [
+     "Zhenjiang Hu",
+     "Hideya Iwasaki",
+     "Masato Takeichi"
+    ],
+    "venue": "Lecture Notes in Computer Science",
+    "year": 1996,
+    "volume": null,
+    "issue": null,
+    "pages": "407-418",
+    "doi": "10.1007/3-540-61550-4_166",
+    "type": "book-chapter",
+    "publisher": "Springer Berlin Heidelberg"
+   },
+   {
+    "title": "Construction of all homomorphisms of groupoids",
+    "authors": [
+     "Miroslav Novotný"
+    ],
+    "venue": "Czechoslovak Mathematical Journal",
+    "year": 1996,
+    "volume": "46",
+    "issue": "1",
+    "pages": "141-153",
+    "doi": "10.21136/cmj.1996.127278",
+    "type": "journal-article",
+    "publisher": "Institute of Mathematics, Czech Academy of Sciences"
+   },
+   {
+    "title": "Construction of all strong homomorphisms of binary structures",
+    "authors": [
+     "Miroslav Novotný"
+    ],
+    "venue": "Czechoslovak Mathematical Journal",
+    "year": 1991,
+    "volume": "41",
+    "issue": "2",
+    "pages": "300-311",
+    "doi": "10.21136/cmj.1991.102464",
+    "type": "journal-article",
+    "publisher": "Institute of Mathematics, Czech Academy of Sciences"
+   }
+  ]
+ },
+ "hu97": {
+  "source": "crossref",
+  "query": "Tupling calculation eliminates multiple data traversals",
+  "matches": [
+   {
+    "title": "Tupling calculation eliminates multiple data traversals",
+    "authors": [
+     "Zhenjiang Hu",
+     "Hideya Iwasaki",
+     "Masato Takeichi",
+     "Akihiko Takano"
+    ],
+    "venue": "ACM SIGPLAN Notices",
+    "year": 1997,
+    "volume": "32",
+    "issue": "8",
+    "pages": "164-175",
+    "doi": "10.1145/258949.258964",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery (ACM)"
+   },
+   {
+    "title": "Tupling calculation eliminates multiple data traversals",
+    "authors": [
+     "Zhenjiang Hu",
+     "Hideya Iwasaki",
+     "Masato Takeichi",
+     "Akihiko Takano"
+    ],
+    "venue": "Proceedings of the second ACM SIGPLAN international conference on Functional programming",
+    "year": 1997,
+    "volume": null,
+    "issue": null,
+    "pages": "164-175",
+    "doi": "10.1145/258948.258964",
+    "type": "proceedings-article",
+    "publisher": "ACM"
+   },
+   {
+    "title": "Partial parametrization eliminates multiple traversals of data structures",
+    "authors": [
+     "Masato Takeichi"
+    ],
+    "venue": "Acta Informatica",
+    "year": 1987,
+    "volume": "24",
+    "issue": "1",
+    "pages": "57-77",
+    "doi": "10.1007/bf00290706",
+    "type": "journal-article",
+    "publisher": "Springer Science and Business Media LLC"
+   }
+  ]
+ },
+ "bird84": {
+  "source": "crossref",
+  "query": "Using circular programs to eliminate multiple traversals of data",
+  "matches": [
+   {
+    "title": "Using circular programs to eliminate multiple traversals of data",
+    "authors": [
+     "R. S. Bird"
+    ],
+    "venue": "Acta Informatica",
+    "year": 1984,
+    "volume": "21",
+    "issue": "3",
+    "pages": "239-250",
+    "doi": "10.1007/bf00264249",
+    "type": "journal-article",
+    "publisher": "Springer Science and Business Media LLC"
+   },
+   {
+    "title": "Partial parametrization eliminates multiple traversals of data structures",
+    "authors": [
+     "Masato Takeichi"
+    ],
+    "venue": "Acta Informatica",
+    "year": 1987,
+    "volume": "24",
+    "issue": "1",
+    "pages": "57-77",
+    "doi": "10.1007/bf00290706",
+    "type": "journal-article",
+    "publisher": "Springer Science and Business Media LLC"
+   },
+   {
+    "title": "Enabling Time-Centric Computation for Efficient Temporal Graph Traversals From Multiple Sources (Extended abstract)",
+    "authors": [
+     "Jaewook Byun"
+    ],
+    "venue": "2023 IEEE 39th International Conference on Data Engineering (ICDE)",
+    "year": 2023,
+    "volume": null,
+    "issue": null,
+    "pages": "3827-3828",
+    "doi": "10.1109/icde55515.2023.00340",
+    "type": "proceedings-article",
+    "publisher": "IEEE"
+   }
+  ]
+ },
+ "pettorossi87": {
+  "source": "crossref",
+  "query": "Program development using lambda abstraction",
+  "matches": [
+   {
+    "title": "Program development using lambda abstraction",
+    "authors": [
+     "Alberto Pettorossi"
+    ],
+    "venue": "Lecture Notes in Computer Science",
+    "year": 1987,
+    "volume": null,
+    "issue": null,
+    "pages": "420-434",
+    "doi": "10.1007/3-540-18625-5_65",
+    "type": "book-chapter",
+    "publisher": "Springer Berlin Heidelberg"
+   },
+   {
+    "title": "The Lambda Abstraction Strategy for Program Derivation",
+    "authors": [
+     "Alberto Pettorossi",
+     "Andrzej Skowron"
+    ],
+    "venue": "Fundamenta Informaticae",
+    "year": 1989,
+    "volume": "12",
+    "issue": "4",
+    "pages": "541-561",
+    "doi": "10.3233/fi-1989-12407",
+    "type": "journal-article",
+    "publisher": "SAGE Publications"
+   },
+   {
+    "title": "Lambda Abstraction",
+    "authors": [],
+    "venue": "Modal Logic for Philosophers",
+    "year": 2013,
+    "volume": null,
+    "issue": null,
+    "pages": "407-429",
+    "doi": "10.1017/cbo9781139342117.022",
+    "type": "book-chapter",
+    "publisher": "Cambridge University Press"
+   }
+  ]
+ },
+ "morita07": {
+  "source": "crossref",
+  "query": "Automatic inversion generates divide-and-conquer parallel programs",
+  "matches": [
+   {
+    "title": "Automatic inversion generates divide-and-conquer parallel programs",
+    "authors": [
+     "Kazutaka Morita",
+     "Akimasa Morihata",
+     "Kiminori Matsuzaki",
+     "Zhenjiang Hu",
+     "Masato Takeichi"
+    ],
+    "venue": "ACM SIGPLAN Notices",
+    "year": 2007,
+    "volume": "42",
+    "issue": "6",
+    "pages": "146-155",
+    "doi": "10.1145/1273442.1250752",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery (ACM)"
+   },
+   {
+    "title": "Automatic inversion generates divide-and-conquer parallel programs",
+    "authors": [
+     "Kazutaka Morita",
+     "Akimasa Morihata",
+     "Kiminori Matsuzaki",
+     "Zhenjiang Hu",
+     "Masato Takeichi"
+    ],
+    "venue": "Proceedings of the 28th ACM SIGPLAN Conference on Programming Language Design and Implementation",
+    "year": 2007,
+    "volume": null,
+    "issue": null,
+    "pages": "146-155",
+    "doi": "10.1145/1250734.1250752",
+    "type": "proceedings-article",
+    "publisher": "ACM"
+   },
+   {
+    "title": "Generating synchronization statements in divide-and-conquer programs",
+    "authors": [
+     "Pieter Hijma",
+     "Rob V. van Nieuwpoort",
+     "Ceriel J.H. Jacobs",
+     "Henri E. Bal"
+    ],
+    "venue": "Parallel Computing",
+    "year": 2012,
+    "volume": "38",
+    "issue": "1-2",
+    "pages": "75-89",
+    "doi": "10.1016/j.parco.2011.10.007",
+    "type": "journal-article",
+    "publisher": "Elsevier BV"
+   }
+  ]
+ },
+ "farzan17": {
+  "source": "crossref",
+  "query": "Synthesis of divide and conquer parallelism for loops",
+  "matches": [
+   {
+    "title": "Synthesis of divide and conquer parallelism for loops",
+    "authors": [
+     "Azadeh Farzan",
+     "Victor Nicolet"
+    ],
+    "venue": "ACM SIGPLAN Notices",
+    "year": 2017,
+    "volume": "52",
+    "issue": "6",
+    "pages": "540-555",
+    "doi": "10.1145/3140587.3062355",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery (ACM)"
+   },
+   {
+    "title": "Synthesis of divide and conquer parallelism for loops",
+    "authors": [
+     "Azadeh Farzan",
+     "Victor Nicolet"
+    ],
+    "venue": "Proceedings of the 38th ACM SIGPLAN Conference on Programming Language Design and Implementation",
+    "year": 2017,
+    "volume": null,
+    "issue": null,
+    "pages": "540-555",
+    "doi": "10.1145/3062341.3062355",
+    "type": "proceedings-article",
+    "publisher": "ACM"
+   },
+   {
+    "title": "Exploiting Divide-and-Conquer Parallelism of Functional Specifications",
+    "authors": [
+     "Sergei Gorlatch"
+    ],
+    "venue": "Massively Parallel Processing Applications and Development",
+    "year": 1994,
+    "volume": null,
+    "issue": null,
+    "pages": "397-404",
+    "doi": "10.1016/b978-0-444-81784-6.50051-8",
+    "type": "book-chapter",
+    "publisher": "Elsevier"
+   }
+  ]
+ },
+ "farzan19": {
+  "source": "crossref",
+  "query": "Modular divide-and-conquer parallelization of nested loops",
+  "matches": [
+   {
+    "title": "Modular divide-and-conquer parallelization of nested loops",
+    "authors": [
+     "Azadeh Farzan",
+     "Victor Nicolet"
+    ],
+    "venue": "Proceedings of the 40th ACM SIGPLAN Conference on Programming Language Design and Implementation",
+    "year": 2019,
+    "volume": null,
+    "issue": null,
+    "pages": "610-624",
+    "doi": "10.1145/3314221.3314612",
+    "type": "proceedings-article",
+    "publisher": "ACM"
+   },
+   {
+    "title": "Parallelization of divide-and-conquer by translation to nested loops",
+    "authors": [
+     "CHRISTOPH A. HERRMANN",
+     "CHRISTIAN LENGAUER"
+    ],
+    "venue": "Journal of Functional Programming",
+    "year": 1999,
+    "volume": "9",
+    "issue": "3",
+    "pages": "279-310",
+    "doi": "10.1017/s0956796899003287",
+    "type": "journal-article",
+    "publisher": "Cambridge University Press (CUP)"
+   },
+   {
+    "title": "Algorithms design for the parallelization of nested loops",
+    "authors": [
+     "Florina-Monica Ciorba"
+    ],
+    "venue": "",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.12681/eadd/16956",
+    "type": "dissertation",
+    "publisher": "National Documentation Centre (EKT)"
+   }
+  ]
+ },
+ "farzan21": {
+  "source": "crossref",
+  "query": "Phased synthesis of divide and conquer programs",
+  "matches": [
+   {
+    "title": "Phased synthesis of divide and conquer programs",
+    "authors": [
+     "Azadeh Farzan",
+     "Victor Nicolet"
+    ],
+    "venue": "Proceedings of the 42nd ACM SIGPLAN International Conference on Programming Language Design and Implementation",
+    "year": 2021,
+    "volume": null,
+    "issue": null,
+    "pages": "974-986",
+    "doi": "10.1145/3453483.3454089",
+    "type": "proceedings-article",
+    "publisher": "ACM"
+   },
+   {
+    "title": "Divide and Conquer",
+    "authors": [
+     "Maria Kronfeldner"
+    ],
+    "venue": "Oxford Scholarship Online",
+    "year": 2018,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.1093/oso/9780198823650.003.0011",
+    "type": "book",
+    "publisher": "Oxford University Press"
+   },
+   {
+    "title": "Aprendizaje de la programación con estrategia “divide and conquer” vs. Sin estrategia “divide and conquer”",
+    "authors": [
+     "Omar Iván Trejos Buritica",
+     "Luis Eduardo Muñoz Guerrero"
+    ],
+    "venue": "Entre Ciencia e Ingeniería",
+    "year": 2020,
+    "volume": "14",
+    "issue": "28",
+    "pages": "34-39",
+    "doi": "10.31908/19098367.2013",
+    "type": "journal-article",
+    "publisher": "Universidad Catolica de Pereira"
+   }
+  ]
+ },
+ "morihata21": {
+  "source": "crossref",
+  "query": "Reverse engineering for reduction parallelization via semiring polynomials",
+  "matches": [
+   {
+    "title": "Reverse engineering for reduction parallelization via semiring polynomials",
+    "authors": [
+     "Akimasa Morihata",
+     "Shigeyuki Sato"
+    ],
+    "venue": "Proceedings of the 42nd ACM SIGPLAN International Conference on Programming Language Design and Implementation",
+    "year": 2021,
+    "volume": null,
+    "issue": null,
+    "pages": "820-834",
+    "doi": "10.1145/3453483.3454079",
+    "type": "proceedings-article",
+    "publisher": "ACM"
+   },
+   {
+    "title": "On the Semiring of Skew Polynomials      over a Bezout Semiring",
+    "authors": [
+     "M. V. Babenko",
+     "V. V. Chermnykh"
+    ],
+    "venue": "Mathematical Notes",
+    "year": 2022,
+    "volume": "111",
+    "issue": "3-4",
+    "pages": "331-342",
+    "doi": "10.1134/s0001434622030014",
+    "type": "journal-article",
+    "publisher": "Pleiades Publishing Ltd"
+   },
+   {
+    "title": "Model reduction via Chebyshev polynomials",
+    "authors": [
+     "Cheng-Chiian Liu",
+     "Yen-Ping Shih"
+    ],
+    "venue": "Computers &amp; Electrical Engineering",
+    "year": 1986,
+    "volume": "12",
+    "issue": "3-4",
+    "pages": "89-100",
+    "doi": "10.1016/0045-7906(86)90001-7",
+    "type": "journal-article",
+    "publisher": "Elsevier BV"
+   }
+  ]
+ },
+ "autolifter": {
+  "source": "crossref",
+  "query": "Decomposition-based synthesis for applying divide-and-conquer-like algorithmic paradigms",
+  "matches": [
+   {
+    "title": "Decomposition-based Synthesis for Applying Divide-and-Conquer-like Algorithmic Paradigms",
+    "authors": [
+     "Ruyi Ji",
+     "Yuwei Zhao",
+     "Yingfei Xiong",
+     "Di Wang",
+     "Lu Zhang",
+     "Zhenjiang Hu"
+    ],
+    "venue": "ACM Transactions on Programming Languages and Systems",
+    "year": 2024,
+    "volume": "46",
+    "issue": "2",
+    "pages": "1-59",
+    "doi": "10.1145/3648440",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery (ACM)"
+   },
+   {
+    "title": "Divide-and-conquer",
+    "authors": [],
+    "venue": "A Guide to Algorithm Design",
+    "year": 2013,
+    "volume": null,
+    "issue": null,
+    "pages": "51-70",
+    "doi": "10.1201/9780429428890-5",
+    "type": "book-chapter",
+    "publisher": "CRC Press"
+   },
+   {
+    "title": "Divide, radicalize and conquer: Algorithmic micro-targeting, “Not Like Us” propaganda and fractured resistance",
+    "authors": [
+     "Brooklyne Gipson"
+    ],
+    "venue": "Dialogues on Digital Society",
+    "year": 2025,
+    "volume": "1",
+    "issue": "3",
+    "pages": "428-432",
+    "doi": "10.1177/29768640251381450",
+    "type": "journal-article",
+    "publisher": "SAGE Publications"
+   }
+  ]
+ },
+ "sufu": {
+  "source": "crossref",
+  "query": "Superfusion: Eliminating Intermediate Data Structures via Inductive Synthesis",
+  "matches": [
+   {
+    "title": "Superfusion: Eliminating Intermediate Data Structures via Inductive Synthesis",
+    "authors": [
+     "Ruyi Ji",
+     "Yuwei Zhao",
+     "Nadia Polikarpova",
+     "Yingfei Xiong",
+     "Zhenjiang Hu"
+    ],
+    "venue": "Proceedings of the ACM on Programming Languages",
+    "year": 2024,
+    "volume": "8",
+    "issue": "PLDI",
+    "pages": "939-964",
+    "doi": "10.1145/3656415",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery (ACM)"
+   },
+   {
+    "title": "Boosting Stability of Cesium/Formamidinium Based Perovskite Solar Cells via Eliminating Intermediate Phase Transition and XAnion Vacancy",
+    "authors": [],
+    "venue": "",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.1021/acsami.4c16316.s001",
+    "type": "component",
+    "publisher": "American Chemical Society (ACS)"
+   },
+   {
+    "title": "Eliminating Amortization",
+    "authors": [],
+    "venue": "Purely Functional Data Structures",
+    "year": 1998,
+    "volume": null,
+    "issue": null,
+    "pages": "83-98",
+    "doi": "10.1017/cbo9780511530104.008",
+    "type": "book-chapter",
+    "publisher": "Cambridge University Press"
+   }
+  ]
+ },
+ "opera": {
+  "source": "crossref",
+  "query": "From Batch to Stream: Automatic Generation of Online Algorithms",
+  "matches": [
+   {
+    "title": "From Batch to Stream: Automatic Generation of Online Algorithms",
+    "authors": [
+     "Ziteng Wang",
+     "Shankara Pailoor",
+     "Aaryan Prakash",
+     "Yuepeng Wang",
+     "Işıl Dillig"
+    ],
+    "venue": "Proceedings of the ACM on Programming Languages",
+    "year": 2024,
+    "volume": "8",
+    "issue": "PLDI",
+    "pages": "1014-1039",
+    "doi": "10.1145/3656418",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery (ACM)"
+   },
+   {
+    "title": "From Predictive Algorithms to Automatic Generation of Anomalies",
+    "authors": [
+     "Sendhil Mullainathan",
+     "Ashesh Rambachan"
+    ],
+    "venue": "",
+    "year": 2024,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.3386/w32422",
+    "type": "report",
+    "publisher": "National Bureau of Economic Research"
+   },
+   {
+    "title": "From Predictive Algorithms to Automatic Generation of Anomalies",
+    "authors": [
+     "Sendhil Mullainathan",
+     "Ashesh Rambachan"
+    ],
+    "venue": "",
+    "year": 2024,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.2139/ssrn.4826029",
+    "type": "posted-content",
+    "publisher": "Elsevier BV"
+   }
+  ]
+ },
+ "datacube": {
+  "source": "crossref",
+  "query": "Data Cube: A Relational Aggregation Operator Generalizing Group-By, Cross-Tab, and Sub-Totals",
+  "matches": [
+   {
+    "title": "Data cube: a relational aggregation operator generalizing GROUP-BY, CROSS-TAB, and SUB-TOTALS",
+    "authors": [
+     "J. Gray",
+     "A. Bosworth",
+     "A. Lyaman",
+     "H. Pirahesh"
+    ],
+    "venue": "Proceedings of the Twelfth International Conference on Data Engineering",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": "152-159",
+    "doi": "10.1109/icde.1996.492099",
+    "type": "proceedings-article",
+    "publisher": "IEEE Comput. Soc. Press"
+   },
+   {
+    "title": "Data Cube: A Relational Aggregation Operator Generalizing Group-By, Cross-Tab, and Sub-Totals",
+    "authors": [
+     "Jim Gray",
+     "Surajit Chaudhuri",
+     "Adam Bosworth",
+     "Andrew Layman",
+     "Don Reichart",
+     "Murali Venkatrao",
+     "Frank Pellow",
+     "Hamid Pirahesh"
+    ],
+    "venue": "Data Mining and Knowledge Discovery",
+    "year": 1997,
+    "volume": "1",
+    "issue": "1",
+    "pages": "29-53",
+    "doi": "10.1023/a:1009726021843",
+    "type": "journal-article",
+    "publisher": "Springer Science and Business Media LLC"
+   },
+   {
+    "title": "CXT-cube",
+    "authors": [
+     "Lamia Oukid",
+     "Ounas Asfari",
+     "Fadila Bentayeb",
+     "Nadjia Benblidia",
+     "Omar Boussaid"
+    ],
+    "venue": "Proceedings of the sixteenth international workshop on Data warehousing and OLAP",
+    "year": 2013,
+    "volume": null,
+    "issue": null,
+    "pages": "27-32",
+    "doi": "10.1145/2513190.2513201",
+    "type": "proceedings-article",
+    "publisher": "ACM"
+   }
+  ]
+ },
+ "jesus": {
+  "source": "crossref",
+  "query": "A Survey of Distributed Data Aggregation Algorithms",
+  "matches": [
+   {
+    "title": "A Survey of Distributed Data Aggregation Algorithms",
+    "authors": [
+     "Paulo Jesus",
+     "Carlos Baquero",
+     "Paulo Sergio Almeida"
+    ],
+    "venue": "IEEE Communications Surveys &amp; Tutorials",
+    "year": 2015,
+    "volume": "17",
+    "issue": "1",
+    "pages": "381-404",
+    "doi": "10.1109/comst.2014.2354398",
+    "type": "journal-article",
+    "publisher": "Institute of Electrical and Electronics Engineers (IEEE)"
+   },
+   {
+    "title": "Distributed Aggregation/Disaggregation Algorithms for Optimal Routing in Data Networks",
+    "authors": [
+     "Wei K. Tsai",
+     "G. Huang",
+     "John K. Antonio",
+     "Wei-T. Tsai"
+    ],
+    "venue": "1988 American Control Conference",
+    "year": 1988,
+    "volume": null,
+    "issue": null,
+    "pages": "1799-1804",
+    "doi": "10.23919/acc.1988.4790019",
+    "type": "proceedings-article",
+    "publisher": "IEEE"
+   },
+   {
+    "title": "Survey of data partitioning algorithms for big data stores",
+    "authors": [
+     "Shraddha Phansalkar",
+     "Swati Ahirrao"
+    ],
+    "venue": "2016 Fourth International Conference on Parallel, Distributed and Grid Computing (PDGC)",
+    "year": 2016,
+    "volume": null,
+    "issue": null,
+    "pages": "163-168",
+    "doi": "10.1109/pdgc.2016.7913137",
+    "type": "proceedings-article",
+    "publisher": "IEEE"
+   }
+  ]
+ },
+ "kuczma": {
+  "source": "crossref",
+  "query": "An Introduction to the Theory of Functional Equations and Inequalities Cauchy's Equation and Jensen's Inequality",
+  "matches": [
+   {
+    "title": "Multiplicative Cauchy equation",
+    "authors": [],
+    "venue": "Functional Equations and Inequalities in Several Variables",
+    "year": 2002,
+    "volume": null,
+    "issue": null,
+    "pages": "141-146",
+    "doi": "10.1142/9789812778116_0014",
+    "type": "book-chapter",
+    "publisher": "WORLD SCIENTIFIC"
+   },
+   {
+    "title": "Additive Cauchy equation",
+    "authors": [],
+    "venue": "Functional Equations and Inequalities in Several Variables",
+    "year": 2002,
+    "volume": null,
+    "issue": null,
+    "pages": "129-139",
+    "doi": "10.1142/9789812778116_0013",
+    "type": "book-chapter",
+    "publisher": "WORLD SCIENTIFIC"
+   },
+   {
+    "title": "Additive Cauchy Functional Equation",
+    "authors": [],
+    "venue": "Introduction to Functional Equations",
+    "year": 2011,
+    "volume": null,
+    "issue": null,
+    "pages": "1-23",
+    "doi": "10.1201/b10722-2",
+    "type": "book-chapter",
+    "publisher": "Chapman and Hall/CRC"
+   }
+  ]
+ },
+ "sympy": {
+  "source": "crossref",
+  "query": "SymPy: symbolic computing in Python",
+  "matches": [
+   {
+    "title": "Peer Review #2 of \"SymPy: symbolic computing in Python (v0.1)\"",
+    "authors": [],
+    "venue": "",
+    "year": 2017,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.7287/peerj-cs.103v0.1/reviews/2",
+    "type": "peer-review",
+    "publisher": "PeerJ"
+   },
+   {
+    "title": "Peer Review #1 of \"SymPy: symbolic computing in Python (v0.2)\"",
+    "authors": [],
+    "venue": "",
+    "year": 2017,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.7287/peerj-cs.103v0.2/reviews/1",
+    "type": "peer-review",
+    "publisher": "PeerJ"
+   },
+   {
+    "title": "Peer Review #1 of \"SymPy: symbolic computing in Python (v0.1)\"",
+    "authors": [],
+    "venue": "",
+    "year": 2017,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.7287/peerj-cs.103v0.1/reviews/1",
+    "type": "peer-review",
+    "publisher": "PeerJ"
+   }
+  ]
+ },
+ "bpr": {
+  "source": "crossref",
+  "query": "Algorithms in Real Algebraic Geometry Basu Pollack Roy",
+  "matches": [
+   {
+    "title": "Quantitative Semi-algebraic Geometry",
+    "authors": [
+     "Saugata Basu",
+     "Richard Pollack",
+     "Marie-Francoise Roy"
+    ],
+    "venue": "Algorithms and Computation in Mathematics",
+    "year": 2003,
+    "volume": null,
+    "issue": null,
+    "pages": "201-240",
+    "doi": "10.1007/978-3-662-05355-3_8",
+    "type": "book-chapter",
+    "publisher": "Springer Berlin Heidelberg"
+   },
+   {
+    "title": "Algorithms in Real Algebraic Geometry",
+    "authors": [
+     "Saugata Basu",
+     "Richard Pollack",
+     "Marie-Françoise Roy"
+    ],
+    "venue": "Algorithms and Computation in Mathematics",
+    "year": 2006,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.1007/3-540-33099-2",
+    "type": "book",
+    "publisher": "Springer Berlin Heidelberg"
+   },
+   {
+    "title": "Algorithms in Real Algebraic Geometry",
+    "authors": [
+     "Saugata Basu",
+     "Richard Pollack",
+     "Marie-Franco̧ise Roy"
+    ],
+    "venue": "Algorithms and Computation in Mathematics",
+    "year": 2003,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.1007/978-3-662-05355-3",
+    "type": "book",
+    "publisher": "Springer Berlin Heidelberg"
+   }
+  ]
+ },
+ "ieee754": {
+  "source": "crossref",
+  "query": "IEEE Standard for Floating-Point Arithmetic 754-2019",
+  "matches": [
+   {
+    "title": "Revisions to the IEEE 754 standard for floating-point arithmetic",
+    "authors": [
+     "E. Schwarz"
+    ],
+    "venue": "16th IEEE Symposium on Computer Arithmetic, 2003. Proceedings.",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": "112-112",
+    "doi": "10.1109/arith.2003.1207667",
+    "type": "proceedings-article",
+    "publisher": "IEEE Comput. Soc"
+   },
+   {
+    "title": "IEEE Standard for Floating-Point Arithmetic",
+    "authors": [],
+    "venue": "",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.1109/ieeestd.2008.4610935",
+    "type": "standard",
+    "publisher": "IEEE"
+   },
+   {
+    "title": "IEEE Standard for Floating-Point Arithmetic",
+    "authors": [],
+    "venue": "",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.1109/ieeestd.2019.8766229",
+    "type": "standard",
+    "publisher": "IEEE"
+   }
+  ]
+ },
+ "flashattention": {
+  "source": "crossref",
+  "query": "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",
+  "matches": [
+   {
+    "title": "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",
+    "authors": [
+     "Tri Dao",
+     "Dan Fu",
+     "Stefano Ermon",
+     "Atri Rudra",
+     "Christopher Ré"
+    ],
+    "venue": "Advances in Neural Information Processing Systems 35",
+    "year": 2022,
+    "volume": null,
+    "issue": null,
+    "pages": "16344-16359",
+    "doi": "10.52202/068431-1189",
+    "type": "proceedings-article",
+    "publisher": "Neural Information Processing Systems Foundation, Inc. (NeurIPS)"
+   },
+   {
+    "title": "FlashBEV: Fast and Memory-Efficient Exact BEV Transformation with IO-Awareness",
+    "authors": [
+     "Shunsuke Yokokawa",
+     "Hironori Kasahara"
+    ],
+    "venue": "Lecture Notes in Computer Science",
+    "year": 2026,
+    "volume": null,
+    "issue": null,
+    "pages": "540-556",
+    "doi": "10.1007/978-3-032-37362-5_29",
+    "type": "book-chapter",
+    "publisher": "Springer Nature Switzerland"
+   },
+   {
+    "title": "FlashAttention and the Co-Evolution of Algorithms and Hardware: From IO-Awareness to Vector Optimization",
+    "authors": [
+     "Smitha Shivashankaraiah"
+    ],
+    "venue": "International Journal of AI, BigData, Computational and Management Studies",
+    "year": 2026,
+    "volume": "7",
+    "issue": null,
+    "pages": "266-267",
+    "doi": "10.63282/3050-9416.ijaibdcms-v7i2p135",
+    "type": "journal-article",
+    "publisher": "ScienceTech Xplore"
+   }
+  ]
+ },
+ "attention": {
+  "source": "crossref",
+  "query": "Attention is all you need Vaswani",
+  "matches": [
+   {
+    "title": "Attention Is All You Need",
+    "authors": [
+     "Ashish Vaswani",
+     "Noam Shazeer",
+     "Niki Parmar",
+     "Jakob Uszkoreit",
+     "Llion Jones",
+     "Aidan N.Gomez",
+     "Lukasz Kaiser",
+     "Illia Polosukhin"
+    ],
+    "venue": "",
+    "year": 2025,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.65215/r5bs2d54",
+    "type": "posted-content",
+    "publisher": "Shenzhen Medical Academy of Research and Translation"
+   },
+   {
+    "title": "Attention Is All You Need",
+    "authors": [
+     "Ashish Vaswani",
+     "Noam Shazeer",
+     "Niki Parmar",
+     "Jakob Uszkoreit",
+     "Llion Jones",
+     "Aidan N.Gomez",
+     "Lukasz Kaiser",
+     "Illia Polosukhin"
+    ],
+    "venue": "",
+    "year": 2025,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.65215/ysbyhc05",
+    "type": "posted-content",
+    "publisher": "Shenzhen Medical Academy of Research and Translation"
+   },
+   {
+    "title": "Attention Is All You Need",
+    "authors": [
+     "Ashish Vaswani",
+     "Noam Shazeer",
+     "Niki Parmar",
+     "Jakob Uszkoreit",
+     "Llion Jones",
+     "Aidan N.Gomez",
+     "Lukasz Kaiser",
+     "Illia Polosukhin"
+    ],
+    "venue": "",
+    "year": 2025,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.65215/mdcm8z23",
+    "type": "posted-content",
+    "publisher": "Shenzhen Medical Academy of Research and Translation"
+   }
+  ]
+ },
+ "cole95": {
+  "source": "crossref",
+  "query": "Parallel programming with list homomorphisms Cole",
+  "matches": [
+   {
+    "title": "PARALLEL PROGRAMMING WITH LIST HOMOMORPHISMS",
+    "authors": [
+     "MURRAY I. COLE"
+    ],
+    "venue": "Parallel Processing Letters",
+    "year": 1995,
+    "volume": "05",
+    "issue": "02",
+    "pages": "191-203",
+    "doi": "10.1142/s0129626495000175",
+    "type": "journal-article",
+    "publisher": "World Scientific Pub Co Pte Lt"
+   },
+   {
+    "title": "Extracting and implementing list homomorphisms in parallel program development",
+    "authors": [
+     "Sergei Gorlatch"
+    ],
+    "venue": "Science of Computer Programming",
+    "year": 1999,
+    "volume": "33",
+    "issue": "1",
+    "pages": "1-27",
+    "doi": "10.1016/s0167-6423(97)00014-2",
+    "type": "journal-article",
+    "publisher": "Elsevier BV"
+   },
+   {
+    "title": "Calculating Parallel Programs in Coq Using List Homomorphisms",
+    "authors": [
+     "Frédéric Loulergue",
+     "Wadoud Bousdira",
+     "Julien Tesson"
+    ],
+    "venue": "International Journal of Parallel Programming",
+    "year": 2016,
+    "volume": "45",
+    "issue": "2",
+    "pages": "300-319",
+    "doi": "10.1007/s10766-016-0415-8",
+    "type": "journal-article",
+    "publisher": "Springer Science and Business Media LLC"
+   }
+  ]
+ },
+ "cuturi": {
+  "source": "crossref",
+  "query": "Sinkhorn Distances: Lightspeed Computation of Optimal Transport",
+  "matches": [
+   {
+    "title": "Hybrid Wasserstein Distance: An Approximation for Optimal Transport Distances",
+    "authors": [
+     "Sara Nassar",
+     "Rachid Hedjam",
+     "Samir Brahim Belhaouari"
+    ],
+    "venue": "Computation",
+    "year": 2026,
+    "volume": "14",
+    "issue": "3",
+    "pages": "57",
+    "doi": "10.3390/computation14030057",
+    "type": "journal-article",
+    "publisher": "MDPI AG"
+   },
+   {
+    "title": "A universal network strategy for lightspeed computation of entropy-regularized optimal transport",
+    "authors": [
+     "Yong Shi",
+     "Lei Zheng",
+     "Pei Quan",
+     "Yang Xiao",
+     "Lingfeng Niu"
+    ],
+    "venue": "Neural Networks",
+    "year": 2025,
+    "volume": "184",
+    "issue": null,
+    "pages": "107038",
+    "doi": "10.1016/j.neunet.2024.107038",
+    "type": "journal-article",
+    "publisher": "Elsevier BV"
+   },
+   {
+    "title": "Debiasing Sinkhorn divergence in optimal transport of cellular dynamics",
+    "authors": [
+     "Jayshawn Cooper",
+     "Christina Young",
+     "Pilhwa Lee"
+    ],
+    "venue": "",
+    "year": 2025,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.1101/2025.01.11.632566",
+    "type": "posted-content",
+    "publisher": "openRxiv"
+   }
+  ]
+ },
+ "tvm": {
+  "source": "crossref",
+  "query": "TVM: An Automated End-to-End Optimizing Compiler for Deep Learning",
+  "matches": [
+   {
+    "title": "OCC: An Automated End-to-End Machine Learning Optimizing Compiler for Computing-In-Memory",
+    "authors": [
+     "Adam Siemieniuk",
+     "Lorenzo Chelini",
+     "Asif Ali Khan",
+     "Jeronimo Castrillon",
+     "Andi Drebes",
+     "Henk Corporaal",
+     "Tobias Grosser",
+     "Martin Kong"
+    ],
+    "venue": "IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems",
+    "year": 2022,
+    "volume": "41",
+    "issue": "6",
+    "pages": "1674-1686",
+    "doi": "10.1109/tcad.2021.3101464",
+    "type": "journal-article",
+    "publisher": "Institute of Electrical and Electronics Engineers (IEEE)"
+   },
+   {
+    "title": "Automated End-to-End Deep Learning Framework for Complex Multiclass Brassica Seed Classification",
+    "authors": [
+     "Elhoucine Elfatimi",
+     "Recep Eryiğit",
+     "Lahcen Elfatimi"
+    ],
+    "venue": "Seeds",
+    "year": 2025,
+    "volume": "4",
+    "issue": "4",
+    "pages": "67",
+    "doi": "10.3390/seeds4040067",
+    "type": "journal-article",
+    "publisher": "MDPI AG"
+   },
+   {
+    "title": "End-to-end deep learning image compression",
+    "authors": [
+     "Bouzid Arezki"
+    ],
+    "venue": "",
+    "year": null,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.70675/a09e2b9bzacf6z432fz8ba6z2e1988f7a7f8",
+    "type": "dissertation",
+    "publisher": "Agence Bibliographique de l'Enseignement Supérieur"
+   }
+  ]
+ },
+ "fptaylor": {
+  "source": "crossref",
+  "query": "Rigorous Estimation of Floating-Point Round-Off Errors with Symbolic Taylor Expansions",
+  "matches": [
+   {
+    "title": "Rigorous Estimation of Floating-Point Round-Off Errors with Symbolic Taylor Expansions",
+    "authors": [
+     "Alexey Solovyev",
+     "Marek S. Baranowski",
+     "Ian Briggs",
+     "Charles Jacobsen",
+     "Zvonimir Rakamarić",
+     "Ganesh Gopalakrishnan"
+    ],
+    "venue": "ACM Transactions on Programming Languages and Systems",
+    "year": 2018,
+    "volume": "41",
+    "issue": "1",
+    "pages": "1-39",
+    "doi": "10.1145/3230733",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery (ACM)"
+   },
+   {
+    "title": "Rigorous Estimation of Floating-Point Round-off Errors with Symbolic Taylor Expansions",
+    "authors": [
+     "Alexey Solovyev",
+     "Charles Jacobsen",
+     "Zvonimir Rakamarić",
+     "Ganesh Gopalakrishnan"
+    ],
+    "venue": "Lecture Notes in Computer Science",
+    "year": 2015,
+    "volume": null,
+    "issue": null,
+    "pages": "532-550",
+    "doi": "10.1007/978-3-319-19249-9_33",
+    "type": "book-chapter",
+    "publisher": "Springer International Publishing"
+   },
+   {
+    "title": "Automatic Estimation of Verified Floating-Point Round-Off Errors via Static Analysis",
+    "authors": [
+     "Mariano Moscato",
+     "Laura Titolo",
+     "Aaron Dutle",
+     "César A. Muñoz"
+    ],
+    "venue": "Lecture Notes in Computer Science",
+    "year": 2017,
+    "volume": null,
+    "issue": null,
+    "pages": "213-229",
+    "doi": "10.1007/978-3-319-66266-4_14",
+    "type": "book-chapter",
+    "publisher": "Springer International Publishing"
+   }
+  ]
+ },
+ "cce": {
+  "source": "crossref",
+  "query": "Cut Your Losses in Large-Vocabulary Language Models",
+  "matches": [
+   {
+    "title": "Fine-Tuning Large Language Models for Vocabulary-Constrained Language Learning",
+    "authors": [
+     "Jens Wienkamp",
+     "Malte Schilling"
+    ],
+    "venue": "2025 3rd International Conference on Foundation and Large Language Models (FLLM)",
+    "year": 2025,
+    "volume": null,
+    "issue": null,
+    "pages": "443-448",
+    "doi": "10.1109/fllm67465.2025.11391123",
+    "type": "proceedings-article",
+    "publisher": "IEEE"
+   },
+   {
+    "title": "Cut Your Losses and Let Your Profits Run",
+    "authors": [
+     "Dirk G. Baur",
+     "Thomas Dimpfl"
+    ],
+    "venue": "",
+    "year": 2022,
+    "volume": null,
+    "issue": null,
+    "pages": null,
+    "doi": "10.2139/ssrn.4233700",
+    "type": "posted-content",
+    "publisher": "Elsevier BV"
+   },
+   {
+    "title": "Introduction to Large Language Models",
+    "authors": [
+     "Alessandro Benedetti"
+    ],
+    "venue": "How Large Language Models Can Help Your Search Project",
+    "year": 2025,
+    "volume": null,
+    "issue": null,
+    "pages": "3-22",
+    "doi": "10.1007/978-3-032-01563-1_1",
+    "type": "book-chapter",
+    "publisher": "Springer Nature Switzerland"
+   }
+  ]
+ },
+ "flashlight": {
+  "source": "crossref",
+  "query": "FlashLight: PyTorch Compiler Extensions to Accelerate Attention Variants",
+  "matches": [
+   {
+    "title": "Torchy: A Tracing JIT Compiler for PyTorch",
+    "authors": [
+     "Nuno P. Lopes"
+    ],
+    "venue": "Proceedings of the 32nd ACM SIGPLAN International Conference on Compiler Construction",
+    "year": 2023,
+    "volume": null,
+    "issue": null,
+    "pages": "98-109",
+    "doi": "10.1145/3578360.3580266",
+    "type": "proceedings-article",
+    "publisher": "ACM"
+   },
+   {
+    "title": "PyTorch 2.0: The Journey to Bringing Compiler Technologies to the Core of PyTorch (Keynote)",
+    "authors": [
+     "Peng Wu"
+    ],
+    "venue": "Proceedings of the 21st ACM/IEEE International Symposium on Code Generation and Optimization",
+    "year": 2023,
+    "volume": null,
+    "issue": null,
+    "pages": "1-1",
+    "doi": "10.1145/3579990.3583093",
+    "type": "proceedings-article",
+    "publisher": "ACM"
+   },
+   {
+    "title": "PyTorch 2 and Its Compiler Technologies",
+    "authors": [],
+    "venue": "2024 IEEE International Parallel and Distributed Processing Symposium (IPDPS)",
+    "year": 2024,
+    "volume": null,
+    "issue": null,
+    "pages": "544-544",
+    "doi": "10.1109/ipdps57955.2024.00054",
+    "type": "proceedings-article",
+    "publisher": "IEEE"
+   }
+  ]
+ },
+ "milakov": {
+  "source": "arxiv",
+  "query": "1805.02867",
+  "matches": [
+   {
+    "title": "Online normalizer calculation for softmax",
+    "authors": [
+     "Maxim Milakov",
+     "Natalia Gimelshein"
+    ],
+    "arxiv": "1805.02867v2",
+    "year": 2018
+   }
+  ]
+ },
+ "redfuser_arxiv": {
+  "source": "arxiv",
+  "query": "2603.10026",
+  "matches": [
+   {
+    "title": "RedFuser: An Automatic Operator Fusion Framework for Cascaded Reductions on AI Accelerators",
+    "authors": [
+     "Xinsheng Tang",
+     "Yangcheng Li",
+     "Nan Wang",
+     "Zhiyi Shu",
+     "Xingyu Ling",
+     "Junna Xing",
+     "Peng Zhou",
+     "Qiang Liu"
+    ],
+    "arxiv": "2603.10026v1",
+    "year": 2026
+   }
+  ]
+ },
+ "flashattention2": {
+  "source": "arxiv",
+  "query": "2307.08691",
+  "matches": [
+   {
+    "title": "FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning",
+    "authors": [
+     "Tri Dao"
+    ],
+    "arxiv": "2307.08691v1",
+    "year": 2023
+   }
+  ]
+ },
+ "tilelang": {
+  "source": "arxiv",
+  "query": "2504.17577",
+  "matches": [
+   {
+    "title": "TileLang: A Composable Tiled Programming Model for AI Systems",
+    "authors": [
+     "Lei Wang",
+     "Yu Cheng",
+     "Yining Shi",
+     "Zhengju Tang",
+     "Zhiwen Mo",
+     "Wenhao Xie",
+     "Lingxiao Ma",
+     "Yuqing Xia",
+     "Jilong Xue",
+     "Fan Yang",
+     "Zhi Yang"
+    ],
+    "arxiv": "2504.17577v2",
+    "year": 2025
+   }
+  ]
+ },
+ "almira": {
+  "source": "arxiv",
+  "query": "1612.03756",
+  "matches": [
+   {
+    "title": "On certain generalizations of the Levi-Civita and Wilson functional equations",
+    "authors": [
+     "J. M. Almira",
+     "E. V. Shulman"
+    ],
+    "arxiv": "1612.03756v2",
+    "year": 2016
+   }
+  ]
+ },
+ "prism": {
+  "source": "arxiv",
+  "query": "2604.15272",
+  "matches": [
+   {
+    "title": "Prism: Symbolic Superoptimization of Tensor Programs",
+    "authors": [
+     "Mengdi Wu",
+     "Xiaoyu Jiang",
+     "Oded Padon",
+     "Zhihao Jia"
+    ],
+    "arxiv": "2604.15272v1",
+    "year": 2026
+   }
+  ]
+ },
+ "flashsinkhorn": {
+  "source": "arxiv",
+  "query": "FlashSinkhorn IO-Aware Entropic Optimal Transport",
+  "matches": [
+   {
+    "title": "FlashSinkhorn: IO-Aware Entropic Optimal Transport on GPU",
+    "authors": [
+     "Felix X. -F. Ye",
+     "Xingjie Li",
+     "An Yu",
+     "Ming-Ching Chang",
+     "Linsong Chu",
+     "Davis Wertheimer"
+    ],
+    "arxiv": "2602.03067v3",
+    "year": 2026
+   }
+  ]
+ },
+ "flashlight_arxiv": {
+  "source": "arxiv",
+  "query": "FlashLight PyTorch Compiler Extensions to Accelerate Attention Variants",
+  "matches": [
+   {
+    "title": "Flashlight: PyTorch Compiler Extensions to Accelerate Attention Variants",
+    "authors": [
+     "Bozhi You",
+     "Irene Wang",
+     "Zelal Su Mustafaoglu",
+     "Abhinav Jangda",
+     "Angélica Moreira",
+     "Roshan Dathathri",
+     "Divya Mahajan",
+     "Keshav Pingali"
+    ],
+    "arxiv": "2511.02043v4",
+    "year": 2025
+   }
+  ]
+ },
+ "cce_arxiv": {
+  "source": "arxiv",
+  "query": "2411.09009",
+  "matches": [
+   {
+    "title": "Cut Your Losses in Large-Vocabulary Language Models",
+    "authors": [
+     "Erik Wijmans",
+     "Brody Huval",
+     "Alexander Hertzberg",
+     "Vladlen Koltun",
+     "Philipp Krähenbühl"
+    ],
+    "arxiv": "2411.09009v2",
+    "year": 2024
+   }
+  ]
+ },
+ "nautilus": {
+  "source": "arxiv",
+  "query": "2604.14825",
+  "matches": [
+   {
+    "title": "Nautilus: An Auto-Scheduling Tensor Compiler for Efficient Tiled GPU Kernels",
+    "authors": [
+     "Yifan Zhao",
+     "Yuchen Yang",
+     "Matei Budiu",
+     "Sasa Misailovic"
+    ],
+    "arxiv": "2604.14825v1",
+    "year": 2026
+   }
+  ]
+ }
+}

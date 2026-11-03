@@ -1,0 +1,128 @@
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Automatic Fusion of Dependent Reductions: Neptune and RedFuser}
+\label{sec:related-prior}
+
+Two recent compilers fuse dependent reductions automatically, and they are the closest work to ours.
+\emph{Neptune}~\citep{neptune} fuses the reductions as if the dependency did not exist and then solves symbolically for a repair function $h(t,r,r')$, which turns a partial result $t$ computed with a stale value $r$ of the earlier reduction into the result for its new value $r'$.
+The fusion is applied by rolling-update and split-K schedules that a user names in a schedule template, and the result is compiled through Triton~\citep{triton}; according to Neptune's conclusion, its follow-up Nautilus~\citep{nautilus} automates the scheduling.
+\emph{RedFuser}~\citep{redfuser} tests whether each reduction body factors as $G(x)\otimes H(d)$ into a function of the data and a function of the earlier results, with $\otimes$ fixed by the reduction, derives fused and incremental forms that rescale by $H$, and generates TileLang~\citep{tilelang} kernels.
+Both keep one state per reduction of the program, and both evaluate GPU performance, which \sys does not yet do.
+
+\textbf{Their conditions.}
+We compare the conditions under which each fuses one reduction, with reduction $\oplus\in\{\Sigma,\max\}$ ($\min$ is dual), body $g(r,c)$, contexts $r$ and context-free values $c$.
+\begin{itemize}
+\item[$\Cls{N}$:] Neptune's condition~\citep[Eq.~3--4]{neptune}: some $h$ satisfies $h(g(r,c),r,r')=g(r',c)$ and $h(t\oplus t',r,r')=h(t,r,r')\oplus h(t',r,r')$ for all $r,r',c,t,t'$.
+\item[$\Cls{R}$:] RedFuser's condition~\citep[Eq.~4, Tab.~1]{redfuser}: $g(r,c)=G(c)\cdot H(r)$ when $\oplus=\Sigma$, and $g(r,c)=G(c)+H(r)$ when $\oplus=\max$.
+\item[$\Cls{H}$:] the condition of \cref{lem:regroup}, with finitely many context-free $G_k$:
+\[
+g(r,c)=\sum_{k=1}^{K}a_k(r)\,G_k(c)\ \text{ when }\oplus=\Sigma,\qquad
+g(r,c)=\max_{k=1}^{K}\psi_k(r,G_k(c))\ \text{ when }\oplus=\max,
+\]
+where every $\psi_k(r,\cdot)$ is non-decreasing.
+\end{itemize}
+
+\begin{theorem}[Containment]
+\label{thm:containment}
+(a) $\Cls{R}\subseteq\Cls{H}$.
+(b) Every link of $\Cls{N}$ is in $\Cls{H}$, provided, when $\oplus=\Sigma$, that its repair $h(\cdot,r,r')$ is continuous at some point.
+(c) Both inclusions are strict: $\sum_j (c_j-r)^2$ and $\max_j |c_j-r|$ are in $\Cls{H}$ and in neither $\Cls{N}$ nor $\Cls{R}$.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+(a) $G(c)H(r)$ is the case $K=1$, $a_1=H$; and $u\mapsto u+H(r)$ does not decrease.
+(b) For $\oplus=\Sigma$ the second equation makes $h(\cdot,r,r')$ additive, hence linear, $h(t,r,r')=\lambda(r,r')\,t$, once it is continuous at a point (Cauchy's equation~\citep{kuczma}).
+The first equation with $r$ fixed to some $r_0$ then gives $g(r',c)=\lambda(r_0,r')\,g(r_0,c)$, a single term.
+For $\oplus=\max$, the second equation makes $h(\cdot,r,r')$ non-decreasing, and the first gives $g(r',c)=h(g(r_0,c),r_0,r')$, a non-decreasing function of $G(c)=g(r_0,c)$.
+(c) $(c-r)^2=c^2-2rc+r^2$ and $|c-r|=\max(c-r,\,r-c)$ are in $\Cls{H}$.
+Changing the context separates inputs that these bodies map to the same partial value, so that value alone cannot determine the correction required by $\Cls{N}$.
+Neither body has the single-factor or additive separation required by $\Cls{R}$.
+Appendix~A of the supplementary material gives the full proof.
+\end{proof}
+
+In words, both prior conditions admit a context that enters through one factor or one term, and a repair or a rescaling of the program's own partial result.
+A polynomial consumer such as a central moment, and an extreme of an absolute deviation, fall outside both, because their join needs states that the program does not compute.
+Neptune reports this failure for Welford's variance~\citep[\S4.2]{neptune}.
+RedFuser reports speedups for the variance and the moment of inertia~\citep[App.~A.6]{redfuser} but does not show how $\sum_l (x_l-m)^2$ satisfies its condition, which it does not.
+The theorem compares the conditions as the papers state them; the implementations recognise sub-languages of them, Neptune's and RedFuser's through SymPy and \sys's through the rewrites of \cref{tab:rules}.
+The continuity assumption excludes only non-measurable repairs, which no closed form expresses.
+
+\textbf{Their programs.}
+To compare the implementations, we wrote the \nPriorPrograms programs that the two papers fuse in TE and ran them through \sys (Appendix~F of the supplementary material).
+\sys fuses \nPriorFused of them, among them every attention variant once its mask or bias is supplied as a tensor, RMSNorm followed by a maximum, the three reduction patterns of the performer, MLA decoding, the variance and the moment of inertia.
+Six use constructs outside the language of \cref{fig:grammar}: masks built with \code{if\_then\_else}, ALiBi computed from loop indices, soft-capping with $\tanh$, grouped-query indexing by \code{n // G}, and a reduction over two axes at once.
+The scaled L2 norm and FP8 quantisation followed by GEMM obtain verified reducers but fail the numerical check on extreme input families.
+Two further programs fail state selection: the sum-of-sums example has an unresolved domain obligation, and the Appendix~A.1 program below needs a supplement beyond its state limit.
+Neptune keeps the scale in its L2 norm and divides by the running maximum, which is zero after an all-zero prefix; the paper does not discuss that case.
+
+\textbf{Contexts without an inverse.}
+RedFuser rescales a stale partial result by $H(d_{\mathrm{old}})^{-1}\otimes H(d_{\mathrm{new}})$ and, when $H(d_{\mathrm{old}})$ has no inverse, substitutes the identity element~\citep[App.~A.1]{redfuser}.
+
+\label{ex:a1}
+When a zero factor has already erased a contribution, substituting an identity for the inverse cannot recover that information.
+A valid join must retain enough information to reconstruct the erased contribution, for example through an additional state.
+Under \sys's preservation policy this supplement must fit alongside the defined original results; if it exceeds the state limit, the chain remains unfused.
+Appendix~D of the supplementary material gives a concrete counterexample and evaluates the incremental form.
+
+\Cref{tab:capabilities} summarises the comparison, including where the prior systems are ahead.
+
+\begin{table}[t]
+\caption{Capabilities as stated and shown in each paper. \cmark: supported. \xmark: excluded by the paper's own condition, or not done. \pmark: partly. \nr: not reported, which does not mean the system cannot do it. Page numbers refer to the papers.}
+\label{tab:capabilities}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.4\linewidth}>{\raggedright\arraybackslash}p{0.19\linewidth}>{\raggedright\arraybackslash}p{0.19\linewidth}>{\raggedright\arraybackslash}p{0.17\linewidth}@{}}
+\toprule
+& \textbf{Neptune} & \textbf{RedFuser} & \textbf{\sys}\\
+\midrule
+Sum with one multiplicative context (softmax, $P\cdot V$) & \cmark{} Eq.~3--5, p.~7 & \cmark{} Eq.~4, Tab.~1 & \cmark{}\\
+Max with an additive or a positive-scale context & \cmark{} p.~13 & \pmark{} additive only, Tab.~1 & \cmark{}\\
+Context in several terms (moments, centred extrema) & \xmark{} p.~10--11; \cref{thm:containment} & \xmark{} \cref{thm:containment} & \pmark{} subject to state limit\\
+States the program does not compute & \xmark{} & \xmark{} & \cmark{}\\
+Join proven equal to the program over $\R$ & \cmark{} Thm.~4.1, 4.4 & \pmark{} derivation & \cmark{} \cref{thm:correct}\\
+Context that is zero on a part & \nr & \xmark{} App.~D & \pmark{} verified guards\\
+Accuracy relative to the original decides fusion & \xmark{} measured after, App.~F & \nr & \cmark{} \cref{def:gate}\\
+Masked, ALiBi, soft-cap, GQA attention as written & \cmark{} Tab.~1, p.~16 & \pmark{} MHA, MLA & \xmark{} frontend\\
+Reducers other than sum, max, min & \cmark{} any associative & \cmark{} top-k, prod & \xmark{}\\
+Scheduling, GPU code generation, performance & \cmark{} Triton & \cmark{} TileLang & \xmark{} \cref{sec:gpu}\\
+\bottomrule
+\end{tabular}
+% src: Neptune PDF pages 7, 10-11, 13, 16, App. F; RedFuser PDF Eq. 4, Tab. 1 p.7, A.1 p.15, A.6 p.17;
+%      Hapax: data/prior.json, data/fused_ops.json; theorems of this paper.
+\end{table}
+
+\subsection{Other Related Work}
+
+\textbf{Hand-derived single passes.}
+Welford's update~\citep{welford}, its weighted form~\citep{west}, the pairwise join and its error analysis by \citet{chan}, and the formulas for joining arbitrary-order moments by \citet{pebay} are single passes for statistics.
+The online softmax~\citep{milakov}, FlashAttention~\citep{flashattention,flashattention2}, cut cross-entropy~\citep{cce} and FlashSinkhorn~\citep{flashsinkhorn} are single passes for machine learning, and the scaled Euclidean norm~\citep{blue} and the accurate log-sum-exp~\citep{blanchard} are single passes chosen for accuracy.
+Each was derived by hand for one operator; \sys derives the softmax, attention and variance reducers from the operators' definitions.
+
+\textbf{Tensor compilers and superoptimisers.}
+Flashlight~\citep{flashlight} rewrites attention variants into an online form through the homomorphism of the exponential.
+Halide's \code{rfactor}~\citep{rfactor} and TVM~\citep{tvm,tensorir} parallelise associative reductions, including tuple reducers, but do not fuse a reduction with one that reads its final value.
+Mirage~\citep{mirage} searches multi-level graphs of tensor operators and verifies candidates probabilistically on a fragment of multilinear operators, division and at most one exponential per path, filtering numerically unstable ones with floating-point tests; a maximum is outside that fragment.
+STENSO~\citep{stenso} and Prism~\citep{prism} search equivalent tensor programs symbolically.
+\sys extracts features from context-correction formulas and synthesises supplemental coordinates over them; constructive recovery and domain proofs govern acceptance.
+The synthesis concerns partition summaries rather than arbitrary operator graphs.
+
+\textbf{Program calculation and synthesis.}
+List homomorphisms~\citep{bird87} and the third homomorphism theorem~\citep{gibbons96} characterise when a function on lists has a divide-and-conquer form, \citet{morita07} construct one from two sequential programs, and recursion schemes such as catamorphisms~\citep{meijer91} give the calculational laws behind such derivations.
+Tupling eliminates multiple traversals of a data structure~\citep{bird84,pettorossi87,hu96,hu97}.
+Farzan and Nicolet synthesise divide-and-conquer programs by unfolding loop bodies and collecting auxiliary accumulators~\citep{farzan17,farzan19,farzan21}, AutoLifter finds minimal auxiliary values by decomposing the problem into inductive synthesis tasks~\citep{autolifter}, SuFu fuses functional programs by inductive synthesis~\citep{sufu}, and \citet{morihata21} parallelise reductions through semiring polynomials.
+Opera~\citep{opera} derives online algorithms, which update a state one element at a time, from offline ones, and solves 50 of its 51 benchmarks; the one it fails is kurtosis.
+% src: notes/evidence/opera.txt lines 913, 934 (50 of 51; kurtosis)
+These works develop synthesis and calculational methods for sequential loops and recursive programs.
+\sys restricts itself to reductions over one tensor axis, which lets it establish a sufficient condition by a finite expansion and derive commutative joins over bags.
+It uses the source centring and scaling to guide join formulation, with floating-point measurements determining acceptance.
+
+\textbf{Aggregation.}
+In databases, an aggregate is \emph{distributive} if partial results combine directly and \emph{algebraic} if a fixed tuple of distributive ones suffices~\citep{datacube}; distributed systems compute such aggregates by trees and gossip~\citep{jesus}.
+A fusible chain is an algebraic aggregate, and \sys derives the tuple and its join.
+
+\textbf{Floating-point accuracy.}
+Herbie~\citep{herbie} rewrites expressions to improve their accuracy, and FPTaylor~\citep{fptaylor} bounds their round-off error rigorously.
+\sys neither improves the original program nor bounds the error of the fused one; it keeps the fused program close to the original and checks it against the original (\cref{def:gate}).
+A rigorous bound on the derived join, in the style of FPTaylor, would replace the sampled part of that check and is future work.

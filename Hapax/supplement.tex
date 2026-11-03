@@ -1,0 +1,358 @@
+%% Supplementary material for "Hapax: Fusing Dependent Tensor Reductions by Deriving
+%% Single-Pass Reducers". Anonymised. Cross-references to the paper are read from
+%% build/main.aux (build main.tex first).
+\PassOptionsToPackage{table}{xcolor}
+\documentclass[acmsmall,screen,review,anonymous,nonacm]{acmart}
+\citestyle{acmnumeric}
+\input{preamble/packages}
+\input{preamble/style}
+\input{preamble/macros}
+\input{gen/mode}
+\input{gen/stats}
+\input{gen/tab-registry}
+\input{gen/tab-unfused}
+\input{gen/tab-prior}
+\input{gen/tab-hazards}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{xr}
+\externaldocument[P-]{build/main}
+\newcommand{\pref}[1]{\ref{P-#1} of the paper}
+\renewcommand{\thesection}{\Alph{section}}
+
+\begin{document}
+\title{Supplementary Material for \emph{Hapax: Fusing Dependent Tensor Reductions by Deriving Single-Pass Reducers}}
+\author{Anonymous Author(s)}
+\affiliation{\institution{Anonymous Institution}\country{Anonymous Country}}
+\begin{abstract}
+Full proofs of the results stated in the paper, the complete registry and its results, every program that is not fused with the tool's own reason, the RedFuser Appendix~A.1 counterexample in its incremental form, and the lowered code of one fused operator.
+Every number is generated from the same data as the paper's.
+\end{abstract}
+\maketitle
+
+\section{Proofs}
+\label{app:proofs}
+
+Throughout, a \emph{link} reduces $\oplus\in\{\Sigma,\max\}$ over the axis, its body is $g(r,c)$ with contexts $r$ (a tuple) and context-free values $c$, and $\min$ is the dual of $\max$.
+
+\subsection{Laws from the Invariant (Lemma~\pref{lem:laws})}
+Let $\mathcal{R}=\{\st(S)\mid S\neq\emptyset\}$.
+For $a=\st(\pa)$, $b=\st(\pb)$ with $\pa\cap\pb=\emptyset$, the invariant gives $\Mrg(a,b)=\st(\pa\dunion\pb)=\st(\pb\dunion\pa)=\Mrg(b,a)$.
+For three disjoint parts, with $c=\st(C)$,
+\[
+\begin{aligned}
+\Mrg(\Mrg(a,b),c)
+  &=\st((\pa\dunion\pb)\dunion C)\\
+  &=\st(\pa\dunion(\pb\dunion C))
+   =\Mrg(a,\Mrg(b,c)).
+\end{aligned}
+\]
+A binary join tree whose leaves are the states of the parts of a partition evaluates, by induction on its height, to the state of the union of its leaves, hence to $\st(\Ax)$ at the root.
+The serial fold starts from the first leaf and subsequently applies the invariant to each remaining singleton.
+Empty partitions do not participate in the join.
+
+\subsection{Existence (Theorem~\pref{thm:existence})}
+Write $\mathcal Q=\{q_1,\dots,q_k\}$ for the distinct reference atoms, where $q_i(S)=\bigoplus_{j\in S}^{(i)}g_i(x_j)$.
+Assume, as in the theorem, that each collected body is defined on the declared element domain.
+An extent read on a part is normalised to $\sum_{j\in S}1$, which is an ordinary atom and shares its coordinate with any identical atom exposed by algebraic rewriting.
+Each rewrite of Table~\pref{tab:rules} is an identity on its source real-valued domain under its proven side condition.
+
+Visit the required members and their dependencies in producer order.
+The regrouping lemma expresses each link in terms of its contexts and context-free atoms wherever that source computation is defined.
+By induction, the contexts have reconstruction expressions in the atoms already collected.
+Substituting these expressions reconstructs the link from the union of those atoms and the atoms introduced by its own body.
+A value member is reconstructed by composing its defining expression with the reconstruction expressions of its dependencies.
+Canonical sharing identifies equal atoms without removing information.
+Thus the required outputs have a reconstruction expression in $(q_1(S),\dots,q_k(S))$ on their source domain.
+This argument does not require undefined source members to be evaluated on proper partitions.
+
+For disjoint non-empty parts, associativity and commutativity of each reduction give
+\[
+q_i(S\dunion T)=q_i(S)\oplus_i q_i(T).
+\]
+Consequently, the leaf $(g_1(x_j),\dots,g_k(x_j))$ and the componentwise join compute the reference tuple for any partition and join tree.
+The domain assumption ensures that its coordinates are defined on legal non-empty parts.
+Applying the reconstruction expression to the full-input tuple produces the source outputs wherever they are defined.
+The construction uses one coordinate per distinct atom, hence at most $|\mathcal Q|$ states, independent of the input length.
+
+\subsection{Containment (Theorem~\pref{thm:containment})}
+
+\emph{(a) RedFuser.}
+If $\oplus=\Sigma$ and $g(r,c)=G(c)H(r)$, take $K=1$, $a_1=H$, $G_1=G$.
+If $\oplus=\max$ and $g(r,c)=G(c)+H(r)$, take $\psi_1(r,u)=u+H(r)$, which does not decrease in $u$.
+Neither argument uses the invertibility of $H$ that RedFuser's join needs.
+
+\emph{(b) Neptune.}
+Fix $r$ and $r'$, and let $\phi(t)=h(t,r,r')$.
+If $\oplus=\Sigma$, Neptune's Eq.~4 states $\phi(t+t')=\phi(t)+\phi(t')$ for all $t,t'$: $\phi$ is additive.
+An additive function on $\R$ that is continuous at one point is linear~\citep{kuczma}, so $\phi(t)=\lambda(r,r')\,t$.
+Neptune's Eq.~3 with $r$ fixed to an arbitrary $r_0$ states $g(r',c)=\phi_{r_0,r'}(g(r_0,c))=\lambda(r_0,r')\,g(r_0,c)$ for all $r',c$; take $K=1$, $a_1(r')=\lambda(r_0,r')$ and $G_1(c)=g(r_0,c)$.
+If $\oplus=\max$, Eq.~4 states $\phi(\max(t,t'))=\max(\phi(t),\phi(t'))$.
+For $t\le t'$ this gives $\phi(t')=\max(\phi(t),\phi(t'))\ge\phi(t)$, so $\phi$ does not decrease.
+Eq.~3 with $r_0$ gives $g(r',c)=\psi(r',G(c))$ with $G(c)=g(r_0,c)$ and $\psi(r',\cdot)=h(\cdot,r_0,r')$ non-decreasing; take $K=1$.
+Neptune's change of variables, $g(r,c)=g_0(r,g_c(c))$ with a repair for $g_0$, is covered by the same argument with $G(c)=g_0(r_0,g_c(c))$, and several producers make $r$ a tuple without changing it.
+The continuity assumption is needed only for $\oplus=\Sigma$; without it Eq.~4 admits additive functions that are not linear, which no closed-form repair computes.
+
+\emph{(c) Strictness.}
+$(c-r)^2=1\cdot c^2+(-2r)\cdot c+r^2\cdot1$ is in $\Cls{H}$ with $K=3$, and $|c-r|=\max(c-r,\,(-c)+r)$ is in $\Cls{H}$ with $\psi_1(r,u)=u-r$, $G_1(c)=c$, $\psi_2(r,u)=u+r$, $G_2(c)=-c$.
+
+Not in $\Cls{N}$: suppose $h$ satisfies Eq.~3 for $g(r,c)=(c-r)^2$.
+Choose $r\neq r'$ and $d\neq0$, and let $c_1=r+d$, $c_2=r-d$.
+Then $g(r,c_1)=g(r,c_2)=d^2$, and Eq.~3 requires $h(d^2,r,r')=(r+d-r')^2$ and $h(d^2,r,r')=(r-d-r')^2$.
+The two right-hand sides differ by $4d(r-r')\neq0$, a contradiction; no regularity of $h$ is used.
+For $g(r,c)=|c-r|$ under $\max$, the same $c_1,c_2$ give $g(r,c_1)=g(r,c_2)=|d|$ and require $|r-r'+d|=|r-r'-d|$, which fails unless $d(r-r')=0$.
+
+Not in $\Cls{R}$: a product $G(c)H(r)$ satisfies $g(r,c)\,g(r_0,c_0)=g(r_0,c)\,g(r,c_0)$ for all arguments.
+For $(c-r)^2$ at $(r,c,r_0,c_0)=(0,2,1,0)$ the left side is $4\cdot1=4$ and the right side is $1\cdot0=0$.
+A sum $G(c)+H(r)$ satisfies $g(r,c)+g(r_0,c_0)=g(r_0,c)+g(r,c_0)$; for $|c-r|$ at $(1,1,0,0)$ the sides are $0$ and $2$.
+
+\subsection{Complete Recovery and Correctness (Theorem~\pref{thm:correct})}
+Let $B(S)$ be the context-free verification tuple and let $A(S)=G(B(S))$ be the maintained tuple on a legal non-empty part $S$.
+Assume that every verification coordinate has a concrete inverse satisfying $H(G(B(S)))=B(S)$ on that domain.
+For disjoint non-empty $S,T$, componentwise aggregation gives $B(S\dunion T)=B(S)\oplus B(T)$.
+Thus
+\[
+G\bigl(H(A(S))\oplus H(A(T))\bigr)
+=G\bigl(B(S)\oplus B(T)\bigr)
+=A(S\dunion T).
+\]
+Definedness of the inverse and join ensures that this identity denotes an executable operation at every internal node.
+Induction over a join tree proves the invariant; the verified epilogue recovers each required output on the source output's domain.
+Printed re-based formulas inherit the invariant only after their equality and branch domains have been checked.
+
+The SMT uniqueness query is independent of constructing $H$.
+Let $\mathcal R$ contain every reachable $B(S)$.
+Unsatisfiability of $B_1,B_2\in\mathcal R\land G(B_1)=G(B_2)\land B_1\ne B_2$ proves injectivity on the reachable subset.
+Satisfiability does not prove a collision between real inputs, because $\mathcal R$ can contain unreachable tuples.
+Neither injectivity alone nor cancellation of an unresolved coordinate from an output supplies executable recovery.
+
+For a guarded inverse, the non-zero branch must recover the coordinate under its guard, while the zero branch requires a proof that the coordinate itself vanishes there.
+Generic finite-sum implications justify the reachable-state constraints independently of segment length: if every summand is non-negative, a zero sum forces each summand to be zero.
+Lazy conditionals ensure that inactive divisions are not evaluated.
+These arguments hold over the reals and do not exclude floating-point underflow.
+
+\subsection{Sufficient Supplementation and Bounded Synthesis}
+\begin{proposition}[Sufficient supplementation]
+\label{prop:supplement}
+Let $A_0$ have $m$ coordinates and $B$ have $k$ coordinates.
+Suppose $B$ is defined on legal non-empty parts, joins componentwise under $\oplus$, and determines the required outputs on their source domain.
+Suppose also that $A_0=G_0\circ B$, with $G_0$ defined on reachable reference tuples.
+If every coordinate of $B$ is an allowed supplement, there is a representation retaining $A_0$ that recovers $B$ and admits a join, using at most $m+k$ states.
+\end{proposition}
+\begin{proof}
+Choose $\widehat A(S)=(A_0(S),B(S))$.
+Projection onto the last $k$ coordinates recovers $B(S)$.
+For disjoint non-empty parts $S,T$, form $B_U=B(S)\oplus B(T)$ and return $(G_0(B_U),B_U)$.
+Componentwise joining gives $B_U=B(S\dunion T)$, so this result is $\widehat A(S\dunion T)$.
+The assumptions ensure defined states and join operations; the required outputs are recovered from $B$ on their source domain.
+The tuple has $m+k$ coordinates, with sharing able to reduce this count.
+\end{proof}
+
+
+The proposition gives an algebraic construction, not a completeness result for compact source-preserving synthesis or a floating-point guarantee.
+The implemented search first checks the protected source tuple and its complete admissible rebase closure, then invokes native cvc5 SyGuS over preferred features and subsequently over preferred features plus verification coordinates.
+Each supplemental coordinate contains at most three feature occurrences, combined by addition and subtraction.
+The synthesis constraint excludes collisions between two copies of the verification tuple under a conservative reachable-state abstraction.
+Native enumeration on an unknown synthesis result provides proposals without a synthesis certificate; independent constructive verification remains mandatory.
+The search allows 256 proposals within a 20-second deadline, shared among grammar stages and widths, with up to 1500\,ms per semantic synthesis call.
+It tries the maximum allowed width first, followed by smaller widths in increasing order.
+An in-flight independent check may finish after the search deadline.
+Repair is restricted to demonstrated source-domain failures, with 64 rounds and 1500\,ms per Z3 query.
+Numerical rejection does not resume synthesis.
+These bounds, the restricted grammar, conservative abstraction and supported recovery rules can each prevent finding an otherwise valid representation.
+
+\subsection{Attention Formulations}
+For attention, the maintained tuple retains the maximum, normaliser and output, recovering the familiar normalised reducer~\citep{flashattention}.
+A source with deferred normalisation yields that formulation instead~\citep{flashattention2}.
+
+\lstinputlisting[float=t,firstline=1,lastline=14,caption={The derived attention join. Its arguments are maintained tuples of non-empty parts; initialisation uses the first leaf.},label={lst:attention}]{listings/attention-after.py}
+
+\section{The Registry}
+\label{app:registry}
+
+\Cref{tab:registry} lists every fused operator of the registry: its domain, passes before and after, the states (those the program does not compute in \aux{purple}), the heaviest selection step, and the error ratios of Section~\pref{sec:eval-accuracy}. A star marks the operators of Table~\pref{tab:showcase}.
+
+{\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{longtable}{@{}p{0.19\linewidth}p{0.13\linewidth}cp{0.3\linewidth}lrr@{}}
+\caption{Every fused operator of the registry.}\label{tab:registry}\\
+\toprule
+\textbf{Operator} & \textbf{Domain} & \textbf{Passes} & \textbf{States} & \textbf{Step} & \multicolumn{2}{c}{\textbf{Ratio}}\\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Operator} & \textbf{Domain} & \textbf{Passes} & \textbf{States} & \textbf{Step} & \multicolumn{2}{c}{\textbf{Ratio}}\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\tabRegistryRows
+\end{longtable}
+}
+
+\section{Programs That Are Not Fused}
+\label{app:unfused}
+
+\Cref{tab:unfused} lists the \nNegative negative operators of the registry and the \nCollectedOther programs of the survey and of the method documentation, with the reason \sys reports.
+It also includes \nPreservingFailures registry operators whose preserving-state selection fails at this revision.
+``No single pass is known'' quotes the stuck reduction found by the judgement.
+
+{\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.18\linewidth}lp{0.17\linewidth}p{0.47\linewidth}@{}}
+\caption{Programs that are not fused, with the tool's reason.}\label{tab:unfused}\\
+\toprule
+\textbf{Program} & \textbf{Source} & \textbf{Outcome} & \textbf{Reason}\\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Program} & \textbf{Source} & \textbf{Outcome} & \textbf{Reason}\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\tabUnfusedRows
+\end{longtable}
+}
+
+\section{The RedFuser Appendix~A.1 Counterexample}
+\label{app:a1}
+
+Consider $s=\sum_j u_j$ and $y=\sum_j v_j s$.
+RedFuser's incremental form (its Eq.~16) updates $\hat y[L]=\hat y[L-1]\cdot H(\hat s[L-1])^{-1}\cdot H(\hat s[L])+v[L]\cdot H(\hat s[L])$ where $\hat s[L]$ is the prefix sum of $u$ and $H(s)=s$.
+Run on the whole input $u=(1,-1,3,0)$, $v=(1,1,1,0)$ in one segment, starting from the identity $\hat s[0]=0$:
+\begin{center}\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+$L$ & 1 & 2 & 3 & 4\\
+\midrule
+$\hat s[L]$ & 1 & 0 & 3 & 3\\
+$H(\hat s[L-1])^{-1}$ & missing & 1 & missing & $1/3$\\
+$\hat y[L]$ with the A.1 substitution & 1 & 0 & 3 & \exAOneRepaired\\
+true $y$ of the prefix & 1 & 0 & 9 & \exAOneTruth\\
+\bottomrule
+\end{tabular}
+% src: data/illus.json redfuser_a1_incremental (exact fractions)
+\end{center}
+The inverse is missing at the very first step, where the prefix context is the identity of the sum, and again at step 3, after the prefix $(1,-1)$ sums to zero.
+Substituting the identity element keeps the first step correct, because $\hat y[0]=0$, but at step 3 the stale result $\hat y[2]=0$ has already lost $\sum_{j\le2}v_j=2$, and the result is \exAOneRepaired instead of \exAOneTruth.
+A variant that also kept $\sum G$ would join partial results correctly, but would still divide by $H$ of the final context, which is zero whenever the final $s$ is.
+Keeping $(s,\sum v)$ would give a valid context-free reducer.
+The current policy must also preserve the defined result $y$, so the default two-state limit is insufficient for the verified preserving tuple; \sys leaves this program unfused.
+
+\section{Accuracy Measurements}
+\label{app:accuracy}
+
+This appendix details the acceptance check of Section~\pref{sec:static} and reports the measurements behind Section~\pref{sec:eval-accuracy}.
+
+\paragraph{The check.}
+For each family of \cref{tab:families}, \sys draws inputs with 256 elements along the reduced axis, evaluates the original program and the fused one in float32, and compares both with a float64 interpretation of the original TE program.
+The empirical sensitivity estimate is the largest change of the float64 reference when every input is perturbed by one unit in the last place, in two random trials.
+The fused program passes a family if it is finite wherever the original is and its error is at most $100\max(\mathit{err}_{\mathrm{orig}},\mathit{err}_{\mathrm{inh}})+64u$ (Definition~\pref{def:gate}).
+The huge and tiny families count only where the original itself is accurate there; a family whose reference is not finite is skipped.
+
+\begin{table}[h]
+\caption{Input families. Each input is $\mathit{shift}+\mathit{scale}\cdot\mathcal{N}(0,1)$ in float32. Inputs that the program requires to be positive are sampled as $|\cdot|+0.1$.}
+\label{tab:families}
+\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Family} & \textbf{Shift} & \textbf{Scale} & \textbf{Counted}\\
+\midrule
+unit & 0 & 1 & always\\
+offset & $10^4$ & 1 & always\\
+wide & 0 & 10 & always\\
+huge & 0 & $8\sqrt{\mathrm{FLT\_MAX}}$ & where the original's error is at most $10^{-3}$\\
+tiny & 0 & $10^{-4}\sqrt{\mathrm{FLT\_MIN}}$ & where the original's error is at most $10^{-3}$\\
+\bottomrule
+\end{tabular}
+% src: python/tvm/te/superopt/accuracy.py (families, bound)
+\end{table}
+
+\paragraph{Errors of the fused operators.}
+\Cref{fig:accuracy} shows, for each of the \nFused fused operators of the registry, the error of the fused program relative to the original's on centred data and on data shifted by $10^4$.
+On centred data the median ratio is \ratioCentredMedian, ranging from \ratioCentredMin to \ratioCentredMax, and \nRatioCentredLeOne of \nRatioCentred fused programs are at least as accurate as the original.
+On offset data the median is \ratioOffsetMedian over \nRatioOffset operators; attention is excluded there because every form has zero error.
+The four operators above a factor of ten on offset data are the variance, covariance, matrix covariance and Pearson correlation, all update formulas~\citep{chan}.
+On the gate's own offset inputs, for instance, the fused variance has error \varianceOffsetSynth against \varianceOffsetUnfused for the two passes, and is accepted because the inherent error of those inputs, \varianceOffsetInherent, makes the bound \varianceOffsetBound.
+Every fused program uses at most \gateWorstMargin of its bound (\gateWorstOp).
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  width=\linewidth, height=4.2cm,
+  ymode=log, ymin=0.1, ymax=200,
+  xmin=-1, xmax=40,
+  xtick=\empty,
+  ylabel={fused / original error},
+  ylabel style={font=\small},
+  yticklabel style={font=\small},
+  legend style={font=\small, at={(0.02,0.97)}, anchor=north west, draw=none, fill=white, fill opacity=0.8, text opacity=1},
+  legend columns=2,
+  unbounded coords=discard,
+  grid=major, grid style={densely dotted, rulegray!60},
+]
+\addplot[only marks, mark=*, mark size=1.6pt, color=origblue] table[x expr=\coordindex, y=ratio_c, col sep=comma] {gen/accuracy.csv};
+\addlegendentry{centred}
+\addplot[only marks, mark=triangle*, mark size=2pt, color=staleorange] table[x expr=\coordindex, y=ratio_o, col sep=comma] {gen/accuracy.csv};
+\addlegendentry{offset by $10^4$}
+\addplot[densely dashed, color=rulegray, domain=-1:40] {1};
+\end{axis}
+\end{tikzpicture}
+\caption{Error of each fused program relative to the original program, sorted by the centred ratio. Below the dashed line the fused program is more accurate than the original.}
+\label{fig:accuracy}
+% src: gen/accuracy.csv (from data/fused_ops.json err_synth / err_unfused)
+\end{figure}
+
+\paragraph{Inputs the check does not sample.}
+\Cref{tab:hazards} runs the unfused, the hand-written and the fused programs on inputs chosen to be awkward.
+The fused Gram--Schmidt remainder loses accuracy on nearly parallel vectors, as the hand-written single pass does; exactly zero weights, outside the declared positive domain of the weighted variance, make both single passes non-finite.
+
+\begin{table}[h]
+\caption{Errors on awkward inputs ($\infty$: a non-finite result).}
+\label{tab:hazards}
+\footnotesize
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.22\linewidth}>{\raggedright\arraybackslash}p{0.33\linewidth}lll@{}}
+\toprule
+\textbf{Operator} & \textbf{Input} & \textbf{Unfused} & \textbf{Hand} & \textbf{Fused}\\
+\midrule
+\tabHazardRows
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{The Programs of Neptune and RedFuser}
+\label{app:prior}
+
+\Cref{tab:prior} lists the programs of the two papers as we wrote them in TE, and what \sys does with each.
+``As written'' follows the paper; ``as data'' supplies the position-dependent part of the scores as a tensor.
+
+{\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{0.33\linewidth}>{\raggedright\arraybackslash}p{0.2\linewidth}l>{\raggedright\arraybackslash}p{0.25\linewidth}@{}}
+\caption{The programs of Neptune and RedFuser, run through \sys. \cmark: fused, with the number of states. \markRefused: fails the accuracy check. \markFrontend: rejected by the frontend, with the construct. ``No verified state tuple'': selection did not establish recovery or its domains within the state limit.}\label{tab:prior}\\
+\toprule
+\textbf{Program} & \textbf{Source} & \textbf{Spelling} & \textbf{\sys}\\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Program} & \textbf{Source} & \textbf{Spelling} & \textbf{\sys}\\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\tabPriorRows
+\end{longtable}
+}
+
+\section{Lowered Code of the Fused Variance}
+\label{app:tir}
+
+\Cref{lst:tir} is the unscheduled TIRx function that \code{te.create\_function} produces from \sys's output for the variance (generated, unedited).
+
+\lstinputlisting[caption={The fused variance after lowering (TVMScript, unscheduled).},label={lst:tir}]{listings/variance-fused.tvmscript.py}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{bib/refs}
+\end{document}

@@ -1,0 +1,53 @@
+%% Hapax: Fusing Dependent Tensor Reductions by Deriving Single-Pass Reducers
+%% PLDI 2027 submission (PACMPL, acmsmall). Build: bash build.sh
+%% Every number in the text comes from gen/stats.tex (generated from data/*.json);
+%% hand-written numbers carry a "% src:" comment.
+\PassOptionsToPackage{table}{xcolor}
+\documentclass[acmsmall,screen,review,anonymous,nonacm]{acmart}
+
+\citestyle{acmnumeric}
+\input{preamble/packages}
+\input{preamble/chinese}
+\input{preamble/style}
+\input{preamble/macros}
+\input{gen/mode}
+\input{gen/stats}
+\input{gen/tab-showcase}
+
+\begin{document}
+\raggedbottom % Keep natural paragraph spacing around indivisible side-by-side blocks.
+
+\title{Hapax: Fusing Dependent Tensor Reductions by Deriving Single-Pass Reducers}
+\author{Anonymous Author(s)}
+\affiliation{\institution{Anonymous Institution}\country{Anonymous Country}}
+
+\input{zh/sections/00-abstract}
+
+% CCS concepts: regenerate the CCSXML block with https://dl.acm.org/ccs before camera-ready.
+\ccsdesc[500]{Software and its engineering~Compilers}
+\ccsdesc[300]{Software and its engineering~Formal language definitions}
+\ccsdesc[300]{Mathematics of computing~Mathematical software}
+
+\keywords{operator fusion, reductions, homomorphisms, monoids, program derivation, floating-point accuracy, tensor compilers}
+
+\maketitle
+
+\input{zh/sections/01-intro}
+\input{zh/sections/02-example}
+\input{zh/sections/03-chains}
+\input{zh/sections/04-existence}
+\input{zh/sections/05-derivation}
+\input{zh/sections/06-accuracy}
+\input{zh/sections/07-implementation}
+\input{zh/sections/08-evaluation}
+\input{zh/sections/09-related}
+\input{zh/sections/10-conclusion}
+\input{zh/sections/90-ai-use}
+\label{body-end}
+
+\input{zh/sections/91-data-availability}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{bib/refs}
+
+\end{document}

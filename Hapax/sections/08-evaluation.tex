@@ -1,0 +1,95 @@
+\section{Evaluation}
+\label{sec:eval}
+
+We evaluate four questions.
+\textbf{RQ1}: Does \sys fuse dependent reductions that are used in practice?
+\textbf{RQ2}: Which states does it introduce?
+\textbf{RQ3}: What do derivation and proof cost?
+\textbf{RQ4}: How close are the fused programs to the originals' accuracy?
+
+
+We selected \nShowcase operators from applications that differ in how their reductions depend on each other (\cref{tab:showcase}).
+Their applications include language models (attention, cross-entropy, LayerNorm and its backward pass), reinforcement learning and multimodal pretraining, optimal transport, statistics, wireless communication, numerical linear algebra and statistical physics.
+For most of them, libraries implement a single pass by hand today; the table identifies those implementations where recorded, without treating the absence of an entry as evidence that none exists.
+Each operator is written as its definition in TE, together with a float64 reference and a hand-written single pass for comparison.
+They come from a registry of \nRegistry operators, many of which are variants of these; Appendix~B of the supplementary material reports all of them, and Appendix~C every program \sys does not fuse, with its reason.
+
+
+All programs are float32 with symbolic extents.
+The experiments use Python \pythonVersion, SymPy \sympyVersion, Z3 \zThreeVersion and cvc5 \cvcFiveVersion.
+Times are medians of five runs after a warm-up, on an Intel Xeon Platinum 8468H.
+% src: data/fused_ops.json meta (cpu, extent, seed, offset); data/proofs_timing.json meta.repeats
+
+\begin{table}[t]
+\caption{Coverage and state discovery. ``Hand-fused in'' lists identified library implementations; a dash means none is recorded. Passes count traversals of the fused axes. Added counts derived coordinates, including repairs. Selection reports source states alone, the rebase closure, or native synthesis (including independently verified enumeration).}
+\label{tab:showcase}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.24\linewidth}>{\raggedright\arraybackslash}p{0.28\linewidth}ccc>{\raggedright\arraybackslash}p{0.12\linewidth}@{}}
+\toprule
+\textbf{Operator} & \textbf{Hand-fused in} & \textbf{Passes} & \textbf{States} & \textbf{Added} & \textbf{Selection}\\
+\midrule
+\tabShowcaseRows
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Fusion Coverage and State Selection}
+\label{sec:eval-coverage}
+
+\sys fuses \nShowFused of the \nShowcase operators.
+The accepted operators' \showChains chains walked their axes \showPassesBefore times before fusion and \showPassesAfter times after it, once per chain; the contrastive loss and the Sinkhorn iteration each have two chains, along the rows and along the columns.
+The hand-written single passes use the same number of passes.
+The derived reducers include the online softmax, FlashAttention's normalised reducer, and Welford's join inside LayerNorm and the Pearson correlation.
+The heat capacity reads the mean through a weighted polynomial, placing it outside the stated conditions of prior fusion compilers (\cref{thm:containment}).
+
+
+\paragraph{Derived representation.}
+\label{sec:eval-states}
+
+The \showChains reducers have \showStates states, \showDerived of which the programs do not compute, in \showDerivedOps operators (\cref{tab:showcase}).
+Source states alone suffice for \showOriginalOps operators, the rebase closure for \showRebaseOps, and native synthesis for \showSygusOps.
+For PAPR, the source retains a total, a centred peak and a squared-deviation sum.
+Synthesis adds a count and a joint extreme coordinate, the sum of the input maximum and minimum, instead of storing the two extrema separately.
+This proposal comes from native enumeration after an unknown quantified-synthesis result and passes the independent recovery and join checks.
+Householder selects a rebase feature through semantic SyGuS and uses guarded recovery.
+Kurtosis and normalised policy loss first repair normalised source states that are undefined on singleton parts.
+The added quantities elsewhere include coefficients of context corrections; Ledoit--Wolf covariance and scalar OLS HC0 illustrate corrections with several such coefficients.
+Table~\ref{tab:showcase} reports the showcase representations; Appendix~B includes label smoothing and the other registry operators.
+% src: data/fused_ops.json showcase chains[].states, auxiliaries, actions
+The accepted tuples fit the default state limit from \cref{thm:existence}; the existence theorem does not guarantee that every preserving tuple can do so.
+
+\subsection{Derivation Cost and Numerical Accuracy}
+\label{sec:eval-cost}
+
+The judgement takes at most \showJudgeMaxMs{}\,ms per operator.
+Selection, which derives the join and discharges every proof obligation, takes a median of \showSelectMedianMs{}\,ms and at most \showSelectMaxMs{}\,ms over the accepted showcase operators.
+\showInvCanonical join invariants are discharged by canonical identity.
+This count describes the final invariants; selection additionally invokes recovery and domain proofs, including SMT, so it does not measure the entire verification workload.
+A complete \code{fuse}, including reconstruction, LLVM compilation and acceptance checks, takes a median of \showFuseMedian{}\,s and at most \showFuseMax{}\,s over the accepted showcase operators.
+
+\paragraph{Numerical results.}
+\label{sec:eval-accuracy}
+
+All \nShowFused accepted showcase programs pass the accuracy check (\cref{def:gate}) on the input families counted by the check.
+For \showRatioLeOne of them the fused program is at least as accurate as the original on centred data.
+The largest use of the error bound by any of them is \showGateWorstMargin of the bound.
+% src: gen/stats.tex showGateWorstMargin (candidate / bound over families)
+The Pearson correlation and the heat capacity are less accurate than their two-pass originals on data offset by $10^4$; this is consistent with the sensitivity of update formulas~\citep{chan}, and both stay within the acceptance bound.
+Kurtosis replaces an original reduction, while the Householder-type norm introduces guarded recovery (\cref{sec:static}).
+Both change numerical evaluation, and their measured accuracy is supported by the check rather than by a rounding-error bound.
+% src: data/fused_ops.json pearson, heat_capacity err_synth[1] / err_unfused[1]
+The per-operator errors are in Appendix~E of the supplementary material.
+
+\textbf{Performance scope.}\par
+\label{sec:eval-perf}
+
+\ifperf
+\placeholder{GPU performance of the fused operators against the unfused TE program, PyTorch and the hand-fused libraries of \cref{tab:showcase}; memory traffic and time.}
+\else
+\ifsubmit\else
+\placeholder{GPU performance. If measurements exist before the deadline: time and memory traffic of the \nShowcase operators against the unfused TE program, PyTorch and the libraries of \cref{tab:showcase}. Otherwise this subsection is removed and the claims stay as they are now.}
+\fi
+\sys does not schedule or generate GPU code yet (\cref{sec:gpu}), so we report no performance numbers.
+The fused programs read each input once instead of once per reduction, but whether that becomes speed depends on the schedule.
+\fi

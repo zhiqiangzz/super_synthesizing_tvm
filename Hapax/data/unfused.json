@@ -1,0 +1,979 @@
+{
+ "meta": {
+  "commit": "6c46fb1b025bd61316935f07529fac25365138dd",
+  "commit_date": "2026-11-02T02:10:24-08:00",
+  "dirty": false,
+  "generated": "2026-11-02T10:26:27+00:00",
+  "script": "collect_unfused.py",
+  "python": "3.12.14",
+  "numpy": "2.2.6",
+  "sympy": "1.14.0",
+  "z3": "5.3.3",
+  "cvc5": "1.4.2",
+  "machine": "x86_64",
+  "cpu": "Intel(R) Xeon(R) Platinum 8468H",
+  "limit": 300
+ },
+ "rows": [
+  {
+   "key": "logit_norm",
+   "doc": "log Σ exp(x / ‖x‖): the norm scales the score under the exp",
+   "max_states": null,
+   "source": "registry",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\nssq = te.compute((n,), lambda i: te.sum(X[i, j] * X[i, j], axis=j), name=\"ssq\")\nnrm = te.compute((n,), lambda i: tir.sqrt(ssq[i]), name=\"nrm\")\nj = te.reduce_axis((0, m), \"j\")\nden = te.compute((n,), lambda i: te.sum(tir.exp(X[i, j] / nrm[i]), axis=j), name=\"den\")\nlse_out = te.compute((n,), lambda i: tir.log(den[i]), name=\"lse_out\")\n# outputs: lse_out",
+   "judged": [
+    false
+   ],
+   "judged_states": [
+    null
+   ],
+   "theory": [
+    "no single pass is known: den reads nrm inside Σ_j exp(X[i, j] / nrm[i]), and no rule takes it out of the reduction"
+   ],
+   "seconds": 0.07630662003066391,
+   "fused": false,
+   "summary": "chain over j (ssq, den): not fused -- no single pass is known: den reads nrm inside Σ_j exp(X[i, j] / nrm[i]), and no rule takes it out of the reduction",
+   "chains": [
+    {
+     "members": [
+      "ssq",
+      "nrm",
+      "den"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "no single pass is known: den reads nrm inside Σ_j exp(X[i, j] / nrm[i]), and no rule takes it out of the reduction",
+     "rejected": [],
+     "rejected_total": 0,
+     "selection": []
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "standardised_softmax",
+   "doc": "Σ exp((x - mean) / sigma): the mean can leave the exp, the deviation cannot",
+   "max_states": null,
+   "source": "registry",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\ntotal = te.compute((n,), lambda i: te.sum(X[i, j], axis=j), name=\"total\")\nmean = te.compute((n,), lambda i: total[i] / m.astype(\"float32\"), name=\"mean\")\nj = te.reduce_axis((0, m), \"j\")\nss = te.compute((n,), lambda i: te.sum((X[i, j] - mean[i]) * (X[i, j] - mean[i]), axis=j), name=\"ss\")\nsigma = te.compute((n,), lambda i: tir.sqrt(ss[i] / m.astype(\"float32\")), name=\"sigma\")\nj = te.reduce_axis((0, m), \"j\")\nzden = te.compute((n,), lambda i: te.sum(tir.exp((X[i, j] - mean[i]) / sigma[i]), axis=j), name=\"zden\")\n# outputs: zden",
+   "judged": [
+    false
+   ],
+   "judged_states": [
+    null
+   ],
+   "theory": [
+    "no single pass is known: zden reads sigma inside Σ_j exp(X[i, j] / sigma[i]), and no rule takes it out of the reduction"
+   ],
+   "seconds": 0.09040893503697589,
+   "fused": false,
+   "summary": "chain over j (total, ss, zden): not fused -- no single pass is known: zden reads sigma inside Σ_j exp(X[i, j] / sigma[i]), and no rule takes it out of the reduction",
+   "chains": [
+    {
+     "members": [
+      "total",
+      "mean",
+      "ss",
+      "sigma",
+      "zden"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "no single pass is known: zden reads sigma inside Σ_j exp(X[i, j] / sigma[i]), and no rule takes it out of the reduction",
+     "rejected": [],
+     "rejected_total": 0,
+     "selection": []
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "mean_abs_deviation",
+   "doc": "Σ |x - mean| / n",
+   "max_states": null,
+   "source": "registry",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\ntotal_mean = te.compute((n,), lambda i: te.sum(X[i, j], axis=j), name=\"total_mean\")\nmean = te.compute((n,), lambda i: total_mean[i] / m.astype(\"float32\"), name=\"mean\")\nj = te.reduce_axis((0, m), \"j\")\ndev = te.compute((n,), lambda i: te.sum(tir.max(X[i, j] - mean[i], mean[i] - X[i, j]), axis=j), name=\"dev\")\nmad = te.compute((n,), lambda i: dev[i] / m.astype(\"float32\"), name=\"mad\")\n# outputs: mad",
+   "judged": [
+    false
+   ],
+   "judged_states": [
+    null
+   ],
+   "theory": [
+    "no single pass is known: dev reads mean inside Σ_j max(X[i, j] - mean[i], mean[i] - X[i, j]), and no rule takes it out of the reduction"
+   ],
+   "seconds": 0.06817316199885681,
+   "fused": false,
+   "summary": "chain over j (total_mean, dev): not fused -- no single pass is known: dev reads mean inside Σ_j max(X[i, j] - mean[i], mean[i] - X[i, j]), and no rule takes it out of the reduction",
+   "chains": [
+    {
+     "members": [
+      "total_mean",
+      "mean",
+      "dev"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "no single pass is known: dev reads mean inside Σ_j max(X[i, j] - mean[i], mean[i] - X[i, j]), and no rule takes it out of the reduction",
+     "rejected": [],
+     "rejected_total": 0,
+     "selection": []
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "min_sq_deviation",
+   "doc": "min (x - mean)²: attained at the element nearest the mean, which is no extreme",
+   "max_states": null,
+   "source": "registry",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\ntotal = te.compute((n,), lambda i: te.sum(X[i, j], axis=j), name=\"total\")\nmean = te.compute((n,), lambda i: total[i] / m.astype(\"float32\"), name=\"mean\")\nj = te.reduce_axis((0, m), \"j\")\nnear = te.compute((n,), lambda i: te.min((X[i, j] - mean[i]) * (X[i, j] - mean[i]), axis=j), name=\"near\")\n# outputs: near",
+   "judged": [
+    false
+   ],
+   "judged_states": [
+    null
+   ],
+   "theory": [
+    "no single pass is known: near reads mean inside max_j (2·X[i, j]·mean[i] - X[i, j]^2), and no rule takes it out of the reduction"
+   ],
+   "seconds": 0.07241500698728487,
+   "fused": false,
+   "summary": "chain over j (total, near): not fused -- no single pass is known: near reads mean inside max_j (2·X[i, j]·mean[i] - X[i, j]^2), and no rule takes it out of the reduction",
+   "chains": [
+    {
+     "members": [
+      "total",
+      "mean",
+      "near"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "no single pass is known: near reads mean inside max_j (2·X[i, j]·mean[i] - X[i, j]^2), and no rule takes it out of the reduction",
+     "rejected": [],
+     "rejected_total": 0,
+     "selection": []
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "abs_from_max",
+   "doc": "Σ |x - max x| = n max x - Σ x, which takes knowing that x <= max x",
+   "max_states": null,
+   "source": "registry",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\nmx = te.compute((n,), lambda i: te.max(X[i, j], axis=j), name=\"mx\")\nj = te.reduce_axis((0, m), \"j\")\ngap = te.compute((n,), lambda i: te.sum(tir.abs(X[i, j] - mx[i]), axis=j), name=\"gap\")\n# outputs: gap",
+   "judged": [
+    false
+   ],
+   "judged_states": [
+    null
+   ],
+   "theory": [
+    "no single pass is known: gap reads mx inside Σ_j max(X[i, j] - mx[i], mx[i] - X[i, j]), and no rule takes it out of the reduction"
+   ],
+   "seconds": 0.06070874200668186,
+   "fused": false,
+   "summary": "chain over j (mx, gap): not fused -- no single pass is known: gap reads mx inside Σ_j max(X[i, j] - mx[i], mx[i] - X[i, j]), and no rule takes it out of the reduction",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "gap"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "no single pass is known: gap reads mx inside Σ_j max(X[i, j] - mx[i], mx[i] - X[i, j]), and no rule takes it out of the reduction",
+     "rejected": [],
+     "rejected_total": 0,
+     "selection": []
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "normalised_projection",
+   "doc": "Σ (a - r q)² with r = Σ q a / Σ q²: r is 0 / 0 on a part where q is 0, so it is taken out, and Σ a² - (Σ q a)² / Σ q² cancels on offset data",
+   "max_states": null,
+   "source": "registry",
+   "before_te": "Q = te.placeholder((n, m), name=\"Q\")\nA = te.placeholder((n, m), name=\"A\")\nj = te.reduce_axis((0, m), \"j\")\nqa = te.compute((n,), lambda i: te.sum(Q[i, j] * A[i, j], axis=j), name=\"qa\")\nj = te.reduce_axis((0, m), \"j\")\nqq = te.compute((n,), lambda i: te.sum(Q[i, j] * Q[i, j], axis=j), name=\"qq\")\nr = te.compute((n,), lambda i: qa[i] / qq[i], name=\"r\")\nj = te.reduce_axis((0, m), \"j\")\nrem = te.compute((n,), lambda i: te.sum((A[i, j] - r[i] * Q[i, j]) * (A[i, j] - r[i] * Q[i, j]), axis=j), name=\"rem\")\n# outputs: rem",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    3
+   ],
+   "theory": [
+    "a single pass with 3 state(s) exists, keeping Σ_j A[i, j]^2, Σ_j Q[i, j]^2, Σ_j Q[i, j]·A[i, j]"
+   ],
+   "seconds": 0.17376555898226798,
+   "fused": false,
+   "summary": "chain over j (qa, qq, rem): not fused -- the reducer of (qa, qq, rem.h1) is refused: REJECTED: unit: 5.4e-07 (original 2.8e-07, inherent 3.7e-08); offset: 27 (original 1.1e-05, inherent 0.00024) (!); wide: 4.3e-07 (original 3.5e-08, inherent 3.5e-08)\n  theory: a single pass with 3 state(s) exists, keeping Σ_j A[i, j]^2, Σ_j Q[i, j]^2, Σ_j Q[i, j]·A[i, j]",
+   "chains": [
+    {
+     "members": [
+      "qa",
+      "qq",
+      "r",
+      "rem"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "the reducer of (qa, qq, rem.h1) is refused: REJECTED: unit: 5.4e-07 (original 2.8e-07, inherent 3.7e-08); offset: 27 (original 1.1e-05, inherent 0.00024) (!); wide: 4.3e-07 (original 3.5e-08, inherent 3.5e-08)",
+     "rejected": [
+      {
+       "states": [
+        "qa",
+        "qq",
+        "rem.h1"
+       ],
+       "why": "REJECTED: unit: 5.4e-07 (original 2.8e-07, inherent 3.7e-08); offset: 27 (original 1.1e-05, inherent 0.00024) (!); wide: 4.3e-07 (original 3.5e-08, inherent 3.5e-08)"
+      }
+     ],
+     "rejected_total": 1,
+     "selection": [
+      "hoist r out of rem: rem: it divides by qq[i] (through r), which is 0 where Q[i, j] is"
+     ]
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "scaled_norm",
+   "doc": "max |x| · sqrt(Σ (x / max |x|)²): fused, it would overflow where it does not now",
+   "max_states": null,
+   "source": "registry",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\nscale = te.compute((n,), lambda i: te.max(tir.abs(X[i, j]), axis=j), name=\"scale\")\nj = te.reduce_axis((0, m), \"j\")\nssq = te.compute((n,), lambda i: te.sum(X[i, j] / scale[i] * (X[i, j] / scale[i]), axis=j), name=\"ssq\")\nnrm2 = te.compute((n,), lambda i: scale[i] * tir.sqrt(ssq[i]), name=\"nrm2\")\n# outputs: nrm2",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    3
+   ],
+   "theory": [
+    "a single pass with 3 state(s) exists, keeping max_j -X[i, j], max_j X[i, j], Σ_j X[i, j]^2"
+   ],
+   "seconds": 0.2906453689793125,
+   "fused": false,
+   "summary": "chain over j (scale, ssq): not fused -- the reducer of (scale, ssq.h0, synth0) is refused: REJECTED: unit: 6.1e-08 (original 1.5e-07, inherent 1.3e-08); offset: 2.7e-07 (original 2.2e-07, inherent 1e-08); wide: 1.6e-07 (original 1.6e-07, inherent 2.4e-08); huge: inf (original 1.1e-07, inherent 2.1e-08) (!); tiny: 0.64 (original 2.6e-07, inherent 1.9e-08) (!)\n  theory: a single pass with 3 state(s) exists, keeping max_j -X[i, j], max_j X[i, j], Σ_j X[i, j]^2",
+   "chains": [
+    {
+     "members": [
+      "scale",
+      "ssq"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "the reducer of (scale, ssq.h0, synth0) is refused: REJECTED: unit: 6.1e-08 (original 1.5e-07, inherent 1.3e-08); offset: 2.7e-07 (original 2.2e-07, inherent 1e-08); wide: 1.6e-07 (original 1.6e-07, inherent 2.4e-08); huge: inf (original 1.1e-07, inherent 2.1e-08) (!); tiny: 0.64 (original 2.6e-07, inherent 1.9e-08) (!)",
+     "rejected": [
+      {
+       "states": [
+        "scale",
+        "ssq.h0",
+        "synth0"
+       ],
+       "why": "REJECTED: unit: 6.1e-08 (original 1.5e-07, inherent 1.3e-08); offset: 2.7e-07 (original 2.2e-07, inherent 1e-08); wide: 1.6e-07 (original 1.6e-07, inherent 2.4e-08); huge: inf (original 1.1e-07, inherent 2.1e-08) (!); tiny: 0.64 (original 2.6e-07, inherent 1.9e-08) (!)"
+      }
+     ],
+     "rejected_total": 1,
+     "selection": [
+      "hoist scale out of ssq: ssq: it divides by scale[i], which is not proven to be non-zero",
+      "supplement synth0 = max_j X[i, j] - max_j -X[i, j]: complete recovery and tuple merge proved on nonempty parts"
+     ]
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "05 linreg_residual",
+   "doc": "Σ ((y-μy) - β(x-μx))², β = sxy/sxx",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nY = te.placeholder((n, m), name=\"Y\")\nj = te.reduce_axis((0, m), \"j\")\ntotal_mean_y = te.compute((n,), lambda i: te.sum(Y[i, j], axis=j), name=\"total_mean_y\")\nmean_y = te.compute((n,), lambda i: total_mean_y[i] / m.astype(\"float32\"), name=\"mean_y\")\nj = te.reduce_axis((0, m), \"j\")\ntotal_mean_x = te.compute((n,), lambda i: te.sum(X[i, j], axis=j), name=\"total_mean_x\")\nmean_x = te.compute((n,), lambda i: total_mean_x[i] / m.astype(\"float32\"), name=\"mean_x\")\nj = te.reduce_axis((0, m), \"j\")\nsxy = te.compute((n,), lambda i: te.sum((X[i, j] - mean_x[i]) * (Y[i, j] - mean_y[i]), axis=j), name=\"sxy\")\nj = te.reduce_axis((0, m), \"j\")\nsxx = te.compute((n,), lambda i: te.sum((X[i, j] - mean_x[i]) * (X[i, j] - mean_x[i]), axis=j), name=\"sxx\")\nbeta = te.compute((n,), lambda i: sxy[i] / sxx[i], name=\"beta\")\nj = te.reduce_axis((0, m), \"j\")\nout = te.compute((n,), lambda i: te.sum((Y[i, j] - mean_y[i] - beta[i] * (X[i, j] - mean_x[i])) * (Y[i, j] - mean_y[i] - beta[i] * (X[i, j] - mean_x[i])), axis=j), name=\"out\")\n# outputs: out",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    6
+   ],
+   "theory": [
+    "a single pass with 6 state(s) exists, keeping Σ_j Y[i, j]^2, Σ_j X[i, j]^2, Σ_j X[i, j], Σ_j Y[i, j]·X[i, j], Σ_j Y[i, j], the count"
+   ],
+   "seconds": 0.43822230998193845,
+   "fused": true,
+   "summary": "chain over j (total_mean_y, total_mean_x, sxy, sxx, out): fused into 6 states (total_mean_y, total_mean_x, sxy, sxx, out.h0, sxy.r0); derived: out.h0, sxy.r0; selection: rebase\n  theory: a single pass with 6 state(s) exists, keeping Σ_j Y[i, j]^2, Σ_j X[i, j]^2, Σ_j X[i, j], Σ_j Y[i, j]·X[i, j], Σ_j Y[i, j], the count\naccurate: unit: 4.8e-07 (original 2.7e-07, inherent 3.7e-08); offset: 0.00042 (original 4.8e-06, inherent 0.00026); wide: 3.4e-07 (original 1.9e-07, inherent 3.6e-08)",
+   "chains": [
+    {
+     "members": [
+      "total_mean_y",
+      "mean_y",
+      "total_mean_x",
+      "mean_x",
+      "sxy",
+      "sxx",
+      "beta",
+      "out"
+     ],
+     "fused": true,
+     "states": [
+      "total_mean_y",
+      "total_mean_x",
+      "sxy",
+      "sxx",
+      "out.h0",
+      "sxy.r0"
+     ],
+     "reason": "",
+     "rejected": [],
+     "rejected_total": 0,
+     "selection": [
+      "hoist beta out of out: out: it divides by sxx[i] (through beta), which is 0 on every single element",
+      "supplement sxy.r0 = Σ_j 1: complete recovery and tuple merge proved on nonempty parts"
+     ]
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "10 sq_from_max",
+   "doc": "Σ (x - max x)²",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\nmx = te.compute((n,), lambda i: te.max(X[i, j], axis=j), name=\"mx\")\nj = te.reduce_axis((0, m), \"j\")\nout = te.compute((n,), lambda i: te.sum((X[i, j] - mx[i]) * (X[i, j] - mx[i]), axis=j), name=\"out\")\n# outputs: out",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    4
+   ],
+   "theory": [
+    "a single pass with 4 state(s) exists, keeping Σ_j X[i, j]^2, Σ_j X[i, j], max_j X[i, j], the count"
+   ],
+   "seconds": 0.2374464760068804,
+   "fused": true,
+   "summary": "chain over j (mx, out): fused into 4 states (mx, out, out.r0, out.r1); derived: out.r0, out.r1; selection: rebase\n  theory: a single pass with 4 state(s) exists, keeping Σ_j X[i, j]^2, Σ_j X[i, j], max_j X[i, j], the count\naccurate: unit: 1.7e-07 (original 1e-07, inherent 2.1e-07); offset: 2.2e-07 (original 1.9e-07, inherent 0.0008); wide: 4.8e-07 (original 4.8e-07, inherent 2.2e-07)",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "out"
+     ],
+     "fused": true,
+     "states": [
+      "mx",
+      "out",
+      "out.r0",
+      "out.r1"
+     ],
+     "reason": "",
+     "rejected": [],
+     "rejected_total": 0,
+     "selection": [
+      "supplement out.r0 = Σ_j 1: complete recovery and tuple merge proved on nonempty parts",
+      "supplement out.r1 = Σ_j X[i, j] - Σ_j mx[i]: complete recovery and tuple merge proved on nonempty parts"
+     ]
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "11a count_above_mean[if_then_else]",
+   "doc": "Σ [x > μ] by if_then_else",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\ntotal_mean = te.compute((n,), lambda i: te.sum(X[i, j], axis=j), name=\"total_mean\")\nmean = te.compute((n,), lambda i: total_mean[i] / m.astype(\"float32\"), name=\"mean\")\nj = te.reduce_axis((0, m), \"j\")\nout = te.compute((n,), lambda i: te.sum(tir.if_then_else(prim.GT(0xad82c80), 1.0, 0.0), axis=j), name=\"out\")\n# outputs: out",
+   "judged": [],
+   "judged_states": [],
+   "theory": [],
+   "seconds": 0.0006181829958222806,
+   "fused": false,
+   "summary": "total_mean, out: not fused -- conditional is not a scalar zero guard",
+   "chains": [],
+   "skipped": [
+    {
+     "members": [
+      "total_mean",
+      "out"
+     ],
+     "reason": "conditional is not a scalar zero guard"
+    }
+   ]
+  },
+  {
+   "key": "11b count_above_mean[cast]",
+   "doc": "Σ [x > μ] by a cast of the comparison",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\ntotal_mean = te.compute((n,), lambda i: te.sum(X[i, j], axis=j), name=\"total_mean\")\nmean = te.compute((n,), lambda i: total_mean[i] / m.astype(\"float32\"), name=\"mean\")\nj = te.reduce_axis((0, m), \"j\")\nout = te.compute((n,), lambda i: te.sum(prim.GT(0xa8db800), axis=j), name=\"out\")\n# outputs: out",
+   "judged": [],
+   "judged_states": [],
+   "theory": [],
+   "seconds": 0.000637406948953867,
+   "fused": false,
+   "summary": "total_mean, out: not fused -- expression GT",
+   "chains": [],
+   "skipped": [
+    {
+     "members": [
+      "total_mean",
+      "out"
+     ],
+     "reason": "expression GT"
+    }
+   ]
+  },
+  {
+   "key": "13 log_ratio",
+   "doc": "Σ log(x/μ), x > 0",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\ntotal_mean = te.compute((n,), lambda i: te.sum(X[i, j], axis=j), name=\"total_mean\")\nmean = te.compute((n,), lambda i: total_mean[i] / m.astype(\"float32\"), name=\"mean\")\nj = te.reduce_axis((0, m), \"j\")\nout = te.compute((n,), lambda i: te.sum(tir.log(X[i, j] / mean[i]), axis=j), name=\"out\")\n# outputs: out",
+   "judged": [
+    false
+   ],
+   "judged_states": [
+    null
+   ],
+   "theory": [
+    "no single pass is known: out reads mean inside Σ_j log(X[i, j] / mean[i]), and no rule takes it out of the reduction"
+   ],
+   "seconds": 0.07827417098451406,
+   "fused": false,
+   "summary": "chain over j (total_mean, out): not fused -- no single pass is known: out reads mean inside Σ_j log(X[i, j] / mean[i]), and no rule takes it out of the reduction",
+   "chains": [
+    {
+     "members": [
+      "total_mean",
+      "mean",
+      "out"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "no single pass is known: out reads mean inside Σ_j log(X[i, j] / mean[i]), and no rule takes it out of the reduction",
+     "rejected": [],
+     "rejected_total": 0,
+     "selection": []
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "14 cv_squared",
+   "doc": "Σ (x/μ - 1)²",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\ntotal_mean = te.compute((n,), lambda i: te.sum(X[i, j], axis=j), name=\"total_mean\")\nmean = te.compute((n,), lambda i: total_mean[i] / m.astype(\"float32\"), name=\"mean\")\nj = te.reduce_axis((0, m), \"j\")\nout = te.compute((n,), lambda i: te.sum((X[i, j] / mean[i] - 1.0) * (X[i, j] / mean[i] - 1.0), axis=j), name=\"out\")\n# outputs: out",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    3
+   ],
+   "theory": [
+    "a single pass with 3 state(s) exists, keeping Σ_j X[i, j]^2, Σ_j X[i, j], the count"
+   ],
+   "seconds": 0.1742421649978496,
+   "fused": false,
+   "summary": "chain over j (total_mean, out): not fused -- the reducer of (total_mean, out.h0, out.h1) is refused: REJECTED: unit: 1.3e-05 (original 1.3e-05, inherent 9.6e-06); offset: 34 (original 5.3e-05, inherent 0.00021) (!); wide: 1.4e-06 (original 1.4e-06, inherent 1.4e-06); huge: inf (original 1e-05, inherent 5.5e-06) (!); tiny: inf (original 6.9e-07, inherent 1.4e-06) (!)\n  theory: a single pass with 3 state(s) exists, keeping Σ_j X[i, j]^2, Σ_j X[i, j], the count",
+   "chains": [
+    {
+     "members": [
+      "total_mean",
+      "mean",
+      "out"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "the reducer of (total_mean, out.h0, out.h1) is refused: REJECTED: unit: 1.3e-05 (original 1.3e-05, inherent 9.6e-06); offset: 34 (original 5.3e-05, inherent 0.00021) (!); wide: 1.4e-06 (original 1.4e-06, inherent 1.4e-06); huge: inf (original 1e-05, inherent 5.5e-06) (!); tiny: inf (original 6.9e-07, inherent 1.4e-06) (!)",
+     "rejected": [
+      {
+       "states": [
+        "total_mean",
+        "out.h0",
+        "out.h1"
+       ],
+       "why": "REJECTED: unit: 1.3e-05 (original 1.3e-05, inherent 9.6e-06); offset: 34 (original 5.3e-05, inherent 0.00021) (!); wide: 1.4e-06 (original 1.4e-06, inherent 1.4e-06); huge: inf (original 1e-05, inherent 5.5e-06) (!); tiny: inf (original 6.9e-07, inherent 1.4e-06) (!)"
+      }
+     ],
+     "rejected_total": 1,
+     "selection": [
+      "hoist mean out of out: out: it divides by mean[i], which is 0 where X[i, j] is"
+     ]
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "15 autocorr_lag1",
+   "doc": "Σ_{j<m-1} (x_j-μ)(x_{j+1}-μ)",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\ntotal_mean = te.compute((n,), lambda i: te.sum(X[i, j], axis=j), name=\"total_mean\")\nmean = te.compute((n,), lambda i: total_mean[i] / m.astype(\"float32\"), name=\"mean\")\nj = te.reduce_axis((0, m - 1), \"j\")\nout = te.compute((n,), lambda i: te.sum((X[i, j] - mean[i]) * (X[i, Ts.iter_var(j, T.Range(0, m - 1), \"CommReduce\", \"\") + 1] - mean[i]), axis=j), name=\"out\")\n# outputs: out",
+   "judge_raised": "ValueError: unsupported extent expression m - 1",
+   "raised": "ValueError: unsupported extent expression m - 1"
+  },
+  {
+   "key": "16 softmax_variance",
+   "doc": "Σ p (v - Σ p v)², p = softmax(S)",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "S = te.placeholder((n, m), name=\"S\")\nV = te.placeholder((n, m), name=\"V\")\nj = te.reduce_axis((0, m), \"j\")\nmx = te.compute((n,), lambda i: te.max(S[i, j], axis=j), name=\"mx\")\ne = te.compute((n, m), lambda i, k: tir.exp(S[i, k] - mx[i]), name=\"e\")\nj = te.reduce_axis((0, m), \"j\")\nden = te.compute((n,), lambda i: te.sum(e[i, j], axis=j), name=\"den\")\nP = te.compute((n, m), lambda i, k: e[i, k] / den[i], name=\"P\")\nj = te.reduce_axis((0, m), \"j\")\nev = te.compute((n,), lambda i: te.sum(P[i, j] * V[i, j], axis=j), name=\"ev\")\nj = te.reduce_axis((0, m), \"j\")\nout = te.compute((n,), lambda i: te.sum(P[i, j] * (V[i, j] - ev[i]) * (V[i, j] - ev[i]), axis=j), name=\"out\")\n# outputs: out",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    4
+   ],
+   "theory": [
+    "a single pass with 4 state(s) exists, keeping Σ_j exp(S[i, j]), Σ_j V[i, j]^2·exp(S[i, j]), Σ_j V[i, j]·exp(S[i, j]), max_j S[i, j]"
+   ],
+   "seconds": 0.28272673999890685,
+   "fused": false,
+   "summary": "chain over j (mx, den, ev, out): not fused -- the reducer of (mx, den, ev, out) is refused: REJECTED: unit: 2.8e-07 (original 4.7e-07, inherent 6.4e-08); offset: 0.00053 (original 1.3e-05, inherent 0.0003); wide: 3.5e-07 (original 1.9e-07, inherent 4.7e-06); huge: inf (original 0, inherent 0) (!)\n  theory: a single pass with 4 state(s) exists, keeping Σ_j exp(S[i, j]), Σ_j V[i, j]^2·exp(S[i, j]), Σ_j V[i, j]·exp(S[i, j]), max_j S[i, j]",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "den",
+      "ev",
+      "out"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "the reducer of (mx, den, ev, out) is refused: REJECTED: unit: 2.8e-07 (original 4.7e-07, inherent 6.4e-08); offset: 0.00053 (original 1.3e-05, inherent 0.0003); wide: 3.5e-07 (original 1.9e-07, inherent 4.7e-06); huge: inf (original 0, inherent 0) (!)",
+     "rejected": [
+      {
+       "states": [
+        "mx",
+        "den",
+        "ev",
+        "out"
+       ],
+       "why": "REJECTED: unit: 2.8e-07 (original 4.7e-07, inherent 6.4e-08); offset: 0.00053 (original 1.3e-05, inherent 0.0003); wide: 3.5e-07 (original 1.9e-07, inherent 4.7e-06); huge: inf (original 0, inherent 0) (!)"
+      }
+     ],
+     "rejected_total": 1,
+     "selection": []
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "19 kd_kl",
+   "doc": "Σ p_t (log p_t - log p_s), p = softmax(./2)",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "T = te.placeholder((n, m), name=\"T\")\nS = te.placeholder((n, m), name=\"S\")\nzt = te.compute((n, m), lambda i, k: T[i, k] / 2.0, name=\"zt\")\nj = te.reduce_axis((0, m), \"j\")\nmx_t = te.compute((n,), lambda i: te.max(zt[i, j], axis=j), name=\"mx_t\")\ne_t = te.compute((n, m), lambda i, k: tir.exp(zt[i, k] - mx_t[i]), name=\"e_t\")\nj = te.reduce_axis((0, m), \"j\")\nden_t = te.compute((n,), lambda i: te.sum(e_t[i, j], axis=j), name=\"den_t\")\nP_t = te.compute((n, m), lambda i, k: e_t[i, k] / den_t[i], name=\"P_t\")\nlogp_t = te.compute((n, m), lambda i, k: zt[i, k] - mx_t[i] - tir.log(den_t[i]), name=\"logp_t\")\nzs = te.compute((n, m), lambda i, k: S[i, k] / 2.0, name=\"zs\")\nj = te.reduce_axis((0, m), \"j\")\nmx_s = te.compute((n,), lambda i: te.max(zs[i, j], axis=j), name=\"mx_s\")\ne_s = te.compute((n, m), lambda i, k: tir.exp(zs[i, k] - mx_s[i]), name=\"e_s\")\nj = te.reduce_axis((0, m), \"j\")\nden_s = te.compute((n,), lambda i: te.sum(e_s[i, j], axis=j), name=\"den_s\")\nlogp_s = te.compute((n, m), lambda i, k: zs[i, k] - mx_s[i] - tir.log(den_s[i]), name=\"logp_s\")\nj = te.reduce_axis((0, m), \"j\")\nout = te.compute((n,), lambda i: te.sum(P_t[i, j] * (logp_t[i, j] - logp_s[i, j]), axis=j), name=\"out\")\n# outputs: out",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    6
+   ],
+   "theory": [
+    "a single pass with 6 state(s) exists, keeping Σ_j exp(1/2·T[i, j]), Σ_j S[i, j]·exp(1/2·T[i, j]), Σ_j T[i, j]·exp(1/2·T[i, j]), max_j T[i, j], max_j S[i, j], Σ_j exp(1/2·S[i, j])"
+   ],
+   "seconds": 0.6670013080001809,
+   "fused": false,
+   "summary": "chain over j (mx_t, den_t, mx_s, den_s, out): not fused -- the reducer of (mx_t, den_t, mx_s, den_s, out, synth0) is refused: takes exp of an argument that is not bounded above (the original does not)\n  theory: a single pass with 6 state(s) exists, keeping Σ_j exp(1/2·T[i, j]), Σ_j S[i, j]·exp(1/2·T[i, j]), Σ_j T[i, j]·exp(1/2·T[i, j]), max_j T[i, j], max_j S[i, j], Σ_j exp(1/2·S[i, j])",
+   "chains": [
+    {
+     "members": [
+      "mx_t",
+      "den_t",
+      "mx_s",
+      "den_s",
+      "out"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "the reducer of (mx_t, den_t, mx_s, den_s, out, synth0) is refused: takes exp of an argument that is not bounded above (the original does not)",
+     "rejected": [
+      {
+       "states": [
+        "mx_t",
+        "den_t",
+        "mx_s",
+        "den_s",
+        "out",
+        "synth0"
+       ],
+       "why": "takes exp of an argument that is not bounded above (the original does not)"
+      }
+     ],
+     "rejected_total": 1,
+     "selection": [
+      "supplement synth0 = Σ_j T[i, j]·exp(1/2·T[i, j]): complete recovery and tuple merge proved on nonempty parts"
+     ]
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "21 hist_entropy",
+   "doc": "-Σ (x/s) log(x/s), s = Σx, x > 0",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\ns = te.compute((n,), lambda i: te.sum(X[i, j], axis=j), name=\"s\")\nP = te.compute((n, m), lambda i, k: X[i, k] / s[i], name=\"P\")\nj = te.reduce_axis((0, m), \"j\")\nplogp = te.compute((n,), lambda i: te.sum(P[i, j] * tir.log(P[i, j]), axis=j), name=\"plogp\")\nout = te.compute((n,), lambda i: plogp[i] * -1.0, name=\"out\")\n# outputs: out",
+   "judged": [
+    false
+   ],
+   "judged_states": [
+    null
+   ],
+   "theory": [
+    "no single pass is known: plogp reads s inside Σ_j X[i, j]·log(X[i, j] / s[i]), and no rule takes it out of the reduction"
+   ],
+   "seconds": 0.08054917096160352,
+   "fused": false,
+   "summary": "chain over j (s, plogp): not fused -- no single pass is known: plogp reads s inside Σ_j X[i, j]·log(X[i, j] / s[i]), and no rule takes it out of the reduction",
+   "chains": [
+    {
+     "members": [
+      "s",
+      "plogp"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "no single pass is known: plogp reads s inside Σ_j X[i, j]·log(X[i, j] / s[i]), and no rule takes it out of the reduction",
+     "rejected": [],
+     "rejected_total": 0,
+     "selection": []
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "22 hist_kl",
+   "doc": "Σ (x/sx) log((x/sx)/(y/sy)), x, y > 0",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nY = te.placeholder((n, m), name=\"Y\")\nj = te.reduce_axis((0, m), \"j\")\nsx = te.compute((n,), lambda i: te.sum(X[i, j], axis=j), name=\"sx\")\nPx = te.compute((n, m), lambda i, k: X[i, k] / sx[i], name=\"Px\")\nj = te.reduce_axis((0, m), \"j\")\nsy = te.compute((n,), lambda i: te.sum(Y[i, j], axis=j), name=\"sy\")\nPy = te.compute((n, m), lambda i, k: Y[i, k] / sy[i], name=\"Py\")\nj = te.reduce_axis((0, m), \"j\")\nout = te.compute((n,), lambda i: te.sum(Px[i, j] * tir.log(Px[i, j] / Py[i, j]), axis=j), name=\"out\")\n# outputs: out",
+   "judged": [
+    false
+   ],
+   "judged_states": [
+    null
+   ],
+   "theory": [
+    "no single pass is known: out reads sx, sy inside Σ_j X[i, j]·log(X[i, j]·sy[i] / Y[i, j] / sx[i]), and no rule takes it out of the reduction"
+   ],
+   "seconds": 0.1021644760039635,
+   "fused": false,
+   "summary": "chain over j (sx, sy, out): not fused -- no single pass is known: out reads sx, sy inside Σ_j X[i, j]·log(X[i, j]·sy[i] / Y[i, j] / sx[i]), and no rule takes it out of the reduction",
+   "chains": [
+    {
+     "members": [
+      "sx",
+      "sy",
+      "out"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "no single pass is known: out reads sx, sy inside Σ_j X[i, j]·log(X[i, j]·sy[i] / Y[i, j] / sx[i]), and no rule takes it out of the reduction",
+     "rejected": [],
+     "rejected_total": 0,
+     "selection": []
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "28 maxtemp_den",
+   "doc": "Σ exp(x / max x), x > 0",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\nmx = te.compute((n,), lambda i: te.max(X[i, j], axis=j), name=\"mx\")\nj = te.reduce_axis((0, m), \"j\")\nout = te.compute((n,), lambda i: te.sum(tir.exp(X[i, j] / mx[i]), axis=j), name=\"out\")\n# outputs: out",
+   "judged": [
+    false
+   ],
+   "judged_states": [
+    null
+   ],
+   "theory": [
+    "no single pass is known: out reads mx inside Σ_j exp(X[i, j] / mx[i]), and no rule takes it out of the reduction"
+   ],
+   "seconds": 0.07170556404162198,
+   "fused": false,
+   "summary": "chain over j (mx, out): not fused -- no single pass is known: out reads mx inside Σ_j exp(X[i, j] / mx[i]), and no rule takes it out of the reduction",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "out"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "no single pass is known: out reads mx inside Σ_j exp(X[i, j] / mx[i]), and no rule takes it out of the reduction",
+     "rejected": [],
+     "rejected_total": 0,
+     "selection": []
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "29a log_from_min[te.min]",
+   "doc": "Σ log(x - min x + 1), te.min",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\nlo = te.compute((n,), lambda i: te.min(X[i, j], axis=j), name=\"lo\")\nj = te.reduce_axis((0, m), \"j\")\nout = te.compute((n,), lambda i: te.sum(tir.log(X[i, j] - lo[i] + 1.0), axis=j), name=\"out\")\n# outputs: out",
+   "judged": [
+    false
+   ],
+   "judged_states": [
+    null
+   ],
+   "theory": [
+    "no single pass is known: out reads lo inside Σ_j log(X[i, j] + 1 - lo[i]), and no rule takes it out of the reduction"
+   ],
+   "seconds": 0.07161180500406772,
+   "fused": false,
+   "summary": "chain over j (lo, out): not fused -- no single pass is known: out reads lo inside Σ_j log(X[i, j] + 1 - lo[i]), and no rule takes it out of the reduction",
+   "chains": [
+    {
+     "members": [
+      "lo",
+      "out"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "no single pass is known: out reads lo inside Σ_j log(X[i, j] + 1 - lo[i]), and no rule takes it out of the reduction",
+     "rejected": [],
+     "rejected_total": 0,
+     "selection": []
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "33 cg_residual",
+   "doc": "Σ (r - α q)², α = Σ r r / Σ p q",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "R = te.placeholder((n, m), name=\"R\")\nP = te.placeholder((n, m), name=\"P\")\nQ = te.placeholder((n, m), name=\"Q\")\nj = te.reduce_axis((0, m), \"j\")\nrr = te.compute((n,), lambda i: te.sum(R[i, j] * R[i, j], axis=j), name=\"rr\")\nj = te.reduce_axis((0, m), \"j\")\npq = te.compute((n,), lambda i: te.sum(P[i, j] * Q[i, j], axis=j), name=\"pq\")\nalpha = te.compute((n,), lambda i: rr[i] / pq[i], name=\"alpha\")\nj = te.reduce_axis((0, m), \"j\")\nout = te.compute((n,), lambda i: te.sum((R[i, j] - alpha[i] * Q[i, j]) * (R[i, j] - alpha[i] * Q[i, j]), axis=j), name=\"out\")\n# outputs: out",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    4
+   ],
+   "theory": [
+    "a single pass with 4 state(s) exists, keeping Σ_j R[i, j]^2, Σ_j Q[i, j]^2, Σ_j R[i, j]·Q[i, j], Σ_j P[i, j]·Q[i, j]"
+   ],
+   "seconds": 0.19755823799641803,
+   "fused": false,
+   "summary": "chain over j (rr, pq, out): not fused -- the reducer of (rr, pq, out.h1, out.h2) is refused: REJECTED: unit: 8.9e-07 (original 8e-07, inherent 6.2e-06); offset: 43 (original 0.0012, inherent 0.00018) (!); wide: 3e-06 (original 2.8e-06, inherent 9.7e-07)\n  theory: a single pass with 4 state(s) exists, keeping Σ_j R[i, j]^2, Σ_j Q[i, j]^2, Σ_j R[i, j]·Q[i, j], Σ_j P[i, j]·Q[i, j]",
+   "chains": [
+    {
+     "members": [
+      "rr",
+      "pq",
+      "alpha",
+      "out"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "the reducer of (rr, pq, out.h1, out.h2) is refused: REJECTED: unit: 8.9e-07 (original 8e-07, inherent 6.2e-06); offset: 43 (original 0.0012, inherent 0.00018) (!); wide: 3e-06 (original 2.8e-06, inherent 9.7e-07)",
+     "rejected": [
+      {
+       "states": [
+        "rr",
+        "pq",
+        "out.h1",
+        "out.h2"
+       ],
+       "why": "REJECTED: unit: 8.9e-07 (original 8e-07, inherent 6.2e-06); offset: 43 (original 0.0012, inherent 0.00018) (!); wide: 3e-06 (original 2.8e-06, inherent 9.7e-07)"
+      }
+     ],
+     "rejected_total": 1,
+     "selection": [
+      "hoist alpha out of out: out: it divides by pq[i] (through alpha), which is 0 where P[i, j] or Q[i, j] is"
+     ]
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "37a radius_of_gyration[per-d]",
+   "doc": "Σ_d (Σ_j M (R - cm_d)² / Σ_j M)",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "M = te.placeholder((n, m), name=\"M\")\nR = te.placeholder((n, m, d3), name=\"R\")\nj = te.reduce_axis((0, m), \"j\")\nmr = te.compute((n, d3), lambda i, q: te.sum(M[i, j] * R[i, j, q], axis=j), name=\"mr\")\nj = te.reduce_axis((0, m), \"j\")\nmsum = te.compute((n,), lambda i: te.sum(M[i, j], axis=j), name=\"msum\")\ncm = te.compute((n, d3), lambda i, q: mr[i, q] / msum[i], name=\"cm\")\nj = te.reduce_axis((0, m), \"j\")\nrg2s = te.compute((n, d3), lambda i, q: te.sum(M[i, j] * (R[i, j, q] - cm[i, q]) * (R[i, j, q] - cm[i, q]), axis=j), name=\"rg2s\")\nrg2 = te.compute((n, d3), lambda i, q: rg2s[i, q] / msum[i], name=\"rg2\")\nd = te.reduce_axis((0, d3), \"d\")\ntotal = te.compute((n,), lambda i: te.sum(rg2[i, d], axis=d), name=\"total\")\n# outputs: total",
+   "judged": [
+    true
+   ],
+   "judged_states": [
+    3
+   ],
+   "theory": [
+    "a single pass with 3 state(s) exists, keeping Σ_j M[i, j], Σ_j M[i, j]·R[i, j, q]^2, Σ_j M[i, j]·R[i, j, q]"
+   ],
+   "seconds": 0.3450903929769993,
+   "fused": false,
+   "summary": "chain over j (mr, msum, rg2s): not fused -- the reducer of (mr, msum, rg2s.h1) is refused: REJECTED: unit: 1.4e-05 (original 6.6e-06, inherent 6e-06); offset: 35 (original 1.9e-05, inherent 1.8e-05) (!); wide: 1.7e-06 (original 9.4e-07, inherent 9.3e-07)\n  theory: a single pass with 3 state(s) exists, keeping Σ_j M[i, j], Σ_j M[i, j]·R[i, j, q]^2, Σ_j M[i, j]·R[i, j, q]",
+   "chains": [
+    {
+     "members": [
+      "mr",
+      "msum",
+      "cm",
+      "rg2s"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "the reducer of (mr, msum, rg2s.h1) is refused: REJECTED: unit: 1.4e-05 (original 6.6e-06, inherent 6e-06); offset: 35 (original 1.9e-05, inherent 1.8e-05) (!); wide: 1.7e-06 (original 9.4e-07, inherent 9.3e-07)",
+     "rejected": [
+      {
+       "states": [
+        "mr",
+        "msum",
+        "rg2s.h1"
+       ],
+       "why": "REJECTED: unit: 1.4e-05 (original 6.6e-06, inherent 6e-06); offset: 35 (original 1.9e-05, inherent 1.8e-05) (!); wide: 1.7e-06 (original 9.4e-07, inherent 9.3e-07)"
+      }
+     ],
+     "rejected_total": 1,
+     "selection": [
+      "hoist cm out of rg2s: rg2s: it divides by msum[i] (through cm), which is 0 where M[i, j] is"
+     ]
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "37b radius_of_gyration[joint j,d]",
+   "doc": "Σ_{j,d} M (R - cm_d)² / Σ_j M: one reduction over two axes",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "M = te.placeholder((n, m), name=\"M\")\nR = te.placeholder((n, m, d3), name=\"R\")\nj = te.reduce_axis((0, m), \"j\")\nmr = te.compute((n, d3), lambda i, q: te.sum(M[i, j] * R[i, j, q], axis=j), name=\"mr\")\nj = te.reduce_axis((0, m), \"j\")\nmsum = te.compute((n,), lambda i: te.sum(M[i, j], axis=j), name=\"msum\")\ncm = te.compute((n, d3), lambda i, q: mr[i, q] / msum[i], name=\"cm\")\nj = te.reduce_axis((0, m), \"j\")\nd = te.reduce_axis((0, d3), \"d\")\ntot_s = te.compute((n,), lambda i: te.sum(M[i, j] * (R[i, j, d] - cm[i, d]) * (R[i, j, d] - cm[i, d]), axis=j, d), name=\"tot_s\")\ntotal = te.compute((n,), lambda i: tot_s[i] / msum[i], name=\"total\")\n# outputs: total",
+   "judged": [],
+   "judged_states": [],
+   "theory": [],
+   "seconds": 0.0004196650115773082,
+   "fused": false,
+   "summary": "no reduction chain in the program",
+   "chains": [],
+   "skipped": []
+  },
+  {
+   "key": "38 batchnorm_stats",
+   "doc": "mean[c], var[c] over (b, h, w): one reduction over three axes",
+   "max_states": null,
+   "source": "survey",
+   "before_te": "X = te.placeholder((nb, ch, hh, ww), name=\"X\")\nb = te.reduce_axis((0, nb), \"b\")\nh = te.reduce_axis((0, hh), \"h\")\nw = te.reduce_axis((0, ww), \"w\")\ntotal = te.compute((ch,), lambda q: te.sum(X[b, q, h, w], axis=b, h, w), name=\"total\")\nmean = te.compute((ch,), lambda q: total[q] / (nb * hh * ww), name=\"mean\")\nb = te.reduce_axis((0, nb), \"b\")\nh = te.reduce_axis((0, hh), \"h\")\nw = te.reduce_axis((0, ww), \"w\")\nss = te.compute((ch,), lambda q: te.sum((X[b, q, h, w] - mean[q]) * (X[b, q, h, w] - mean[q]), axis=b, h, w), name=\"ss\")\nvar = te.compute((ch,), lambda q: ss[q] / (nb * hh * ww), name=\"var\")\n# outputs: mean, var",
+   "judged": [],
+   "judged_states": [],
+   "theory": [],
+   "seconds": 9.052403038367629e-05,
+   "fused": false,
+   "summary": "no reduction chain in the program",
+   "chains": [],
+   "skipped": []
+  },
+  {
+   "key": "nearest_to_mean",
+   "doc": "min_j |x - mean|",
+   "max_states": null,
+   "source": "extra",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\ntotal = te.compute((n,), lambda i: te.sum(X[i, j], axis=j), name=\"total\")\nmean = te.compute((n,), lambda i: total[i] / m.astype(\"float32\"), name=\"mean\")\nj = te.reduce_axis((0, m), \"j\")\nout = te.compute((n,), lambda i: te.min(tir.abs(X[i, j] - mean[i]), axis=j), name=\"out\")\n# outputs: out",
+   "judged": [
+    false
+   ],
+   "judged_states": [
+    null
+   ],
+   "theory": [
+    "no single pass is known: out reads mean inside max_j -max(X[i, j] - mean[i], mean[i] - X[i, j]), and no rule takes it out of the reduction"
+   ],
+   "seconds": 0.0643376000225544,
+   "fused": false,
+   "summary": "chain over j (total, out): not fused -- no single pass is known: out reads mean inside max_j -max(X[i, j] - mean[i], mean[i] - X[i, j]), and no rule takes it out of the reduction",
+   "chains": [
+    {
+     "members": [
+      "total",
+      "mean",
+      "out"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "no single pass is known: out reads mean inside max_j -max(X[i, j] - mean[i], mean[i] - X[i, j]), and no rule takes it out of the reduction",
+     "rejected": [],
+     "rejected_total": 0,
+     "selection": []
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "moving_maximum",
+   "doc": "max_j (mean x - x^2)",
+   "max_states": null,
+   "source": "extra",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nj = te.reduce_axis((0, m), \"j\")\ntotal = te.compute((n,), lambda i: te.sum(X[i, j], axis=j), name=\"total\")\nmean = te.compute((n,), lambda i: total[i] / m.astype(\"float32\"), name=\"mean\")\nj = te.reduce_axis((0, m), \"j\")\nout = te.compute((n,), lambda i: te.max(mean[i] * X[i, j] - X[i, j] * X[i, j], axis=j), name=\"out\")\n# outputs: out",
+   "judged": [
+    false
+   ],
+   "judged_states": [
+    null
+   ],
+   "theory": [
+    "no single pass is known: out reads mean inside max_j (X[i, j]·mean[i] - X[i, j]^2), and no rule takes it out of the reduction"
+   ],
+   "seconds": 0.06626642303308472,
+   "fused": false,
+   "summary": "chain over j (total, out): not fused -- no single pass is known: out reads mean inside max_j (X[i, j]·mean[i] - X[i, j]^2), and no rule takes it out of the reduction",
+   "chains": [
+    {
+     "members": [
+      "total",
+      "mean",
+      "out"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "no single pass is known: out reads mean inside max_j (X[i, j]·mean[i] - X[i, j]^2), and no rule takes it out of the reduction",
+     "rejected": [],
+     "rejected_total": 0,
+     "selection": []
+    }
+   ],
+   "skipped": []
+  },
+  {
+   "key": "scale_of_unknown_sign",
+   "doc": "max_j (g x), g = sum G of either sign",
+   "max_states": null,
+   "source": "extra",
+   "before_te": "X = te.placeholder((n, m), name=\"X\")\nG = te.placeholder((n, m), name=\"G\")\nj = te.reduce_axis((0, m), \"j\")\ng = te.compute((n,), lambda i: te.sum(G[i, j], axis=j), name=\"g\")\nj = te.reduce_axis((0, m), \"j\")\nout = te.compute((n,), lambda i: te.max(g[i] * X[i, j], axis=j), name=\"out\")\n# outputs: out",
+   "judged": [
+    false
+   ],
+   "judged_states": [
+    null
+   ],
+   "theory": [
+    "no single pass is known: out reads g inside max_j X[i, j]·g[i], and no rule takes it out of the reduction"
+   ],
+   "seconds": 0.06539376504952088,
+   "fused": false,
+   "summary": "chain over j (g, out): not fused -- no single pass is known: out reads g inside max_j X[i, j]·g[i], and no rule takes it out of the reduction",
+   "chains": [
+    {
+     "members": [
+      "g",
+      "out"
+     ],
+     "fused": false,
+     "states": [],
+     "reason": "no single pass is known: out reads g inside max_j X[i, j]·g[i], and no rule takes it out of the reduction",
+     "rejected": [],
+     "rejected_total": 0,
+     "selection": []
+    }
+   ],
+   "skipped": []
+  }
+ ]
+}

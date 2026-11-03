@@ -1,0 +1,79 @@
+% Introduce the source program before the overview, without fixing a page boundary.
+\section{From Dependent Reductions to a Single Pass}
+\label{sec:example}
+
+\noindent\begin{minipage}{\linewidth}
+\begin{minipage}[t]{0.50\linewidth}
+\vspace{0pt}
+Variance illustrates how a dependent reduction becomes a single pass.
+\Cref{lst:variance-before} shows the source program for a row of length $N$.
+It first computes the total $t$ and derives the mean $\mu=t/N$, then accumulates the centred sum of squares $ss$; the variance is $ss/N$.
+The second traversal needs the final mean from the first, so ordinary loop fusion cannot remove the dependency.
+\end{minipage}\hfill
+\begin{paperdiagram}
+\begin{lstlisting}[style=pseudocode,caption={Two-pass source program.},label={lst:variance-before}]
+Input: $x_0,\ldots,x_{N-1}$, $N>0$
+$t\gets0$
+for $j=0,\ldots,N-1$:
+    $t\gets t+x_j$
+$\mu\gets t/N$
+$ss\gets0$
+for $j=0,\ldots,N-1$:
+    $ss\gets ss+(x_j-\mu)^2$
+return $\;ss/N$
+\end{lstlisting}
+\end{paperdiagram}
+\end{minipage}\par\medskip
+
+\input{figures/variance-overview}
+
+Evaluating this program independently on two partitions does not by itself solve the problem.
+Each partition uses its own mean, and simply adding the local centred results gives the wrong value in \cref{fig:variance}(a).
+The derivation therefore starts by identifying a sufficient summary.
+Separating the mean from the reduction body yields the reference states in panel (b): their coordinates combine independently and determine the final output, establishing a three-state bound.
+Executing this representation directly, however, reconstructs $ss$ by subtracting potentially large, nearly equal quantities.
+On the illustrated row shifted by $10^4$ in float32, it returns $\stale{\exTextbookFloat}$, while the two-pass source returns $\exTwoPassFloat$.
+To retain the centred computation, \sys keeps the source results $t$ and $ss$ and supplements them with $n$, the constant-body sum already present in the reference.
+To derive their correction, let $\mu$ be the mean of the union and $\delta_\pa=\mu-\mu_\pa$ its change on $\pa$.
+Expanding around the local mean gives
+\begin{equation}
+\label{eq:variance-rebase}
+\begin{aligned}
+\sum_{j\in\pa}(x_j-\mu)^2
+&=ss_\pa-2\delta_\pa\sum_{j\in\pa}(x_j-\mu_\pa)+\delta_\pa^2 n_\pa\\
+&=ss_\pa+\delta_\pa^2 n_\pa.
+\end{aligned}
+\end{equation}
+The linear term vanishes because deviations from a partition's own mean sum to zero.
+The remaining term depends on $n_\pa$, which supplies the correction weight missing from the original results.
+Applying the same argument to both partitions yields panel (c), while preserving $t$ as the stored total and computing the means from totals and counts.
+\sys verifies that this join maps the summaries of disjoint non-empty partitions to the summary of their union.
+It then checks the emitted program's accuracy against the source; the illustrated centred join returns $\exTwoPassFloat$ on the shifted row.
+
+\medskip
+\noindent\begin{minipage}{\linewidth}
+\begin{minipage}[t]{0.50\linewidth}
+\vspace{0pt}
+\Cref{lst:variance-after} shows the resulting single-pass program.
+Its maintained tuple is $(t,ss,n)$; subscripts identify the fields of the two input tuples.
+Each leaf is $(x_j,0,1)$, and the serial fold starts from the first leaf.
+Over the reals, the verified union property also permits independent partition computations followed by a divide-and-conquer join tree.
+This recovers the pairwise variance formula of \citet{chan} and, for a serial fold, Welford's update~\citep{welford}.
+The reference construction supplies the information requirement, while the retained source results guide the numerical formulation.
+\end{minipage}\hfill
+\begin{paperdiagram}
+\begin{lstlisting}[style=pseudocode,caption={Fused single-pass program.},label={lst:variance-after}]
+$\leaf(x)=(x,0,1)$
+function $\Mrg(\pa,\pb)$:
+    $t\gets t_\pa+t_\pb$; $n\gets n_\pa+n_\pb$
+    $\mu\gets t/n$; $ss\gets ss_\pa+ss_\pb$
+    for $p\in\{\pa,\pb\}$:
+        $ss\gets ss+n_p(\mu-t_p/n_p)^2$
+    return $\;(t,ss,n)$
+$(t,ss,n)\gets\leaf(x_0)$
+for $j=1,\ldots,N-1$:
+    $(t,ss,n)\gets\Mrg((t,ss,n),\leaf(x_j))$
+return $\;ss/n$
+\end{lstlisting}
+\end{paperdiagram}
+\end{minipage}\par

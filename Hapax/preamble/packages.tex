@@ -1,0 +1,40 @@
+% Packages. acmart already loads amsmath, amsthm, booktabs, natbib, hyperref,
+% xcolor, graphicx, caption and microtype: do not load them again.
+\usepackage{mathtools}
+\usepackage{stmaryrd}            % \llbracket \rrbracket
+\usepackage{xspace}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{subcaption}
+\usepackage{wrapfig}
+\usepackage{pifont}              % \ding{51} check, \ding{55} cross
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc,backgrounds,shapes.misc,decorations.pathreplacing,patterns}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage[ruled,linesnumbered,noend]{algorithm2e}
+\usepackage{cleveref}            % after hyperref (loaded by acmart)
+\crefname{section}{Section}{Sections}
+\Crefname{section}{Section}{Sections}
+\crefname{figure}{Fig.}{Figs.}
+\Crefname{figure}{Figure}{Figures}
+\crefname{table}{Table}{Tables}
+\crefname{algocf}{Algorithm}{Algorithms}
+\crefname{algorithm}{Algorithm}{Algorithms}
+\Crefname{algocf}{Algorithm}{Algorithms}
+\crefname{lstlisting}{Listing}{Listings}
+\crefname{listing}{Listing}{Listings}
+\Crefname{listing}{Listing}{Listings}
+\crefname{theorem}{Theorem}{Theorems}
+\crefname{lemma}{Lemma}{Lemmas}
+\crefname{proposition}{Proposition}{Propositions}
+\crefname{definition}{Definition}{Definitions}
+\crefname{example}{Example}{Examples}
+\crefname{corollary}{Corollary}{Corollaries}
+\crefname{equation}{Eq.}{Eqs.}
+\crefname{appendix}{Appendix}{Appendices}
+
+
+% Keep half-width diagrams/algorithms beside their explanatory prose without reordering the argument.
+\newenvironment{paperdiagram}{\begin{minipage}[t]{0.48\linewidth}\vspace{0pt}}{\end{minipage}}

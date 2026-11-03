@@ -1,0 +1,7 @@
+X = te.placeholder((n, m), name="X")
+j = te.reduce_axis((0, m), "j")
+mx = te.compute((n,), lambda i: te.max(X[i, j], axis=j), name="mx")
+e = te.compute((n, m), lambda i, j: tir.exp(X[i, j] - mx[i]), name="e")
+j = te.reduce_axis((0, m), "j")
+den = te.compute((n,), lambda i: te.sum(e[i, j], axis=j), name="den")
+P = te.compute((n, m), lambda i, j: e[i, j] / den[i], name="P")

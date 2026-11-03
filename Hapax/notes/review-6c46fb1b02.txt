@@ -1,0 +1,56 @@
+Method and manuscript audit, 2026-11-02
+
+Basis: Codex session 01a18b77-d0e0-7351-b926-1fe6480922a6 (recent discussion),
+root main commit 6c46fb1b025bd61316935f07529fac25365138dd, and the actual
+states.py, rebase.py, synthesis.py, fusion.py and STATE_SELECTION.md at that commit.
+The paper worktree was rebased onto that commit; compiler sources were not edited.
+
+Verified algorithm:
+1. Protect source reductions; repair only a demonstrated source-domain defect.
+2. Fix B from the repaired source tuple and required outputs.
+3. Try originals, then admissible complete rebase coefficient closure.
+4. Preferred features: rebase coefficients and independently rebasable additive
+   pieces, each with a defined B expression and retained structural expression.
+   No arbitrary extraction of inner extrema; no special count injection.
+5. Native cvc5 SyGuS searches preferred features, then preferred plus B. Each
+   coordinate uses at most three feature occurrences under addition/subtraction.
+   Nonlinear features count as single terminals. Width ordering is maximum first,
+   then smaller widths. The two-copy specification requires information recovery.
+6. Unknown semantic synthesis can fall back to native grammar enumeration.
+   Every accepted proposal still needs independent executable recovery, domains,
+   complete merge/leaf/output/printed-form verification. H is not jointly
+   synthesized with C. Failed proof advances synthesis; failed accuracy does not.
+
+Writing changes:
+Chapter 5 follows features -> synthesis -> constructive recovery -> merge proof
+-> numerical formulation. The elementary |A0|+|B| sufficiency proposition is in
+Appendix A, distinct from the reference bound and compact-search completeness.
+The variance diagram remains full width, with the graph left and derivation right;
+its arrows use subsection labels. Abstract and introduction foreground state
+synthesis. Related-work failure descriptions and evaluation routes reflect fresh
+measurements. Chinese body prose is synchronized, with protected content unchanged.
+
+Measurement correction:
+The previous stage-timing script called discover_chains directly and therefore
+missed index-view specialisation for Ledoit--Wolf and matrix covariance. The stage
+collector now mirrors fuse's preprocessing before measuring judgement/selection.
+Re-measured both affected rows: selection medians are 482.6 ms for Ledoit--Wolf
+and 65.9 ms for matrix covariance; all their chains now have successful proofs.
+
+Reviewer questions still worth addressing in future experiments:
+- Ablate rebase feature priority and the whole-closure fast path against a B-only
+  grammar. Current route counts show use, not causal benefit or optimality.
+- Vary grammar size and state limit; report search failures and proof cost.
+- Full recovery of B is deliberately stronger than output sufficiency; characterize
+  programs lost by that requirement or by the conservative abstraction.
+- Add merge-tree and partition-size accuracy measurements, and eventually GPU
+  scheduling/performance. Current evidence is sampled numerical acceptance, not
+  universal floating-point stability or a speedup claim.
+
+Final verification:
+350 tests passed, 2 skipped. All 17 showcase operators fuse and pass their
+default numerical gates: 8 original, 7 rebase-closure, 2 native-synthesis routes.
+All six data JSON files record clean compiler commit 6c46fb1b02 and cvc5 1.4.2.
+The English body fits 20 pages; Fig. 1 starts page 3. The English and Chinese
+PDFs pass protected-content, citation, embedded-font and overfull-box checks.
+GPU implementation/performance placeholders remain existing draft items.

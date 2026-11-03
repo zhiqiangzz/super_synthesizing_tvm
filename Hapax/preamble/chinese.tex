@@ -1,0 +1,10 @@
+% Chinese text only; keep acmart's geometry, Latin fonts, math and float styles.
+\usepackage{xeCJK}
+\setCJKmainfont{FandolSong-Regular.otf}[
+  BoldFont=FandolSong-Bold.otf,
+  ItalicFont=FandolKai-Regular.otf]
+\setCJKsansfont{FandolHei-Regular.otf}[BoldFont=FandolHei-Bold.otf]
+\setCJKmonofont{FandolFang-Regular.otf}
+
+% xspace knows Latin punctuation; teach it the corresponding Chinese marks.
+\xspaceaddexceptions{，。；：、！？）】》”’}

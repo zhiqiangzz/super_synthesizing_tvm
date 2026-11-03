@@ -1,0 +1,52 @@
+% Shared English vector figure; both prose editions include this source.
+% The introducing prose occupies the other half of the enclosing minipage.
+\begin{paperdiagram}
+\captionsetup{type=figure,skip=4pt}
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm,>={Stealth[length=1.2mm,width=0.9mm]},
+  label/.style={font=\footnotesize,align=center},
+  instance/.style={draw=origblue,rounded corners=2pt,fill=boxgray,
+    inner sep=2pt,minimum height=0.32cm,font=\footnotesize},
+  continuation/.style={font=\footnotesize,inner sep=1pt},
+  part/.style={draw=origblue,rounded corners=4pt},
+  joinop/.style={draw=fixgreen,rounded corners=2pt,fill=fixgreen!8,
+    inner xsep=6pt,inner ysep=3pt,font=\footnotesize\bfseries},
+  carry/.style={->,draw=rulegray},
+  dependency/.style={->,draw=staleorange,semithick},
+  combine/.style={->,draw=fixgreen,semithick}]
+
+\node[label] at (1.50,0) {Partition $T$};
+\node[label] at (4.90,0) {Partition $S$};
+\draw[part] (0,-0.22) rectangle (3.00,-2.10);
+\draw[part] (3.40,-0.22) rectangle (6.40,-2.10);
+
+% Symbolic endpoints stand for the first and last iterations of each part.
+\node[instance] (t1a) at (0.55,-0.55) {$I_1(a)$};
+\node[continuation] (t1dots) at (1.50,-0.55) {$\cdots$};
+\node[instance] (t1b) at (2.45,-0.55) {$I_1(b)$};
+\node[instance] (t2a) at (0.55,-1.50) {$I_2(a)$};
+\node[continuation] (t2dots) at (1.50,-1.50) {$\cdots$};
+\node[instance] (t2b) at (2.45,-1.50) {$I_2(b)$};
+\node[instance] (s1c) at (3.95,-0.55) {$I_1(c)$};
+\node[continuation] (s1dots) at (4.90,-0.55) {$\cdots$};
+\node[instance] (s1d) at (5.85,-0.55) {$I_1(d)$};
+\node[instance] (s2c) at (3.95,-1.50) {$I_2(c)$};
+\node[continuation] (s2dots) at (4.90,-1.50) {$\cdots$};
+\node[instance] (s2d) at (5.85,-1.50) {$I_2(d)$};
+\foreach \a/\dots/\b in {t1a/t1dots/t1b,t2a/t2dots/t2b,s1c/s1dots/s1d,s2c/s2dots/s2d} {
+  \draw[carry] (\a.east) -- (\dots.west);
+  \draw[carry] (\dots.east) -- (\b.west);
+}
+% Each part's completed first reduction supplies its second reduction.
+\foreach \a/\b in {t1b/t2a,t1b/t2b,s1d/s2c,s1d/s2d}
+  \draw[dependency] (\a.south) -- (\b.north);
+\node[label,text=auxpurple] at (1.50,-1.90) {Supplemental states};
+\node[label,text=auxpurple] at (4.90,-1.90) {Supplemental states};
+
+\node[joinop] (combined) at (3.20,-2.70) {Join};
+\draw[combine] (1.50,-2.10) -- (combined.north west);
+\draw[combine] (4.90,-2.10) -- (combined.north east);
+\end{tikzpicture}
+\caption{Partitioned computation.}
+\label{fig:dc-fusion}
+\end{paperdiagram}

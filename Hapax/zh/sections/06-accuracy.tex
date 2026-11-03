@@ -1,0 +1,81 @@
+\section{Keeping the Accuracy of the Original Program}
+\label{sec:accuracy}
+
+推导出的归约器现在具有经验证的合并操作和选定的数值形式。
+它在浮点数上执行，求值顺序和中间量与源程序不同~\citep{higham,goldberg}。
+为判断这一形式是否可接受，\sys 将生成表达式的静态检查与相对于原程序的差分测量结合起来。
+测量采用以下接受判据。
+
+\begin{definition}[Accuracy acceptance]
+\label{def:gate}
+对于结果 $\hat y$，以原程序在 float64 中的计算结果 $y$ 为参考，定义误差为 $\max|\hat y-y|/\max|y|$；若 $\hat y$ 的任一值非有限，则误差为 $\infty$。
+如果对一组输入中的每个输入，融合后的程序仅在原程序产生非有限值的地方产生非有限值，且误差不超过 $100\max(\mathit{err}_{\mathrm{orig}},\mathit{err}_{\mathrm{inh}})+64u$，就称其在这组输入上\emph{通过精度检查}。其中 $\mathit{err}_{\mathrm{inh}}$ 是通过输入扰动得到的经验敏感度估计，$u=2^{-23}$。
+\end{definition}
+
+这一界限相对于原程序，而不是精确答案：融合程序允许的精度损失，以原程序或问题条件性所导致的损失为基准，并允许一个常数因子。
+检查仅施加于采样输入，因此提供的是证据，而非保证。
+
+\subsection{Static Checks on the Emitted Join}
+\label{sec:hazards}
+\label{sec:static}
+
+单遍计算同时改变求值顺序和中间量。
+并行归约必然涉及运算重结合，而展开为原点矩可能引入相消，移除缩放则可能导致溢出。
+另一个风险是除以上下文：该上下文在完整输入上非零，却可能在某个真子分区上为零。
+这些风险促使我们在合并允许的情况下，保留源程序的中心化和缩放表示。
+
+\textbf{Proven guarantees.}
+随后，\sys 检查所推导合并的两个性质。
+只有原程序具有某个性质时，才要求候选也具有该性质。
+
+\begin{proposition}[Bounded exponents]
+\label{prop:exp}
+合并中每个 $\exp$ 的自变量都不超过 8：每个正项都被同一轴上减去的最大值，或运行中的最大值状态所抵消。
+\end{proposition}
+
+\begin{proposition}[Positive divisors]
+\label{prop:div}
+沿从第一个叶状态初始化的串行折叠，本条件所检查的每个实际执行的除数和对数自变量均为正。
+分析结合了符号格 $\{\text{any},\geq0,>0\}$ 上的最大不动点，以及分支条件下的 SMT 蕴含关系。
+\end{proposition}
+
+\textbf{Where the join departs from the program.}
+程序自身的计算并不总能保留。
+当证明某个源归约结果在合法分区上无定义时，\textsc{Select} 将导致问题的上下文移出归约，并将所得系数保留为状态，以修复该定义。
+% src: data/fused_ops.json actions; reducer/states.py and reducer/smt.py
+即使合并只对原程序状态进行上下文重基，它仍是一个更新公式；当数据偏移相对于其离散程度很大时，更新公式可能比两遍算法损失更多精度，差异可达到问题条件数的量级~\citep{chan}。
+这些情况下没有舍入误差证明，只能由下述验收检查决定是否接受。
+
+\subsection{Acceptance Measurements and Their Limits}
+上述证明并不判定舍入误差。
+因此，\sys 在接受融合之前，会将融合后的程序与原程序进行比较。
+系统从五类输入族采样：中心化输入、平移 $10^4$ 的输入、大离散度输入，以及接近溢出和下溢阈值的输入；以原程序的 float64 求值为参考，分别计算两个程序，并在每类输入上检查 \cref{def:gate}。
+补充材料的附录 E 详细说明了输入族和测量方法。
+
+
+\label{sec:accuracy-limits}
+
+\Cref{tab:assurance} 区分了 \sys 所证明的性质与仅在样本上检查的性质。
+验收检查是对五类输入族的差分测试，而非证明；没有采样到的输入不在其覆盖范围内，例如声明为正的定义域之外、恰好为零的权重。
+执行约定排除了空分区参与合并。
+并行实现必须用各自的第一个叶状态初始化每个活动分区，并跳过非活动分区，而不能注入数值单位元。
+这是对降层实现的要求，而非精度检查所建立的浮点性质。
+
+\begin{table}[t]
+\caption{What each step establishes. \tagP: proven; \tagS: checked on samples; ---: not established.}
+\label{tab:assurance}
+\footnotesize
+\begin{tabular}{@{}lp{0.62\linewidth}l@{}}
+\toprule
+\textbf{Step} & \textbf{Property} & \\
+\midrule
+Judgement (\cref{alg:judge}) & defined reference atoms give a single pass with at most $|\mathcal Q|$ states & \tagP\\
+Selection (\cref{alg:select}) & complete recovery and defined states on legal non-empty parts & \tagP\\
+Join & invariant and leaves (\cref{thm:correct,thm:printed}) & \tagP\\
+Join & bounded exponents, positive divisors on the serial fold (\cref{prop:exp,prop:div}) & \tagP\\
+Rebuilt program & agrees with the original in float64 on three small shapes & \tagS\\
+Rebuilt program & passes the accuracy check (\cref{def:gate}) on five input families & \tagS\\
+Rebuilt program & a bound on its floating-point error for every input & ---\\
+\bottomrule
+\end{tabular}
+\end{table}

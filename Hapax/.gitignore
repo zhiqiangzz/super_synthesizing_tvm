@@ -1,0 +1,12 @@
+# build products
+build/
+*.pdf
+# copyrighted material and extracts of it
+ref_papers/
+notes/evidence/
+# the repository ignores *.json; the paper's data and bibliography records are sources
+!data/*.json
+!data/archive-*/*.json
+!listings/MANIFEST.json
+!bib/lookup.json
+!zh/source-manifest.json

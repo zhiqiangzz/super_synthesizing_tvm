@@ -1,0 +1,17 @@
+% Shared vector source for the paper and standalone diagram.
+\begin{tikzpicture}[node distance=3mm,
+  process/.style={stage,text width=4.5cm,font=\sffamily\small,minimum height=7mm}]
+\node[process,draw=origblue] (judge) {TE chain: analyse existence\\Reference states; state bound};
+\node[process,below=of judge,draw=auxpurple] (candidate) {Discover and synthesise states\\Rebase features; native SyGuS};
+\node[process,below=of candidate] (recover) {Construct and verify recovery\\Identities and domain checks};
+\node[process,below=of recover] (merge) {Derive and verify join\\Emit leaf, join and epilogue};
+\node[process,below=of merge] (check) {Check numerical accuracy};
+\node[process,below=of check,draw=fixgreen] (output) {Accept single-pass TE rewrite};
+\foreach \a/\b in {judge/candidate,candidate/recover,recover/merge,merge/check,check/output}
+  \draw[flow] (\a) -- (\b);
+\draw[flow,draw=auxpurple] (merge.west) -- ++(-0.35,0) |- (candidate.west);
+\draw[flow,draw=auxpurple] (recover.west) -- ++(-0.35,0);
+\node[lbl,rotate=90,anchor=south] at ([xshift=-3.5mm]recover.north west) {retry};
+\draw[weak] (check.east) -- ++(0.35,0) |- ([yshift=-5mm]output.south);
+\node[lbl,anchor=north] at ([yshift=-5mm]output.south) {On failure: retain source chain};
+\end{tikzpicture}

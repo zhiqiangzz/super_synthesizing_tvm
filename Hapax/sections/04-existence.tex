@@ -1,0 +1,125 @@
+\section{A Sufficient Condition for a Single Pass}
+\label{sec:existence}
+
+A link reads its context at every position $j$, but the context's final value is known only at the end of the axis.
+A single pass exists when every link can be \emph{freed} of its contexts: rewritten as a function of the contexts and of reductions that read none.
+This section gives the rules that free a link, the algorithm that applies them, and what follows from them.
+
+\subsection{Freeing a Reduction from Its Contexts}
+\label{sec:freeing}
+
+Say that an operation $\varphi$ \emph{commutes} with a reduction $\oplus$ if $\varphi(a\oplus b)=\varphi(a)\oplus\varphi(b)$.
+\Cref{tab:rules} lists the operations \sys pulls out of a reduction; each is an identity over $\R$ under its side condition and where all expressions are defined.
+A sum distributes over addition and permits factors independent of $j$ to be extracted.
+A maximum permits extraction of an added term, a factor proven non-negative, or a non-decreasing function.
+An even power or an absolute value of a context-dependent term becomes the larger of two extremes.
+
+\begin{table}[t]
+\footnotesize
+\caption{Operations that commute with a reduction over $j$; $a$, $c$ and $y$ do not depend on $j$. Each rule is an identity under its side condition, which \sys proves syntactically before applying it.}
+\label{tab:rules}
+\begin{tabular}{@{}llp{0.42\linewidth}@{}}
+\toprule
+\textbf{Reduction} & \textbf{Rewrite} & \textbf{Side condition}\\
+\midrule
+$\sum_j$ & $\sum_j (u_j+v_j)=\sum_j u_j+\sum_j v_j$ & none\\
+$\sum_j$ & $\sum_j a\,u_j=a\sum_j u_j$, \ $\sum_j e^{u_j+y}=e^{y}\sum_j e^{u_j}$ & none\\
+$\max_j$ & $\max_j (u_j+a)=\max_j u_j+a$ & none\\
+$\max_j$ & $\max_j c\,u_j=c\max_j u_j$ & $c\ge 0$ proven\\
+$\max_j$ & $\max_j h(u_j)=h(\max_j u_j)$ & $h$ non-decreasing on the relevant domain\\
+$\max_j$ & $\max_j |u_j|^{2k}=\max(\max_j u_j,\ \max_j -u_j)^{2k}$ & integer $k\ge1$\\
+$\min_j$ & dual to $\max_j$ & dual\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The separation below splits the body into $r$ contributions.
+Each $g_k$ contains the data-dependent part, while $\varphi_{k,\ctx}$ carries its dependence on the context.
+The context is held fixed during regrouping; the resulting summaries can therefore be accumulated before its value is known.
+
+\begin{lemma}[Regrouping]
+\label{lem:regroup}
+Let $f(x,\ctx)=\bigoplus_{k=1}^{r}\varphi_{k,\ctx}(g_k(x))$, where no $g_k$ reads a context and every $\varphi_{k,\ctx}$ commutes with $\oplus$.
+Then for every non-empty part $S$, $\bigoplus_{j\in S} f(x_j,\ctx)=\bigoplus_{k=1}^{r}\varphi_{k,\ctx}\bigl(\bigoplus_{j\in S} g_k(x_j)\bigr)$.
+\end{lemma}
+
+\begin{proof}
+Reorder the reduction by the associativity and commutativity of $\oplus$, then pull each $\varphi_{k,\ctx}$ out.
+\end{proof}
+
+The resulting tuple can be computed without knowing the final contexts. Those contexts are used only when reconstructing the required members from the tuple.
+
+\subsection{The Judgement}
+\label{sec:judge}
+
+A reference atom is a context-free reduction $q(S)=\bigoplus_{j\in S}g(x_j)$, identified by its reduction operation and canonical body.
+Constant bodies are allowed: $|S|=\sum_{j\in S}1$ is the atom with addition and body $1$.
+Before collecting atoms, every read of the reduction-axis extent as a value is normalised to this sum under the partial semantics.
+Extracting a constant term from a sum can expose the same atom.
+Both occurrences enter the same collection and are shared by canonical equality; no atom is added unless a required expression uses it.
+
+\noindent\begin{minipage}{\linewidth}
+\begin{minipage}[t]{0.50\linewidth}
+\vspace{0pt}
+\Cref{alg:judge} visits every required member and its dependencies, processing each member once.
+It replaces each context by a symbol constant along the axis, rewrites the body with \cref{tab:rules}, and collects the remaining atoms in $\mathcal Q$.
+An atom that still reads a context is \emph{stuck}: the rules could not free it.
+Otherwise the collected atoms constitute the reference state tuple, with one state per distinct atom.
+\end{minipage}\hfill
+\begin{paperdiagram}
+\begin{minipage}{\linewidth}
+\begin{algorithm}[H]
+\small
+\caption{\textsc{Judge}$(\mathit{chain}, \mathit{req})$}
+\label{alg:judge}
+\KwOut{reference atoms $\mathcal Q$, or failure}
+Normalise extent reads in $\mathit{chain}$\;
+$W\leftarrow \mathit{req}$;\ $\mathcal Q\leftarrow\emptyset$\;
+\While{$W$ not empty}{
+  $m\leftarrow$ pop $W$\;
+  $e\leftarrow$ free contexts from body of $m$\;
+  push unvisited dependencies of $e$ onto $W$\;
+  \ForEach{atom $q$ in $e$}{
+    \lIf{$q$ reads a context}{\Return \textsc{Stuck}$(m,q)$}
+    $\mathcal Q\leftarrow\mathcal Q\cup\{q\}$ (canonical form)\;
+  }
+}
+\Return \textsc{Fusible}$(\mathcal Q)$\;
+\end{algorithm}
+\end{minipage}
+\end{paperdiagram}
+\end{minipage}\par\medskip
+
+The construction gives a finite summary whose components join independently and whose values determine the required outputs.
+Its size bounds the number of states in this construction; selection uses that bound as its default state limit.
+It also identifies the context-free quantities against which a selected representation can be verified.
+These roles are distinct: the existence of this construction does not establish that every representation preserving the original results fits the same limit.
+
+\begin{theorem}[Existence]
+\label{thm:existence}
+Suppose \textsc{Judge} returns \textsc{Fusible}$(\mathcal Q)$, with
+\[
+\mathcal Q=\{q_1,\dots,q_k\},\qquad
+q_i(S)=\bigoplus_{j\in S}^{(i)}g_i(x_j).
+\]
+If the collected bodies are defined on the declared element domain, the chain has a single-pass reducer with at most $|\mathcal Q|$ states.
+Its state tuple is $(q_1(S),\dots,q_k(S))$, its join is componentwise, and its epilogue reconstructs the required outputs on their source domain.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+Extent normalisation preserves partial semantics, and every algebraic rewrite is an identity over $\R$ on its source domain under its proven side condition.
+By \cref{lem:regroup} and induction over producer order, each required member has a reconstruction expression in the collected atoms wherever the source computation is defined.
+For every atom, $q_i(S\dunion T)=q_i(S)\oplus_i q_i(T)$.
+The tuple therefore joins componentwise and has leaf $(g_1(x_j),\dots,g_k(x_j))$.
+The domain assumption makes these states defined on legal non-empty partitions; applying the reconstruction expression at the root gives the required outputs.
+There is one coordinate per atom, establishing the bound.
+\end{proof}
+
+The judgement recognises chains whose contexts can be separated by these rules.
+When a residual reduction still depends on a context, the analysis stops without producing a construction.
+Further identities or stronger input relations may establish reducibility beyond this recognised class.
+
+The construction is an algebraic reference, not necessarily the numerical form we should execute.
+Separating contexts from reduction bodies changes the intermediate quantities: cancelling terms may become large independent sums, and bounded expressions may become products of unbounded factors.
+Keeping the source reduction results preserves their centring and scaling, while supplemental quantities provide the information needed for a join.
+The next step is therefore to derive a maintained representation and prove that it retains the required information of the construction.

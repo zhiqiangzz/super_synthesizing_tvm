@@ -1,0 +1,6 @@
+X = te.placeholder((n, m), name="X")
+j = te.reduce_axis((0, m), "j")
+total = te.compute((n,), lambda i: te.sum(X[i, j], axis=j), name="total")
+mean = te.compute((n,), lambda i: total[i] / m.astype("float32"), name="mean")
+j = te.reduce_axis((0, m), "j")
+dmax = te.compute((n,), lambda i: te.max(tir.abs(X[i, j] - mean[i]), axis=j), name="dmax")

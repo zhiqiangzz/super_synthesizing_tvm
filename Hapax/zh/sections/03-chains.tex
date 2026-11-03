@@ -1,0 +1,84 @@
+\section{Dependent Reduction Chains}
+\label{sec:chains}
+
+本节定义 \sys 所融合的程序，以及这些程序的单遍计算形式。
+\Cref{fig:grammar} 给出了归约体的语言。
+
+\begin{figure}[htbp]
+\small
+\begin{align*}
+f \;::=\;& x \mid \ctx \mid c \mid N
+ \mid f + f \mid f - f \mid f \times f \mid f \div f
+ \mid \exp f \mid \log f \mid \sqrt{f} \mid f^{k} \mid |f| \mid \max(f,f) \mid \min(f,f)\\
+m \;::=\;& \textstyle\bigoplus_{j} f \mid g(\ctx_1,\dots,\ctx_p)
+\end{align*}
+\caption{Reduction bodies $f$ and chain members $m$. $x$ ranges over the values a chain reads at position $j$ of the axis, $\ctx$ over earlier members, $c\in\R$ over constants, $k\in\mathbb{Z}$, $N$ is the extent of the axis, and $\oplus\in\{\Sigma,\max,\min\}$.}
+\label{fig:grammar}
+\end{figure}
+
+\begin{definition}[Reduction chain]
+\label{def:chain}
+固定一个轴 $\Ax=\{0,\dots,N-1\}$；对每个位置 $j\in\Ax$，以元组 $x_j$ 表示归约链在位置 $j$ 从链外张量读取的值。
+\emph{归约链}是按生产者先于使用者的顺序排列的成员序列 $m_1,\dots,m_n$。
+成员可以是\emph{归约环节} $m=\bigoplus_{j\in\Ax} f_m(x_j,\ctx_m)$，其中 $\oplus\in\{\Sigma,\max,\min\}$；也可以是一个\emph{值} $m=g_m(\ctx_m)$。
+\emph{上下文} $\ctx_m$ 是 $m$ 使用不含 $j$ 的索引读取的较早成员，即这些成员的最终值。
+只要某个归约环节读取了上下文，就称该链\emph{具有依赖关系}。
+\end{definition}
+
+在贯穿全文的方差示例中，最终求和读取均值作为上下文。
+\sys 从 TE 程序中提取归约链：TE 归约成为归约环节，链沿 $j$ 读取的逐元素张量则内联到归约体中。
+其他轴上的归约，例如注意力中的 $QK^\top$，保留在链外并提供 $x_j$ 中的值。
+
+为了讨论轴的一部分，我们只在该部分上对归约链求值。
+
+\begin{definition}[Partial semantics]
+\label{def:partial}
+对于非空的 $S\subseteq\Ax$，当每个归约环节仅在 $S$ 上归约、每个上下文取其自身在 $S$ 上的值、作为数值读取的轴长度 $N$ 取 $|S|$ 时，成员 $m$ 的值记为 $m(S)$。
+原程序计算的是 $m(\Ax)$。
+\end{definition}
+
+声明的输入域约束元素值。
+合法分区是满足这些约束的输入的任意非空部分。
+即使完整输入的输出有定义，某个原始成员仍可能在这样的分区上无定义；维护状态则必须在每个合法分区上都有定义。
+单遍算法必须从逐个分区收集的信息中，在源输出有定义的地方得到 $m(\Ax)$。
+
+\begin{definition}[Single-pass reducer]
+\label{def:reducer}
+非空分区上的函数元组 $\st=(\st_1,\dots,\st_k)$ 称为\emph{状态映射}。
+归约链的\emph{单遍归约器}是由叶状态 $\leaf(x_j)=\st(\{j\})$、二元操作 $\Mrg$ 和收尾计算 $\epi$ 构成的元组 $(\leaf,\Mrg,\epi)$，对任意不相交的非空分区 $\pa$ 和 $\pb$，满足
+\begin{equation}
+\label{eq:invariant}
+\Mrg(\st(\pa),\st(\pb))=\st(\pa\dunion\pb),\qquad
+\epi(\st(\Ax))=\bigl(m(\Ax)\bigr)_{m\text{ required}}.
+\end{equation}
+\emph{所需}成员是程序其余部分读取的成员。
+\end{definition}
+
+生成的归约从第一个叶状态开始，随后折叠其余叶状态。
+没有数值状态代表空分区：执行时跳过空分区，且输入轴必须非空。
+\cref{eq:invariant} 中的合并不变量将所选摘要与原程序联系起来。
+
+\begin{lemma}[Laws from the invariant]
+\label{lem:laws}
+如果不变量成立，则在两两不相交的非空分区状态上，$\Mrg$ 满足交换律和结合律。
+对 $\Ax$ 的任意非空分区划分，以及这些分区上的任意二叉合并树，合并叶状态均得到 $\st(\Ax)$。
+从第一个叶状态初始化的串行折叠也具有相同性质。
+\end{lemma}
+
+\begin{proof}
+$\Mrg(\st(\pa),\st(\pb))=\st(\pa\dunion\pb)=\st(\pb\dunion\pa)=\Mrg(\st(\pb),\st(\pa))$，结合律同样由 $\dunion$ 的结合律推出。
+其余结论分别通过对合并树和折叠长度的归纳得到。
+\end{proof}
+
+因此，每个非空分区可以独立计算自己的状态元组。
+合并树组合这些元组，无需再次遍历各个分区。
+这一并行结构来自不变量，而不依赖某个特定调度。
+
+用程序演算的术语来说，$S\mapsto\st(S)$ 是从以 $\dunion$ 为运算的有限非空多重集到以 $\Mrg$ 为运算的状态的同态，即合并与顺序无关的列表同态~\citep{bird87,gibbons96}。
+用数据库的术语来说，该链是一个\emph{代数型}聚合，可由固定数量的\emph{分配型}聚合计算得到~\citep{datacube}。
+空分区由控制流处理，不属于代数合并的约定范围。
+
+\paragraph{Problem.}
+给定一个依赖归约链，建立单遍归约器的充分条件，构造归约器，证明 \cref{eq:invariant}，并且仅当浮点计算在检查的输入上不引入额外的非有限结果、测得误差相对于原程序保持在规定界限内时接受融合。
+
+\input{zh/sections/03-pipeline}

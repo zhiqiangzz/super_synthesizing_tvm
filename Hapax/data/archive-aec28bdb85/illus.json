@@ -1,0 +1,140 @@
+{
+ "redfuser_a1_incremental": [
+  {
+   "L": 1,
+   "s": 1.0,
+   "y": 1.0,
+   "truth": 1.0,
+   "inverse_missing": true
+  },
+  {
+   "L": 2,
+   "s": 0.0,
+   "y": 0.0,
+   "truth": 0.0,
+   "inverse_missing": false
+  },
+  {
+   "L": 3,
+   "s": 3.0,
+   "y": 3.0,
+   "truth": 9.0,
+   "inverse_missing": true
+  },
+  {
+   "L": 4,
+   "s": 3.0,
+   "y": 3.0,
+   "truth": 9.0,
+   "inverse_missing": false
+  }
+ ],
+ "meta": {
+  "commit": "aec28bdb8537ec6ba371f66beae256bbe01061c8",
+  "commit_date": "2026-10-28T02:29:53-07:00",
+  "dirty": false,
+  "generated": "2026-10-29T06:08:22+00:00",
+  "script": "illus.py",
+  "python": "3.12.14",
+  "numpy": "2.2.6",
+  "sympy": "1.14.0",
+  "machine": "x86_64",
+  "cpu": "Intel(R) Xeon(R) Platinum 8468H"
+ },
+ "variance_exact": {
+  "x": [
+   1,
+   3,
+   2,
+   6
+  ],
+  "mean": 3.0,
+  "two_pass": 14.0,
+  "part_a": {
+   "mean": 2.0,
+   "ss": 2.0,
+   "count": 2.0
+  },
+  "part_b": {
+   "mean": 4.0,
+   "ss": 8.0,
+   "count": 2.0
+  },
+  "naive": 10.0,
+  "merged": {
+   "mean": 3.0,
+   "ss": 14.0,
+   "count": 4.0
+  }
+ },
+ "variance_float32": {
+  "x": [
+   10001.0,
+   10003.0,
+   10002.0,
+   10006.0
+  ],
+  "two_pass_ss": 14.0,
+  "merged_ss": 14.0,
+  "merged_mean": 10003.0,
+  "power_sums": {
+   "sum": 40012.0,
+   "sum_sq": 400240032.0
+  },
+  "textbook_ss": 0.0,
+  "exact_ss": 14.0
+ },
+ "softmax_merge": {
+  "part_a": {
+   "mx": 3.0,
+   "den": 1.1353352832366128
+  },
+  "part_b": {
+   "mx": 6.0,
+   "den": 1.0183156388887342
+  },
+  "merged": {
+   "mx": 6.0,
+   "den": 1.0748406542556836
+  },
+  "two_pass": {
+   "mx": 6.0,
+   "den": 1.0748406542556836
+  }
+ },
+ "softmax_tuples_float32": {
+  "x": [
+   100.0,
+   200.0
+  ],
+  "judged_sum_exp": Infinity,
+  "program_mx": 200.0,
+  "program_den": 1.0,
+  "p_last_judged": NaN,
+  "p_last_program": 1.0
+ },
+ "redfuser_a1": {
+  "u": [
+   1,
+   -1,
+   3,
+   0
+  ],
+  "v": [
+   1,
+   1,
+   1,
+   0
+  ],
+  "s": 3.0,
+  "truth": 9.0,
+  "partials": {
+   "s_a": 0.0,
+   "s_b": 3.0,
+   "y_a": 0.0,
+   "y_b": 3.0
+  },
+  "eq11_float32": NaN,
+  "a1_repaired": 3.0
+ }
+}

@@ -1,0 +1,1539 @@
+{
+ "meta": {
+  "commit": "59c152dd770003bbe74c50aee9fa317396f412b5",
+  "commit_date": "2026-10-30T01:11:20-07:00",
+  "dirty": false,
+  "generated": "2026-10-30T08:38:49+00:00",
+  "script": "proofs_and_timing.py",
+  "python": "3.12.14",
+  "numpy": "2.2.6",
+  "sympy": "1.14.0",
+  "machine": "x86_64",
+  "cpu": "Intel(R) Xeon(R) Platinum 8468H",
+  "repeats": 5
+ },
+ "rows": [
+  {
+   "name": "softmax",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "den"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.0013143380056135356,
+    "min": 0.0011918459931621328,
+    "max": 0.001375256004394032
+   },
+   "t_select": {
+    "median": 0.00977294500626158,
+    "min": 0.009570410009473562,
+    "max": 0.01066076300048735
+   },
+   "t_fuse": {
+    "median": 0.12971481200656854,
+    "min": 0.12743901400244795,
+    "max": 0.1361357090063393
+   }
+  },
+  {
+   "name": "log_softmax",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "den"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.0012707330024568364,
+    "min": 0.0011978109978372231,
+    "max": 0.0013147739955456927
+   },
+   "t_select": {
+    "median": 0.010676402991521172,
+    "min": 0.009943083990947343,
+    "max": 0.010868312994716689
+   },
+   "t_fuse": {
+    "median": 0.126063832998625,
+    "min": 0.12354462999792304,
+    "max": 0.1282594709919067
+   }
+  },
+  {
+   "name": "logsumexp",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "den"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.001255002003745176,
+    "min": 0.001224332008860074,
+    "max": 0.0013326930056791753
+   },
+   "t_select": {
+    "median": 0.010146978995180689,
+    "min": 0.009910477005178109,
+    "max": 0.010539251001318917
+   },
+   "t_fuse": {
+    "median": 0.1210595629963791,
+    "min": 0.11805360899597872,
+    "max": 0.12294655200093985
+   }
+  },
+  {
+   "name": "cross_entropy",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "den",
+      "t"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.001967411008081399,
+    "min": 0.0018770139868138358,
+    "max": 0.0020544659928418696
+   },
+   "t_select": {
+    "median": 0.011825460998807102,
+    "min": 0.011761877001845278,
+    "max": 0.011983399992459454
+   },
+   "t_fuse": {
+    "median": 0.2307525270007318,
+    "min": 0.23011814699566457,
+    "max": 0.23292551300255582
+   }
+  },
+  {
+   "name": "soft_cross_entropy",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "den",
+      "loss"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.002927458001067862,
+    "min": 0.0028777400002582,
+    "max": 0.0030873530049575493
+   },
+   "t_select": {
+    "median": 0.033542885998031124,
+    "min": 0.03340850200038403,
+    "max": 0.03366047800227534
+   },
+   "t_fuse": {
+    "median": 0.17772562100435607,
+    "min": 0.17510347500501666,
+    "max": 0.20101353200152516
+   }
+  },
+  {
+   "name": "label_smoothing",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "den",
+      "loss"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.005029891995945945,
+    "min": 0.00482489398564212,
+    "max": 0.00623477999761235
+   },
+   "t_select": {
+    "median": 0.10371731399209239,
+    "min": 0.10059575299965218,
+    "max": 0.1080502400000114
+   },
+   "t_fuse": {
+    "median": 0.2553195929940557,
+    "min": 0.2525577039923519,
+    "max": 0.2579168060037773
+   }
+  },
+  {
+   "name": "softmax_entropy",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "den",
+      "H"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.004777409994858317,
+    "min": 0.004771596999489702,
+    "max": 0.004912340998998843
+   },
+   "t_select": {
+    "median": 0.056183149994467385,
+    "min": 0.055436109003494494,
+    "max": 0.05633979900449049
+   },
+   "t_fuse": {
+    "median": 0.19922521700209472,
+    "min": 0.19849779400101397,
+    "max": 0.20529793099558447
+   }
+  },
+  {
+   "name": "attention",
+   "chains": [
+    {
+     "members": [
+      "row_max",
+      "den",
+      "O"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.005137203988851979,
+    "min": 0.004997515003196895,
+    "max": 0.005196361991693266
+   },
+   "t_select": {
+    "median": 0.028934185989783145,
+    "min": 0.028478299995185807,
+    "max": 0.13879066800291184
+   },
+   "t_fuse": {
+    "median": 0.8620403849927243,
+    "min": 0.8529971969983308,
+    "max": 0.8702896670001792
+   }
+  },
+  {
+   "name": "attention_bias",
+   "chains": [
+    {
+     "members": [
+      "row_max",
+      "den",
+      "O"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.005755291989771649,
+    "min": 0.005742293986259028,
+    "max": 0.005872663008631207
+   },
+   "t_select": {
+    "median": 0.029277021007146686,
+    "min": 0.02915139400283806,
+    "max": 0.030309284004033543
+   },
+   "t_fuse": {
+    "median": 0.8983851469965884,
+    "min": 0.8888022199971601,
+    "max": 0.9164760610001395
+   }
+  },
+  {
+   "name": "variance",
+   "chains": [
+    {
+     "members": [
+      "total_mean",
+      "ss"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.0019228059973102063,
+    "min": 0.0018958560103783384,
+    "max": 0.002045020999503322
+   },
+   "t_select": {
+    "median": 0.02192943599948194,
+    "min": 0.02179673498903867,
+    "max": 0.022230033995583653
+   },
+   "t_fuse": {
+    "median": 0.12939472901052795,
+    "min": 0.12698837400239427,
+    "max": 0.1395420230110176
+   }
+  },
+  {
+   "name": "layernorm",
+   "chains": [
+    {
+     "members": [
+      "total_mean",
+      "ss"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.0019696870003826916,
+    "min": 0.0019441670010564849,
+    "max": 0.00204768699768465
+   },
+   "t_select": {
+    "median": 0.02195393199508544,
+    "min": 0.021932867006398737,
+    "max": 0.02444540300348308
+   },
+   "t_fuse": {
+    "median": 0.14797407400328666,
+    "min": 0.14387005899334326,
+    "max": 0.1486413770035142
+   }
+  },
+  {
+   "name": "covariance",
+   "chains": [
+    {
+     "members": [
+      "total_mean_x",
+      "total_mean_y",
+      "co"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.0028594030009116977,
+    "min": 0.002778566995402798,
+    "max": 0.0028781040018657222
+   },
+   "t_select": {
+    "median": 0.034978607000084594,
+    "min": 0.03428818899556063,
+    "max": 0.0375968139996985
+   },
+   "t_fuse": {
+    "median": 0.17510900399065576,
+    "min": 0.17012535899993964,
+    "max": 0.18147995798790362
+   }
+  },
+  {
+   "name": "moment3",
+   "chains": [
+    {
+     "members": [
+      "total_mean",
+      "s3"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.002924703003372997,
+    "min": 0.0027377539954613894,
+    "max": 0.0033896579989232123
+   },
+   "t_select": {
+    "median": 0.07510523300152272,
+    "min": 0.073664165000082,
+    "max": 0.07805765299417544
+   },
+   "t_fuse": {
+    "median": 0.21161179400223773,
+    "min": 0.21042710200708825,
+    "max": 0.35551516599662136
+   }
+  },
+  {
+   "name": "moment4",
+   "chains": [
+    {
+     "members": [
+      "total_mean",
+      "s4"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.003692401005537249,
+    "min": 0.0036415079957805574,
+    "max": 0.003737979001016356
+   },
+   "t_select": {
+    "median": 0.1732887839898467,
+    "min": 0.17268862399214413,
+    "max": 0.17664395600149874
+   },
+   "t_fuse": {
+    "median": 0.3584453340008622,
+    "min": 0.3492613989947131,
+    "max": 0.36272349298815243
+   }
+  },
+  {
+   "name": "moment5",
+   "chains": [
+    {
+     "members": [
+      "total_mean",
+      "s5"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.004737672003102489,
+    "min": 0.004726097991806455,
+    "max": 0.005255296011455357
+   },
+   "t_select": {
+    "median": 0.37220342599903233,
+    "min": 0.35614517600333784,
+    "max": 0.515991189997294
+   },
+   "t_fuse": {
+    "median": 0.610726072001853,
+    "min": 0.5999991810094798,
+    "max": 0.6592958960100077
+   }
+  },
+  {
+   "name": "layernorm_backward",
+   "chains": [
+    {
+     "members": [
+      "sg",
+      "total",
+      "ss",
+      "sgx"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.004452405002666637,
+    "min": 0.004415246003190987,
+    "max": 0.00454930099658668
+   },
+   "t_select": {
+    "median": 0.06807912100339308,
+    "min": 0.06801880600687582,
+    "max": 0.07010740799887571
+   },
+   "t_fuse": {
+    "median": 0.3142624159954721,
+    "min": 0.30823297299502883,
+    "max": 0.3284739509981591
+   }
+  },
+  {
+   "name": "zscore_max",
+   "chains": [
+    {
+     "members": [
+      "total",
+      "ss",
+      "zmax"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.004438554009539075,
+    "min": 0.0043278039956931025,
+    "max": 0.004989037988707423
+   },
+   "t_select": {
+    "median": 0.0494629780005198,
+    "min": 0.04835436500434298,
+    "max": 0.21613725999486633
+   },
+   "t_fuse": {
+    "median": 0.17934599600266665,
+    "min": 0.17761030500696506,
+    "max": 0.18502095999429002
+   }
+  },
+  {
+   "name": "max_abs_deviation",
+   "chains": [
+    {
+     "members": [
+      "total",
+      "dmax"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.0025622009998187423,
+    "min": 0.002475595989380963,
+    "max": 0.002714246991672553
+   },
+   "t_select": {
+    "median": 0.03231678500014823,
+    "min": 0.031608089004294015,
+    "max": 0.03327355899091344
+   },
+   "t_fuse": {
+    "median": 0.1470776839996688,
+    "min": 0.14159101399127394,
+    "max": 0.15252447201055475
+   }
+  },
+  {
+   "name": "peak_power",
+   "chains": [
+    {
+     "members": [
+      "total",
+      "peak"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.003416192004806362,
+    "min": 0.0033917929977178574,
+    "max": 0.0035630990023491904
+   },
+   "t_select": {
+    "median": 0.03206703999603633,
+    "min": 0.03174422000302002,
+    "max": 0.03406924499722663
+   },
+   "t_fuse": {
+    "median": 0.14288855899940245,
+    "min": 0.1421395979996305,
+    "max": 0.1495240969961742
+   }
+  },
+  {
+   "name": "papr",
+   "chains": [
+    {
+     "members": [
+      "total",
+      "peak",
+      "ss"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.004911632000585087,
+    "min": 0.004788089994690381,
+    "max": 0.004936497003654949
+   },
+   "t_select": {
+    "median": 0.0532388300052844,
+    "min": 0.05232401400280651,
+    "max": 0.054584382989560254
+   },
+   "t_fuse": {
+    "median": 0.19935995400010142,
+    "min": 0.1988970509992214,
+    "max": 0.20174179000605363
+   }
+  },
+  {
+   "name": "peak_to_geomean",
+   "chains": [
+    {
+     "members": [
+      "total",
+      "ratio"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.0017068769957404584,
+    "min": 0.0016174790071090683,
+    "max": 0.001826587991672568
+   },
+   "t_select": {
+    "median": 0.01895226800115779,
+    "min": 0.018523147009545937,
+    "max": 0.019182882009772584
+   },
+   "t_fuse": {
+    "median": 0.1247578379989136,
+    "min": 0.123473213010584,
+    "max": 0.1256222039955901
+   }
+  },
+  {
+   "name": "monotone_sum",
+   "chains": [
+    {
+     "members": [
+      "total",
+      "top"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.006002325986628421,
+    "min": 0.005887479012017138,
+    "max": 0.006167244995594956
+   },
+   "t_select": {
+    "median": 0.027136667995364405,
+    "min": 0.02629665200947784,
+    "max": 0.027593388003879227
+   },
+   "t_fuse": {
+    "median": 0.13237145100720227,
+    "min": 0.13202499000180978,
+    "max": 0.1353672010009177
+   }
+  },
+  {
+   "name": "projection",
+   "chains": [
+    {
+     "members": [
+      "r",
+      "rem"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": false,
+      "slots": []
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.00216058999649249,
+    "min": 0.002154103000066243,
+    "max": 0.0022380979935405776
+   },
+   "t_select": {
+    "median": 0.024408668003161438,
+    "min": 0.024356217007152736,
+    "max": 0.02454113400017377
+   },
+   "t_fuse": {
+    "median": 0.15274966599827167,
+    "min": 0.14897284700418822,
+    "max": 0.15439360600430518
+   }
+  },
+  {
+   "name": "householder",
+   "chains": [
+    {
+     "members": [
+      "ssq",
+      "vv"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.00214987900108099,
+    "min": 0.0021161790064070374,
+    "max": 0.0023511230101576075
+   },
+   "t_select": {
+    "median": 0.018962326998007484,
+    "min": 0.018809278000844643,
+    "max": 0.02051479701185599
+   },
+   "t_fuse": {
+    "median": 0.148648893009522,
+    "min": 0.14191894799296279,
+    "max": 0.15007850299298298
+   }
+  },
+  {
+   "name": "cosine",
+   "chains": [
+    {
+     "members": [
+      "sxx",
+      "syy",
+      "cos"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.0021696320036426187,
+    "min": 0.0018712360033532605,
+    "max": 0.0024149079981725663
+   },
+   "t_select": {
+    "median": 0.008457534990157,
+    "min": 0.008319874003063887,
+    "max": 0.009276887998566963
+   },
+   "t_fuse": {
+    "median": 0.13866875400708523,
+    "min": 0.13705807899532374,
+    "max": 0.13978692000091542
+   }
+  },
+  {
+   "name": "sinkhorn_half",
+   "chains": [
+    {
+     "members": [
+      "S_max",
+      "S_sumexp"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.003861207005684264,
+    "min": 0.0037692540063289925,
+    "max": 0.003917565001756884
+   },
+   "t_select": {
+    "median": 0.01651427600882016,
+    "min": 0.016406770999310538,
+    "max": 0.016628256998956203
+   },
+   "t_fuse": {
+    "median": 0.2413375019968953,
+    "min": 0.23527403399930336,
+    "max": 0.24783433398988564
+   }
+  },
+  {
+   "name": "sinkhorn_iteration",
+   "chains": [
+    {
+     "members": [
+      "S_max",
+      "S_sumexp"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical"
+      ]
+     }
+    },
+    {
+     "members": [
+      "S2_max",
+      "S2_sumexp"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.007633986999280751,
+    "min": 0.00746785500086844,
+    "max": 0.008140776000800543
+   },
+   "t_select": {
+    "median": 0.033156101999338716,
+    "min": 0.033016526998835616,
+    "max": 0.03327386500313878
+   },
+   "t_fuse": {
+    "median": 4.24708147700585,
+    "min": 4.186853096995037,
+    "max": 4.267824654001743
+   }
+  },
+  {
+   "name": "sinkhorn_square",
+   "chains": [
+    {
+     "members": [
+      "S_max",
+      "S_sumexp"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical"
+      ]
+     }
+    },
+    {
+     "members": [
+      "S2_max",
+      "S2_sumexp"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.008151054003974423,
+    "min": 0.008096230012597516,
+    "max": 0.008247122998000123
+   },
+   "t_select": {
+    "median": 0.03505871100060176,
+    "min": 0.03316039500350598,
+    "max": 0.03633149300003424
+   },
+   "t_fuse": {
+    "median": 4.186477063005441,
+    "min": 4.17392055199889,
+    "max": 4.216202997005894
+   }
+  },
+  {
+   "name": "weighted_variance",
+   "chains": [
+    {
+     "members": [
+      "swx",
+      "sw",
+      "ss"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.0028494089929154143,
+    "min": 0.0027627309900708497,
+    "max": 0.0029448709974531084
+   },
+   "t_select": {
+    "median": 0.022987809003097937,
+    "min": 0.022681180998915806,
+    "max": 0.025805286000831984
+   },
+   "t_fuse": {
+    "median": 0.16328708198852837,
+    "min": 0.16102911600319203,
+    "max": 0.4048733029922005
+   }
+  },
+  {
+   "name": "skewness",
+   "chains": [
+    {
+     "members": [
+      "total_mean",
+      "ss",
+      "s3"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.005794080003397539,
+    "min": 0.00575090799247846,
+    "max": 0.005958462992566638
+   },
+   "t_select": {
+    "median": 0.09444658400025219,
+    "min": 0.09375228399585467,
+    "max": 0.09789310699852649
+   },
+   "t_fuse": {
+    "median": 0.2573981789901154,
+    "min": 0.2537804120074725,
+    "max": 0.2657361320016207
+   }
+  },
+  {
+   "name": "kurtosis",
+   "chains": [
+    {
+     "members": [
+      "total_mean",
+      "ss",
+      "s4"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.006710191999445669,
+    "min": 0.006644673994742334,
+    "max": 0.006876134997582994
+   },
+   "t_select": {
+    "median": 0.263859863000107,
+    "min": 0.2607780390098924,
+    "max": 0.2932544439972844
+   },
+   "t_fuse": {
+    "median": 0.49233261999324895,
+    "min": 0.4863065719982842,
+    "max": 0.5152838460053317
+   }
+  },
+  {
+   "name": "pearson",
+   "chains": [
+    {
+     "members": [
+      "total_mean_x",
+      "total_mean_y",
+      "sxy",
+      "sxx",
+      "syy"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.005523555999388918,
+    "min": 0.005481330998009071,
+    "max": 0.005709321994800121
+   },
+   "t_select": {
+    "median": 0.07457245199475437,
+    "min": 0.0727763229951961,
+    "max": 0.07623890000104439
+   },
+   "t_fuse": {
+    "median": 0.2666859439923428,
+    "min": 0.2665460930002155,
+    "max": 0.5219173879886512
+   }
+  },
+  {
+   "name": "exp_centered",
+   "chains": [
+    {
+     "members": [
+      "total_mean",
+      "zc"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.0016648949967930093,
+    "min": 0.0015520380111411214,
+    "max": 0.0018641389906406403
+   },
+   "t_select": {
+    "median": 0.019445218989858404,
+    "min": 0.018204082996817306,
+    "max": 0.01991650699346792
+   },
+   "t_fuse": {
+    "median": 0.11985352000920102,
+    "min": 0.1173134599957848,
+    "max": 0.1228633680002531
+   }
+  },
+  {
+   "name": "instance_norm",
+   "chains": [
+    {
+     "members": [
+      "total",
+      "ss"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.0023382939980365336,
+    "min": 0.002328149013919756,
+    "max": 0.0023649620125070214
+   },
+   "t_select": {
+    "median": 0.02412815899879206,
+    "min": 0.023058281003613956,
+    "max": 0.025801177995163016
+   },
+   "t_fuse": {
+    "median": 0.1764468650071649,
+    "min": 0.17464712099172175,
+    "max": 0.17889194199233316
+   }
+  },
+  {
+   "name": "minmax_mean",
+   "chains": [
+    {
+     "members": [
+      "lo",
+      "hi",
+      "scaled"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.002384601000812836,
+    "min": 0.002356648998102173,
+    "max": 0.0024894300004234537
+   },
+   "t_select": {
+    "median": 0.031260507996194065,
+    "min": 0.029916825995314866,
+    "max": 0.031728029003716074
+   },
+   "t_fuse": {
+    "median": 0.16485325299436226,
+    "min": 0.16006403299979866,
+    "max": 0.1673006800119765
+   }
+  },
+  {
+   "name": "collision",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "den",
+      "coll"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.003126786003122106,
+    "min": 0.0030384600104298443,
+    "max": 0.003194275006535463
+   },
+   "t_select": {
+    "median": 0.025193706998834386,
+    "min": 0.025142579004750587,
+    "max": 0.026400602990179323
+   },
+   "t_fuse": {
+    "median": 0.1525850839971099,
+    "min": 0.15024661499774083,
+    "max": 0.15748265500587877
+   }
+  },
+  {
+   "name": "ess",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "sw",
+      "sw2"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.0030195450090104714,
+    "min": 0.0026277849974576384,
+    "max": 0.003189837996615097
+   },
+   "t_select": {
+    "median": 0.02193198299210053,
+    "min": 0.021280971996020526,
+    "max": 0.02298047099611722
+   },
+   "t_fuse": {
+    "median": 0.14329479400475975,
+    "min": 0.14194106600189116,
+    "max": 0.14424309199966956
+   }
+  },
+  {
+   "name": "softmax_jvp",
+   "chains": [
+    {
+     "members": [
+      "mx",
+      "den",
+      "gp"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.002712639994570054,
+    "min": 0.002688801003387198,
+    "max": 0.0028231239994056523
+   },
+   "t_select": {
+    "median": 0.02320988599967677,
+    "min": 0.022490553004899994,
+    "max": 0.023266071002581157
+   },
+   "t_fuse": {
+    "median": 0.1984424630063586,
+    "min": 0.1937933949957369,
+    "max": 0.19998047599801794
+   }
+  },
+  {
+   "name": "contrastive",
+   "chains": [
+    {
+     "members": [
+      "mx_row",
+      "den_row"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical"
+      ]
+     }
+    },
+    {
+     "members": [
+      "mx_col",
+      "den_col"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.002411633002338931,
+    "min": 0.00224783799785655,
+    "max": 0.0025179219956044108
+   },
+   "t_select": {
+    "median": 0.021037036989582703,
+    "min": 0.020721351000247523,
+    "max": 0.02290855698811356
+   },
+   "t_fuse": {
+    "median": 0.28792647599766497,
+    "min": 0.28641303098993376,
+    "max": 0.3015174940082943
+   }
+  },
+  {
+   "name": "heat_capacity",
+   "chains": [
+    {
+     "members": [
+      "lo",
+      "e1s",
+      "Z",
+      "cs"
+     ],
+     "selected": true,
+     "invariant_proof": "canonical",
+     "printed": {
+      "printed": true,
+      "slots": [
+       "canonical",
+       "canonical",
+       "canonical",
+       "canonical"
+      ]
+     }
+    }
+   ],
+   "t_judge": {
+    "median": 0.006840382993686944,
+    "min": 0.006462443998316303,
+    "max": 0.007006893996731378
+   },
+   "t_select": {
+    "median": 0.07428891200106591,
+    "min": 0.07227210399287287,
+    "max": 0.07641789800254628
+   },
+   "t_fuse": {
+    "median": 0.2533143479959108,
+    "min": 0.2498144860001048,
+    "max": 0.2580483110068599
+   }
+  }
+ ]
+}

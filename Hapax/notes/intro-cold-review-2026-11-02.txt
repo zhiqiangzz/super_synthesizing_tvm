@@ -1,0 +1,32 @@
+Abstract/introduction cold-read review, 2026-11-02
+
+Review protocol: a fresh subagent with no inherited conversation read only the
+English abstract and introduction, then their Chinese counterparts. It did not
+read the implementation, method chapters, figures or earlier review notes.
+
+The reviewer could reconstruct the argument: local contexts differ; retained
+states may omit correction information; reference and maintained state tuples
+are linked by transformations; transporting the known reference merge yields
+the maintained merge. It found the state terminology and the distinction between
+parallel structure and measured GPU performance understandable.
+
+Issues raised and addressed:
+- Specify real-arithmetic correctness separately from sampled floating-point
+  acceptance. Added the semantic qualification in both abstract and introduction.
+- Explain how a merge gives a single pass, not merely a combination of multi-pass
+  partitions. Added the single-element base case and one-traversal construction.
+- Clarify why supplemental states can be absent from the source. Replaced the
+  general local-variance sentence with the distinction between reading a loop
+  extent and accumulating partition counts for merging. Detailed formulas remain
+  in the variance example, rather than adding another example to the introduction.
+- Avoid an unexplained machine-learning connotation of "features" in the
+  introduction. Describe coefficient expressions as synthesis building blocks.
+- Qualify the sufficient-condition statement by successful reference construction.
+
+Author choices implemented:
+S_i(j) denotes the execution instance of loop i at iteration j. The new right-side
+one-third-width diagram is numbered Fig. 1. The variance figure becomes Fig. 2
+and retains its page-three placement. Its reference panel explicitly labels
+(t,q,n) as the reference state tuple, distinct from maintained (t,ss,n).
+
+No compiler algorithms, theorems or experiment data were changed in this revision.

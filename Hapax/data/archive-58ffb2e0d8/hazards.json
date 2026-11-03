@@ -1,0 +1,90 @@
+{
+ "meta": {
+  "commit": "58ffb2e0d837879f5b298d6cd738bbd730b389a1",
+  "commit_date": "2026-10-28T23:08:16-07:00",
+  "dirty": false,
+  "generated": "2026-10-29T06:19:03+00:00",
+  "script": "check_hazards.py",
+  "python": "3.12.14",
+  "numpy": "2.2.6",
+  "sympy": "1.14.0",
+  "machine": "x86_64",
+  "cpu": "Intel(R) Xeon(R) Platinum 8468H",
+  "extent": 64,
+  "seed": 1
+ },
+ "rows": [
+  {
+   "operator": "weighted_variance",
+   "input": "the first 3 weights of every row are exactly 0",
+   "fused": true,
+   "unfused": 7.686184732866799e-08,
+   "synthesised": Infinity,
+   "hand": Infinity
+  },
+  {
+   "operator": "normalised_projection",
+   "input": "one column of q is exactly 0",
+   "fused": false,
+   "unfused": 1.595267107492102e-07,
+   "synthesised": 1.595267107492102e-07,
+   "hand": 1.1644641317054928e-07
+  },
+  {
+   "operator": "cosine",
+   "input": "one column of x is exactly 0",
+   "fused": true,
+   "unfused": 1.4080597021258726e-07,
+   "synthesised": 1.938456460847449e-07,
+   "hand": 1.1400107744835594e-07
+  },
+  {
+   "operator": "projection",
+   "input": "a = 2q + 1e-3 noise, q a unit vector",
+   "fused": true,
+   "unfused": 2.5050935110460945e-06,
+   "synthesised": 0.010852729013223287,
+   "hand": 0.030296011923356802
+  },
+  {
+   "operator": "variance",
+   "input": "every input multiplied by 1e25",
+   "fused": true,
+   "unfused": Infinity,
+   "synthesised": Infinity,
+   "hand": Infinity
+  },
+  {
+   "operator": "softmax",
+   "input": "every input multiplied by 1e25",
+   "fused": true,
+   "unfused": 0.0,
+   "synthesised": 0.0,
+   "hand": 0.0
+  },
+  {
+   "operator": "minmax_mean",
+   "input": "every input multiplied by 1e25",
+   "fused": true,
+   "unfused": 2.2118470583215163e-07,
+   "synthesised": 1.5508805314590749e-07,
+   "hand": 5.1608824337964114e-08
+  },
+  {
+   "operator": "variance",
+   "input": "every row constant (3)",
+   "fused": true,
+   "unfused": 0.0,
+   "synthesised": 0.0,
+   "hand": 0.0
+  },
+  {
+   "operator": "zscore_max",
+   "input": "every row constant (3): the standard deviation is 0",
+   "fused": true,
+   "unfused": Infinity,
+   "synthesised": Infinity,
+   "hand": Infinity
+  }
+ ]
+}

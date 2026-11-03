@@ -1,0 +1,36 @@
+Divide-and-conquer construction and loop fusion, 2026-11-03
+
+The abstract and introduction now identify automated divide-and-conquer state
+synthesis and merge construction as a methodological source for fusion. The
+argument first requires a merge that reconstructs the combined input's state
+tuple. Singleton partitions then turn local reductions into per-element body
+computations and supplemental-state initialisation; computing and immediately
+merging each tuple during traversal gives the fused single pass.
+
+Figure 2, shared by both editions, redraws DP_loop_fusion.png as two views:
+partition computations feeding a common merge, and singleton computations feeding
+a serial fold initialised by the first leaf. Arrows are directional data flow,
+not bidirectional communication. The figure uses I_i(j) only for loop iterations
+and textual tuple labels for state collections. The original dependency schematic
+remains Figure 1; the variance overview is now Figure 3.
+
+A fresh reader inspected only the abstract, introduction, the two introductory
+figure sources and the translated prose. It independently explained the
+methodological connection, the source/reference/maintained-state distinction and
+the role of the derived correction merge. It found no material gap requiring the
+reader to infer that unmodified iterations can simply be interleaved, or that all
+leaf tuples must be materialised before a second pass. No substantive translation
+discrepancy was identified.
+
+Visual review corrected two crowded labels in Figure 2. The variance section now
+introduces the source listing before its overview figure, removing a large blank
+area at the end of English page 3 while preserving all content.
+
+Validation: English and Chinese PDFs compile with the cached TeX bundle. Source
+fingerprints, protected Chinese content and citations pass their checks. Neither
+main PDF log has undefined references, missing characters or overfull boxes.
+Inspected English pages 2-4 and Chinese pages 2-3 after the final layout changes.
+The English body now ends on page 21, exceeding the repository's 20-page submission
+limit; the page-limit check therefore fails. No claims, proofs or experimental
+content were removed to meet that limit. The two existing GPU-work draft
+placeholders remain. Algorithm and experimental data files were not changed.

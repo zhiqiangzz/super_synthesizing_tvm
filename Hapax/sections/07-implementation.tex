@@ -1,0 +1,54 @@
+\section{Implementation}
+\label{sec:impl}
+
+\sys is a Python package on top of TVM's tensor expressions, about \nLoC{} non-blank lines with \nTests tests in \nTestFiles files.
+% src: gen/stats.tex nLoC, nTests, nTestFiles (counted by scripts/gen_tex.py; tests from data/pytest.log)
+Its entry point \code{fuse(outputs, inputs)} rewrites every chain behind the outputs and returns the rewritten TE together with one report per chain; \code{judge(outputs)} runs only the judgement.
+The frontend reads chains from TE and translates reduction bodies into a symbolic form whose terms are hash-consed and kept canonical by the rewrites of \cref{tab:rules}.
+The judgement, the selection, the derivation and the proofs work on that form; SymPy handles identities not settled by canonical normalisation.
+Internally, domain cardinality has a compact node representing the constant-body sum; the implementation reports it through a separate flag, equivalent to including that atom in the reference set.
+Z3 checks source domains, guarded recovery domains and polynomial recovery uniqueness over an abstraction of reachable states.
+An unknown solver result rejects the obligation; it is never treated as a proof or as permission to replace a defined source result.
+The back end prints each join as TE expressions, emits one \commreducer per chain with its first leaf as the initial value and a reduction over the remaining leaves, adds the epilogue as elementwise computations, and rebuilds the downstream tensors to read the new states.
+A chain that is not fused is left exactly as written, and its report gives the reason.
+
+
+Native cvc5 SyGuS~\citep{cvc5} searches for supplemental coordinates; it owns candidate enumeration and internal refinement.
+The implementation tries the largest permitted supplemental width first, then smaller widths in increasing order, within each grammar stage.
+It allows at most 256 proposals, three feature occurrences per coordinate and a 20-second synthesis deadline, shared among stages and widths.
+Semantic synthesis calls have a 1500\,ms limit; an in-flight independent proof may finish after the overall deadline.
+On an unknown synthesis result, cvc5's native grammar enumerator can supply proposals for independent verification.
+For polynomial tuples, that checker also rejects any unresolved two-copy uniqueness query, supplementing the constructive recovery proof.
+Source repair is limited to 64 rounds, and individual Z3 queries to 1500\,ms.
+Numerical rejection retains the source chain; it does not restart state synthesis.
+
+The required domain property concerns every legal non-empty input partition.
+To authorise replacement of an original reduction result, the current implementation seeks a concrete witness by substituting a singleton into the source definition and asking whether it is undefined for a legal element value.
+Such a singleton is itself a legal partition and therefore suffices to refute the domain property.
+The witness search is restricted to this case; it does not test arbitrary partition sizes.
+An unresolved recovery equation or a satisfying model in the abstract coordinate domain does not establish a source-domain failure.
+This distinction preserves defined original results while permitting repair when their partial semantics actually fail.
+
+The frontend accepts the arithmetic language given above, one reduction axis, and sum, maximum and minimum reducers.
+Unsupported control flow, indexing or functions cause the chain to be retained.
+The algebraic analysis uses its listed rewrite rules, rather than arbitrary input-dependent identities.
+Symbolic rewriting, SymPy identities, the finite-sum facts and the translation of domain obligations to Z3 form the proof basis; transcendental operations are handled through supported identities and conservative sign facts.
+Timeouts and unsupported obligations cause rejection.
+
+
+The output is ordinary TE.
+\code{te.create\_function} lowers it to a function in TIRx, the tensor IR that the TVM version we build on provides as the separate package \code{tvm\_tirx}, and TVM compiles it for the CPU through LLVM.
+\sys uses this path to evaluate the float64 agreement check and the accuracy gate on the rebuilt program.
+\sys performs no scheduling: the evaluation concerns which programs fuse, what is derived and proven, and how accurate the result is.
+
+\textbf{GPU lowering.}\par
+\label{sec:gpu}
+
+\ifsubmit\else
+\placeholder{GPU code generation through TIRx. To be written with the back end: how a derived \commreducer is scheduled (thread, warp and block levels, split-K over the reduction axis), how the boundary producers such as $QK^\top$ are computed tile by tile inside the pass, and how empty partitions are skipped and each active partition is initialised (\cref{sec:accuracy-limits}).}
+\fi
+A derived reducer is an associative and commutative join over tuples, which is what a GPU tree reduction and a split of the axis across thread blocks require.
+Turning it into fast kernels is the job of TVM's scheduling and of the TIRx tile primitives, and is outside the scope of this paper.
+Two issues are specific to derived joins and must be handled there.
+First, producers that the chain reads along the axis, such as the scores of attention, are still materialised; they must be computed in tiles inside the fused loop, as FlashAttention does by hand.
+Second, each active partition must start from its own first leaf, and inactive partitions must be skipped. The TE initialisation expression is not a neutral element that a generic reduction schedule may duplicate.

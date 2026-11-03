@@ -1,0 +1,10 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+Dependent reductions resist ordinary loop fusion because a later reduction reads a value that exists only after the whole axis has been read.
+\sys fuses them by deriving the single-pass reducer from the program.
+An algebraic analysis establishes a sufficient condition for a single pass.
+Context-correction analysis supplies features for synthesising supplemental states, and constructive recovery transfers the reference join to the source-based representation.
+The emitted program must also pass a sampled accuracy check.
+It fuses \nShowFused of \nShowcase operators of our evaluation, reproducing reducers that were derived by hand for softmax, attention and the variance.
+Turning the derived reducers into scheduled GPU kernels through TIRx, and replacing the sampled part of the accuracy check by a rigorous bound, are the next steps.

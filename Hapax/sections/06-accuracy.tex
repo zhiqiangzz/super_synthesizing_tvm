@@ -1,0 +1,81 @@
+\section{Keeping the Accuracy of the Original Program}
+\label{sec:accuracy}
+
+The derived reducer now has a verified join and a chosen numerical formulation.
+It runs in floating point, where its evaluation order and intermediate values differ from those of the source~\citep{higham,goldberg}.
+To decide whether this formulation is acceptable, \sys combines static checks on the emitted expressions with differential measurements against the original program.
+The measurements use the following acceptance criterion.
+
+\begin{definition}[Accuracy acceptance]
+\label{def:gate}
+Let the error of a result $\hat y$ be $\max|\hat y-y|/\max|y|$ against the reference result $y$, the original program evaluated in float64, and $\infty$ if any value of $\hat y$ is not finite.
+A fused program \emph{passes the accuracy check} on a set of inputs if, on each of them, it produces a non-finite value only where the original does, and its error is at most $100\max(\mathit{err}_{\mathrm{orig}},\mathit{err}_{\mathrm{inh}})+64u$, where $\mathit{err}_{\mathrm{inh}}$ is an empirical sensitivity estimate from input perturbations and $u=2^{-23}$.
+\end{definition}
+
+The bound is relative to the original program, not to an exact answer: the fused program may lose what the original or the problem's conditioning already lose, up to a constant factor.
+The check is applied to sampled inputs, so it is evidence, not a guarantee.
+
+\subsection{Static Checks on the Emitted Join}
+\label{sec:hazards}
+\label{sec:static}
+
+A single pass changes both the order of evaluation and the intermediate quantities.
+Reassociation is inherent in parallel reductions, while expansion into raw moments can introduce cancellation and removal of scaling can expose overflow.
+A further risk is division by a context that vanishes on a proper part even though it is non-zero on the full input.
+These risks motivate retaining the source program's centring and scaling when the join admits that representation.
+
+\textbf{Proven guarantees.}
+\sys then checks two properties of the derived join.
+Each is required of a candidate only if the original program has it.
+
+\begin{proposition}[Bounded exponents]
+\label{prop:exp}
+Every argument of $\exp$ in the join is at most 8: each positive term is absorbed by a subtracted maximum over its own axis or by a running-maximum state.
+\end{proposition}
+
+\begin{proposition}[Positive divisors]
+\label{prop:div}
+Every executed divisor and logarithm argument checked by this condition is positive along the serial fold initialised from its first leaf.
+The analysis combines a greatest fixpoint over the sign lattice $\{\text{any},\geq0,>0\}$ with SMT implications under branch guards.
+\end{proposition}
+
+\textbf{Where the join departs from the program.}
+The program's own computation cannot always be kept.
+When a source result is proved undefined on a legal partition, \textsc{Select} repairs its definition by moving the offending context outside the reduction and retaining the resulting coefficients as states.
+% src: data/fused_ops.json actions; reducer/states.py and reducer/smt.py
+A join that only re-bases the program's states is still an update formula, and on data whose offset is large relative to its spread an update formula can lose more than two passes do, by a factor of the problem's condition number~\citep{chan}.
+In these cases nothing is proven about rounding error, and only the acceptance check below decides.
+
+\subsection{Acceptance Measurements and Their Limits}
+Rounding error is not decided by these proofs.
+\sys therefore compares each fused program with the original before it accepts the fusion.
+It evaluates both on inputs drawn from five families, centred, shifted by $10^4$, wide, and near the overflow and underflow thresholds, against a float64 interpretation of the original, and checks \cref{def:gate} on each family.
+The families and the measurement are detailed in Appendix~E of the supplementary material.
+
+
+\label{sec:accuracy-limits}
+
+\Cref{tab:assurance} separates what \sys proves from what it checks on samples.
+The acceptance check is a differential test on five families, not a proof: inputs it does not sample, such as exactly zero weights outside a declared positive domain, are not covered.
+The execution contract excludes empty partitions from the join.
+A parallel implementation must initialise each active partition from its own first leaf and skip inactive partitions, rather than inject a numerical identity.
+This is a requirement on lowering, not a floating-point property established by the accuracy check.
+
+\begin{table}[t]
+\caption{What each step establishes. \tagP: proven; \tagS: checked on samples; ---: not established.}
+\label{tab:assurance}
+\footnotesize
+\begin{tabular}{@{}lp{0.62\linewidth}l@{}}
+\toprule
+\textbf{Step} & \textbf{Property} & \\
+\midrule
+Judgement (\cref{alg:judge}) & defined reference atoms give a single pass with at most $|\mathcal Q|$ states & \tagP\\
+Selection (\cref{alg:select}) & complete recovery and defined states on legal non-empty parts & \tagP\\
+Join & invariant and leaves (\cref{thm:correct,thm:printed}) & \tagP\\
+Join & bounded exponents, positive divisors on the serial fold (\cref{prop:exp,prop:div}) & \tagP\\
+Rebuilt program & agrees with the original in float64 on three small shapes & \tagS\\
+Rebuilt program & passes the accuracy check (\cref{def:gate}) on five input families & \tagS\\
+Rebuilt program & a bound on its floating-point error for every input & ---\\
+\bottomrule
+\end{tabular}
+\end{table}

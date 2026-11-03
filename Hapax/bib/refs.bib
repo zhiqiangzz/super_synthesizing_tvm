@@ -1,0 +1,504 @@
+% Every entry below was written from a looked-up record (bib/lookup.json: Crossref
+% or arXiv; or the first page / reference list named in bib/VERIFIED.md), never from
+% memory. See bib/VERIFIED.md for what was read and what each citation supports.
+
+% ---------------------------------------------------------------- prior systems
+@article{neptune,
+  author    = {Yifan Zhao and Egan Johnson and Prasanth Chatarasi and Vikram Adve and Sasa Misailovic},
+  title     = {Neptune: Advanced {ML} Operator Fusion for Locality and Parallelism on {GPUs}},
+  journal   = {Proceedings of the ACM on Programming Languages},
+  volume    = {10},
+  number    = {PLDI},
+  pages     = {1278--1302},
+  year      = {2026},
+  doi       = {10.1145/3808298},
+}
+
+@inproceedings{redfuser,
+  author    = {Xinsheng Tang and Yangcheng Li and Nan Wang and Zhiyi Shu and Xingyu Ling and Junna Xing and Peng Zhou and Qiang Liu},
+  title     = {{RedFuser}: An Automatic Operator Fusion Framework for Cascaded Reductions on {AI} Accelerators},
+  booktitle = {Proceedings of the 31st ACM International Conference on Architectural Support for Programming Languages and Operating Systems, Volume 2 (ASPLOS)},
+  pages     = {1566--1588},
+  year      = {2026},
+  doi       = {10.1145/3779212.3790209},
+}
+
+@misc{flashlight,
+  author        = {Bozhi You and Irene Wang and Zelal Su Mustafaoglu and Abhinav Jangda and Ang{\'e}lica Moreira and Roshan Dathathri and Divya Mahajan and Keshav Pingali},
+  title         = {Flashlight: {PyTorch} Compiler Extensions to Accelerate Attention Variants},
+  year          = {2025},
+  eprint        = {2511.02043},
+  archivePrefix = {arXiv},
+}
+
+@inproceedings{mirage,
+  author    = {Mengdi Wu and Xinhao Cheng and Shengyu Liu and Chunan Shi and Jianan Ji and Man Kit Ao and Praveen Velliengiri and Xupeng Miao and Oded Padon and Zhihao Jia},
+  title     = {Mirage: A Multi-Level Superoptimizer for Tensor Programs},
+  booktitle = {19th USENIX Symposium on Operating Systems Design and Implementation (OSDI)},
+  pages     = {21--38},
+  year      = {2025},
+}
+
+@inproceedings{stenso,
+  author    = {Alexander Brauckmann and Aarsh Chaube and Jos{\'e} W. de Souza Magalh{\~a}es and Elizabeth Polgreen and Michael F. P. O'Boyle},
+  title     = {Tensor Program Superoptimization through Cost-Guided Symbolic Program Synthesis},
+  booktitle = {2026 IEEE/ACM International Symposium on Code Generation and Optimization (CGO)},
+  pages     = {683--695},
+  year      = {2026},
+  doi       = {10.1109/CGO68049.2026.11395198},
+}
+
+@misc{prism,
+  author        = {Mengdi Wu and Xiaoyu Jiang and Oded Padon and Zhihao Jia},
+  title         = {Prism: Symbolic Superoptimization of Tensor Programs},
+  year          = {2026},
+  eprint        = {2604.15272},
+  archivePrefix = {arXiv},
+}
+
+@misc{nautilus,
+  author        = {Yifan Zhao and Yuchen Yang and Matei Budiu and Sasa Misailovic},
+  title         = {Nautilus: An Auto-Scheduling Tensor Compiler for Efficient Tiled {GPU} Kernels},
+  year          = {2026},
+  eprint        = {2604.14825},
+  archivePrefix = {arXiv},
+}
+
+% ---------------------------------------------------------------- compilers
+@inproceedings{tvm,
+  author    = {Tianqi Chen and Thierry Moreau and Ziheng Jiang and Lianmin Zheng and Eddie Yan and Haichen Shen and Meghan Cowan and Leyuan Wang and Yuwei Hu and Luis Ceze and Carlos Guestrin and Arvind Krishnamurthy},
+  title     = {{TVM}: An Automated End-to-End Optimizing Compiler for Deep Learning},
+  booktitle = {13th USENIX Symposium on Operating Systems Design and Implementation (OSDI)},
+  pages     = {578--594},
+  year      = {2018},
+}
+
+@inproceedings{halide,
+  author    = {Jonathan Ragan-Kelley and Connelly Barnes and Andrew Adams and Sylvain Paris and Fr{\'e}do Durand and Saman Amarasinghe},
+  title     = {Halide: A Language and Compiler for Optimizing Parallelism, Locality, and Recomputation in Image Processing Pipelines},
+  booktitle = {Proceedings of the 34th ACM SIGPLAN Conference on Programming Language Design and Implementation (PLDI)},
+  pages     = {519--530},
+  year      = {2013},
+  doi       = {10.1145/2491956.2462176},
+}
+
+@inproceedings{rfactor,
+  author    = {Patricia Suriana and Andrew Adams and Shoaib Kamil},
+  title     = {Parallel Associative Reductions in {Halide}},
+  booktitle = {2017 IEEE/ACM International Symposium on Code Generation and Optimization (CGO)},
+  pages     = {281--291},
+  year      = {2017},
+  doi       = {10.1109/CGO.2017.7863747},
+}
+
+@inproceedings{tensorir,
+  author    = {Siyuan Feng and Bohan Hou and Hongyi Jin and Wuwei Lin and Junru Shao and Ruihang Lai and Zihao Ye and Lianmin Zheng and Cody Hao Yu and Yong Yu and Tianqi Chen},
+  title     = {{TensorIR}: An Abstraction for Automatic Tensorized Program Optimization},
+  booktitle = {Proceedings of the 28th ACM International Conference on Architectural Support for Programming Languages and Operating Systems, Volume 2 (ASPLOS)},
+  pages     = {804--817},
+  year      = {2023},
+  doi       = {10.1145/3575693.3576933},
+}
+
+@inproceedings{triton,
+  author    = {Philippe Tillet and H. T. Kung and David Cox},
+  title     = {Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations},
+  booktitle = {Proceedings of the 3rd ACM SIGPLAN International Workshop on Machine Learning and Programming Languages (MAPL)},
+  pages     = {10--19},
+  year      = {2019},
+  doi       = {10.1145/3315508.3329973},
+}
+
+@misc{tilelang,
+  author        = {Lei Wang and Yu Cheng and Yining Shi and Zhengju Tang and Zhiwen Mo and Wenhao Xie and Lingxiao Ma and Yuqing Xia and others},
+  title         = {{TileLang}: A Composable Tiled Programming Model for {AI} Systems},
+  year          = {2025},
+  eprint        = {2504.17577},
+  archivePrefix = {arXiv},
+}
+
+% ---------------------------------------------------------------- hand-derived single passes
+@article{welford,
+  author  = {B. P. Welford},
+  title   = {Note on a Method for Calculating Corrected Sums of Squares and Products},
+  journal = {Technometrics},
+  volume  = {4},
+  number  = {3},
+  pages   = {419--420},
+  year    = {1962},
+  doi     = {10.1080/00401706.1962.10490022},
+}
+
+@article{west,
+  author  = {D. H. D. West},
+  title   = {Updating Mean and Variance Estimates: An Improved Method},
+  journal = {Communications of the ACM},
+  volume  = {22},
+  number  = {9},
+  pages   = {532--535},
+  year    = {1979},
+  doi     = {10.1145/359146.359153},
+}
+
+@article{chan,
+  author  = {Tony F. Chan and Gene H. Golub and Randall J. LeVeque},
+  title   = {Algorithms for Computing the Sample Variance: Analysis and Recommendations},
+  journal = {The American Statistician},
+  volume  = {37},
+  number  = {3},
+  pages   = {242--247},
+  year    = {1983},
+  doi     = {10.1080/00031305.1983.10483115},
+}
+
+@article{pebay,
+  author  = {Philippe P{\'e}bay and Timothy B. Terriberry and Hemanth Kolla and Janine Bennett},
+  title   = {Numerically Stable, Scalable Formulas for Parallel and Online Computation of Higher-Order Multivariate Central Moments with Arbitrary Weights},
+  journal = {Computational Statistics},
+  volume  = {31},
+  number  = {4},
+  pages   = {1305--1325},
+  year    = {2016},
+  doi     = {10.1007/s00180-015-0637-z},
+}
+
+@misc{milakov,
+  author        = {Maxim Milakov and Natalia Gimelshein},
+  title         = {Online Normalizer Calculation for Softmax},
+  year          = {2018},
+  eprint        = {1805.02867},
+  archivePrefix = {arXiv},
+}
+
+@inproceedings{flashattention,
+  author    = {Tri Dao and Dan Fu and Stefano Ermon and Atri Rudra and Christopher R{\'e}},
+  title     = {{FlashAttention}: Fast and Memory-Efficient Exact Attention with {IO}-Awareness},
+  booktitle = {Advances in Neural Information Processing Systems 35 (NeurIPS)},
+  pages     = {16344--16359},
+  year      = {2022},
+  doi       = {10.52202/068431-1189},
+}
+
+@misc{flashattention2,
+  author        = {Tri Dao},
+  title         = {{FlashAttention-2}: Faster Attention with Better Parallelism and Work Partitioning},
+  year          = {2023},
+  eprint        = {2307.08691},
+  archivePrefix = {arXiv},
+}
+
+@misc{cce,
+  author        = {Erik Wijmans and Brody Huval and Alexander Hertzberg and Vladlen Koltun and Philipp Kr{\"a}henb{\"u}hl},
+  title         = {Cut Your Losses in Large-Vocabulary Language Models},
+  year          = {2024},
+  eprint        = {2411.09009},
+  archivePrefix = {arXiv},
+}
+
+@misc{flashsinkhorn,
+  author        = {Felix X.-F. Ye and Xingjie Li and An Yu and Ming-Ching Chang and Linsong Chu and Davis Wertheimer},
+  title         = {{FlashSinkhorn}: {IO}-Aware Entropic Optimal Transport on {GPU}},
+  year          = {2026},
+  eprint        = {2602.03067},
+  archivePrefix = {arXiv},
+}
+
+% ---------------------------------------------------------------- floating point
+@book{higham,
+  author    = {Nicholas J. Higham},
+  title     = {Accuracy and Stability of Numerical Algorithms},
+  publisher = {SIAM},
+  year      = {2002},
+  doi       = {10.1137/1.9780898718027},
+}
+
+@article{blanchard,
+  author  = {Pierre Blanchard and Desmond J. Higham and Nicholas J. Higham},
+  title   = {Accurately Computing the Log-Sum-Exp and Softmax Functions},
+  journal = {IMA Journal of Numerical Analysis},
+  volume  = {41},
+  number  = {4},
+  pages   = {2311--2330},
+  year    = {2021},
+  doi     = {10.1093/imanum/draa038},
+}
+
+@article{goldberg,
+  author  = {David Goldberg},
+  title   = {What Every Computer Scientist Should Know about Floating-Point Arithmetic},
+  journal = {ACM Computing Surveys},
+  volume  = {23},
+  number  = {1},
+  pages   = {5--48},
+  year    = {1991},
+  doi     = {10.1145/103162.103163},
+}
+
+@misc{ieee754,
+  title        = {{IEEE} Standard for Floating-Point Arithmetic},
+  howpublished = {IEEE Std 754-2019},
+  year         = {2019},
+  doi          = {10.1109/IEEESTD.2019.8766229},
+}
+
+@inproceedings{herbie,
+  author    = {Pavel Panchekha and Alex Sanchez-Stern and James R. Wilcox and Zachary Tatlock},
+  title     = {Automatically Improving Accuracy for Floating Point Expressions},
+  booktitle = {Proceedings of the 36th ACM SIGPLAN Conference on Programming Language Design and Implementation (PLDI)},
+  pages     = {1--11},
+  year      = {2015},
+  doi       = {10.1145/2737924.2737959},
+}
+
+@article{fptaylor,
+  author  = {Alexey Solovyev and Marek S. Baranowski and Ian Briggs and Charles Jacobsen and Zvonimir Rakamari{\'c} and Ganesh Gopalakrishnan},
+  title   = {Rigorous Estimation of Floating-Point Round-Off Errors with Symbolic {Taylor} Expansions},
+  journal = {ACM Transactions on Programming Languages and Systems},
+  volume  = {41},
+  number  = {1},
+  pages   = {1--39},
+  year    = {2018},
+  doi     = {10.1145/3230733},
+}
+
+@article{blue,
+  author  = {James L. Blue},
+  title   = {A Portable {Fortran} Program to Find the {Euclidean} Norm of a Vector},
+  journal = {ACM Transactions on Mathematical Software},
+  volume  = {4},
+  number  = {1},
+  pages   = {15--23},
+  year    = {1978},
+  doi     = {10.1145/355769.355771},
+}
+
+% ---------------------------------------------------------------- program calculation and synthesis
+@incollection{bird87,
+  author    = {Richard S. Bird},
+  title     = {An Introduction to the Theory of Lists},
+  booktitle = {Logic of Programming and Calculi of Discrete Design},
+  publisher = {Springer},
+  pages     = {5--42},
+  year      = {1987},
+  doi       = {10.1007/978-3-642-87374-4_1},
+}
+
+@article{gibbons96,
+  author  = {Jeremy Gibbons},
+  title   = {The Third Homomorphism Theorem},
+  journal = {Journal of Functional Programming},
+  volume  = {6},
+  number  = {4},
+  pages   = {657--665},
+  year    = {1996},
+  doi     = {10.1017/S0956796800001908},
+}
+
+@inproceedings{meijer91,
+  author    = {Erik Meijer and Maarten Fokkinga and Ross Paterson},
+  title     = {Functional Programming with Bananas, Lenses, Envelopes and Barbed Wire},
+  booktitle = {Functional Programming Languages and Computer Architecture (FPCA)},
+  series    = {Lecture Notes in Computer Science},
+  pages     = {124--144},
+  publisher = {Springer},
+  year      = {1991},
+  doi       = {10.1007/3540543961_7},
+}
+
+@inproceedings{hu96,
+  author    = {Zhenjiang Hu and Hideya Iwasaki and Masato Takeichi},
+  title     = {Construction of List Homomorphisms by Tupling and Fusion},
+  booktitle = {Mathematical Foundations of Computer Science (MFCS)},
+  series    = {Lecture Notes in Computer Science},
+  pages     = {407--418},
+  publisher = {Springer},
+  year      = {1996},
+  doi       = {10.1007/3-540-61550-4_166},
+}
+
+@inproceedings{hu97,
+  author    = {Zhenjiang Hu and Hideya Iwasaki and Masato Takeichi and Akihiko Takano},
+  title     = {Tupling Calculation Eliminates Multiple Data Traversals},
+  booktitle = {Proceedings of the 2nd ACM SIGPLAN International Conference on Functional Programming (ICFP)},
+  pages     = {164--175},
+  year      = {1997},
+  doi       = {10.1145/258948.258964},
+}
+
+@article{bird84,
+  author  = {Richard S. Bird},
+  title   = {Using Circular Programs to Eliminate Multiple Traversals of Data},
+  journal = {Acta Informatica},
+  volume  = {21},
+  number  = {3},
+  pages   = {239--250},
+  year    = {1984},
+  doi     = {10.1007/BF00264249},
+}
+
+@inproceedings{pettorossi87,
+  author    = {Alberto Pettorossi},
+  title     = {Program Development Using Lambda Abstraction},
+  booktitle = {Foundations of Software Technology and Theoretical Computer Science (FSTTCS)},
+  series    = {Lecture Notes in Computer Science},
+  pages     = {420--434},
+  publisher = {Springer},
+  year      = {1987},
+  doi       = {10.1007/3-540-18625-5_65},
+}
+
+@inproceedings{morita07,
+  author    = {Kazutaka Morita and Akimasa Morihata and Kiminori Matsuzaki and Zhenjiang Hu and Masato Takeichi},
+  title     = {Automatic Inversion Generates Divide-and-Conquer Parallel Programs},
+  booktitle = {Proceedings of the 28th ACM SIGPLAN Conference on Programming Language Design and Implementation (PLDI)},
+  pages     = {146--155},
+  year      = {2007},
+  doi       = {10.1145/1250734.1250752},
+}
+
+@inproceedings{farzan17,
+  author    = {Azadeh Farzan and Victor Nicolet},
+  title     = {Synthesis of Divide and Conquer Parallelism for Loops},
+  booktitle = {Proceedings of the 38th ACM SIGPLAN Conference on Programming Language Design and Implementation (PLDI)},
+  pages     = {540--555},
+  year      = {2017},
+  doi       = {10.1145/3062341.3062355},
+}
+
+@inproceedings{farzan19,
+  author    = {Azadeh Farzan and Victor Nicolet},
+  title     = {Modular Divide-and-Conquer Parallelization of Nested Loops},
+  booktitle = {Proceedings of the 40th ACM SIGPLAN Conference on Programming Language Design and Implementation (PLDI)},
+  pages     = {610--624},
+  year      = {2019},
+  doi       = {10.1145/3314221.3314612},
+}
+
+@inproceedings{farzan21,
+  author    = {Azadeh Farzan and Victor Nicolet},
+  title     = {Phased Synthesis of Divide and Conquer Programs},
+  booktitle = {Proceedings of the 42nd ACM SIGPLAN International Conference on Programming Language Design and Implementation (PLDI)},
+  pages     = {974--986},
+  year      = {2021},
+  doi       = {10.1145/3453483.3454089},
+}
+
+@inproceedings{morihata21,
+  author    = {Akimasa Morihata and Shigeyuki Sato},
+  title     = {Reverse Engineering for Reduction Parallelization via Semiring Polynomials},
+  booktitle = {Proceedings of the 42nd ACM SIGPLAN International Conference on Programming Language Design and Implementation (PLDI)},
+  pages     = {820--834},
+  year      = {2021},
+  doi       = {10.1145/3453483.3454079},
+}
+
+@article{autolifter,
+  author  = {Ruyi Ji and Yuwei Zhao and Yingfei Xiong and Di Wang and Lu Zhang and Zhenjiang Hu},
+  title   = {Decomposition-based Synthesis for Applying Divide-and-Conquer-like Algorithmic Paradigms},
+  journal = {ACM Transactions on Programming Languages and Systems},
+  volume  = {46},
+  number  = {2},
+  pages   = {1--59},
+  year    = {2024},
+  doi     = {10.1145/3648440},
+}
+
+@article{sufu,
+  author  = {Ruyi Ji and Yuwei Zhao and Nadia Polikarpova and Yingfei Xiong and Zhenjiang Hu},
+  title   = {Superfusion: Eliminating Intermediate Data Structures via Inductive Synthesis},
+  journal = {Proceedings of the ACM on Programming Languages},
+  volume  = {8},
+  number  = {PLDI},
+  pages   = {939--964},
+  year    = {2024},
+  doi     = {10.1145/3656415},
+}
+
+@article{opera,
+  author  = {Ziteng Wang and Shankara Pailoor and Aaryan Prakash and Yuepeng Wang and I{\c{s}}{\i}l Dillig},
+  title   = {From Batch to Stream: Automatic Generation of Online Algorithms},
+  journal = {Proceedings of the ACM on Programming Languages},
+  volume  = {8},
+  number  = {PLDI},
+  pages   = {1014--1039},
+  year    = {2024},
+  doi     = {10.1145/3656418},
+}
+
+% ---------------------------------------------------------------- aggregation
+@inproceedings{datacube,
+  author    = {Jim Gray and Adam Bosworth and Andrew Layman and Hamid Pirahesh},
+  title     = {Data Cube: A Relational Aggregation Operator Generalizing Group-By, Cross-Tab, and Sub-Totals},
+  booktitle = {Proceedings of the Twelfth International Conference on Data Engineering (ICDE)},
+  pages     = {152--159},
+  year      = {1996},
+  doi       = {10.1109/ICDE.1996.492099},
+}
+
+@article{jesus,
+  author  = {Paulo Jesus and Carlos Baquero and Paulo S{\'e}rgio Almeida},
+  title   = {A Survey of Distributed Data Aggregation Algorithms},
+  journal = {IEEE Communications Surveys \& Tutorials},
+  volume  = {17},
+  number  = {1},
+  pages   = {381--404},
+  year    = {2015},
+  doi     = {10.1109/COMST.2014.2354398},
+}
+
+% ---------------------------------------------------------------- mathematics and tools
+@article{levicivita,
+  author  = {Tullio Levi-Civita},
+  title   = {Sulle funzioni che ammettono una formula d'addizione del tipo $f(x+y)=\sum_{i=1}^{n} X_i(x) Y_i(y)$},
+  journal = {Atti della Reale Accademia dei Lincei, Rendiconti, Serie 5},
+  volume  = {22},
+  pages   = {181--183},
+  year    = {1913},
+}
+
+@misc{almira,
+  author        = {J. M. Almira and E. V. Shulman},
+  title         = {On Certain Generalizations of the {Levi-Civita} and {Wilson} Functional Equations},
+  year          = {2016},
+  eprint        = {1612.03756},
+  archivePrefix = {arXiv},
+}
+
+@book{kuczma,
+  author    = {Marek Kuczma},
+  title     = {An Introduction to the Theory of Functional Equations and Inequalities: {Cauchy's} Equation and {Jensen's} Inequality},
+  publisher = {Birkh{\"a}user},
+  year      = {2009},
+  doi       = {10.1007/978-3-7643-8749-5},
+}
+
+@article{sympy,
+  author  = {Aaron Meurer and Christopher P. Smith and Mateusz Paprocki and Ond{\v{r}}ej {\v{C}}ert{\'i}k and Sergey B. Kirpichev and Matthew Rocklin and Amit Kumar and Sergiu Ivanov and Jason K. Moore and Sartaj Singh and others},
+  title   = {{SymPy}: Symbolic Computing in {Python}},
+  journal = {PeerJ Computer Science},
+  volume  = {3},
+  pages   = {e103},
+  year    = {2017},
+  doi     = {10.7717/peerj-cs.103},
+}
+
+@book{bpr,
+  author    = {Saugata Basu and Richard Pollack and Marie-Fran{\c{c}}oise Roy},
+  title     = {Algorithms in Real Algebraic Geometry},
+  series    = {Algorithms and Computation in Mathematics},
+  publisher = {Springer},
+  year      = {2006},
+  doi       = {10.1007/3-540-33099-2},
+}
+
+@inproceedings{cvc5,
+  author = {Haniel Barbosa and Clark W. Barrett and Martin Brain and Gereon Kremer and Hanna Lachnitt and Makai Mann and Abdalrhman Mohamed and Mudathir Mohamed and Aina Niemetz and Andres N{\"o}tzli and Alex Ozdemir and Mathias Preiner and Andrew Reynolds and Ying Sheng and Cesare Tinelli and Yoni Zohar},
+  title = {{cvc5}: A Versatile and Industrial-Strength {SMT} Solver},
+  booktitle = {Tools and Algorithms for the Construction and Analysis of Systems (TACAS)},
+  series = {Lecture Notes in Computer Science},
+  volume = {13243},
+  pages = {415--442},
+  publisher = {Springer},
+  year = {2022},
+  doi = {10.1007/978-3-030-99524-9_24},
+}

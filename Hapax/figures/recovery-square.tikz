@@ -1,0 +1,27 @@
+% Shared vector source for the English and Chinese prose editions.
+\begin{tikzpicture}[
+  summary/.style={draw=rulegray,rounded corners=2pt,fill=boxgray!45,
+    text width=2.45cm,minimum height=1.05cm,inner sep=4pt,
+    align=center,font=\small},
+  arrow/.style={-{Stealth[length=2mm]},semithick},
+  label/.style={font=\small,fill=white,inner sep=2pt,align=center}]
+\node[summary,draw=origblue] (original) at (0,2.2)
+  {$A_0(S),\ A_0(T)$\\[3pt]$(t_p,ss_p)$};
+\node[summary,draw=auxpurple] (maintained) at (0,0)
+  {$A(S),\ A(T)$\\[3pt]$(t_p,ss_p,\aux{n_p})$};
+\node[summary,draw=fixgreen] (merged) at (3.65,0)
+  {$A(U)$\\[3pt]$(t_U,ss_U,\aux{n_U})$};
+\node[summary] (reference) at (0,-2.6)
+  {$B(S),\ B(T)$\\[3pt]$(t_p,q_p,n_p)$};
+\node[summary] (combined) at (3.65,-2.6)
+  {$B(U)$\\[3pt]$(t_U,q_U,n_U)$};
+\draw[arrow,draw=auxpurple] (original) --
+  node[label,right,text=auxpurple] {add $n_p=\sum_{j\in p}1$\\\S\ref{sec:selection}--\ref{sec:synthesis}} (maintained);
+\draw[arrow,draw=fixgreen] (maintained) --
+  node[label,above,text=fixgreen] {$\Mrg$}
+  node[label,below=6mm,text=fixgreen] {\S\ref{sec:correctness}--\ref{sec:rebase}} (merged);
+\draw[arrow] (maintained) -- node[label,left] {$H$\\\S\ref{sec:recovery}} (reference);
+\draw[arrow] (reference) -- node[label,above] {$\oplus$}
+  node[label,below] {\S\ref{sec:correctness}} (combined);
+\draw[arrow] (combined) -- node[label,right] {$G$\\\S\ref{sec:atoms}} (merged);
+\end{tikzpicture}

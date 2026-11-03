@@ -1,0 +1,84 @@
+\section{Dependent Reduction Chains}
+\label{sec:chains}
+
+This section defines the programs \sys fuses and what a single pass is for them.
+\Cref{fig:grammar} gives the language of reduction bodies.
+
+\begin{figure}[htbp]
+\small
+\begin{align*}
+f \;::=\;& x \mid \ctx \mid c \mid N
+ \mid f + f \mid f - f \mid f \times f \mid f \div f
+ \mid \exp f \mid \log f \mid \sqrt{f} \mid f^{k} \mid |f| \mid \max(f,f) \mid \min(f,f)\\
+m \;::=\;& \textstyle\bigoplus_{j} f \mid g(\ctx_1,\dots,\ctx_p)
+\end{align*}
+\caption{Reduction bodies $f$ and chain members $m$. $x$ ranges over the values a chain reads at position $j$ of the axis, $\ctx$ over earlier members, $c\in\R$ over constants, $k\in\mathbb{Z}$, $N$ is the extent of the axis, and $\oplus\in\{\Sigma,\max,\min\}$.}
+\label{fig:grammar}
+\end{figure}
+
+\begin{definition}[Reduction chain]
+\label{def:chain}
+Fix an axis $\Ax=\{0,\dots,N-1\}$ and, for each position $j\in\Ax$, the tuple $x_j$ of values that the chain reads at $j$ from tensors outside it.
+A \emph{reduction chain} is a sequence of members $m_1,\dots,m_n$ in producer order.
+A member is either a \emph{link} $m=\bigoplus_{j\in\Ax} f_m(x_j,\ctx_m)$ with $\oplus\in\{\Sigma,\max,\min\}$, or a \emph{value} $m=g_m(\ctx_m)$.
+The \emph{contexts} $\ctx_m$ are earlier members that $m$ reads at an index that does not involve $j$, that is, their final values.
+A chain is \emph{dependent} if some link reads a context.
+\end{definition}
+
+In the running variance example, the final sum reads the mean as a context.
+\sys reads chains from TE programs: a TE reduction becomes a link, and an elementwise tensor that the chain reads along $j$ is inlined into the bodies.
+A reduction over another axis, such as $QK^\top$ in attention, stays outside the chain and supplies values $x_j$.
+
+To speak about a part of the axis, we evaluate the chain on that part alone.
+
+\begin{definition}[Partial semantics]
+\label{def:partial}
+For a non-empty $S\subseteq\Ax$, $m(S)$ is the value of member $m$ when every link reduces over $S$ only, every context is its own value on $S$, and the extent $N$ read as a value is $|S|$.
+The program computes $m(\Ax)$.
+\end{definition}
+
+The declared input domain constrains the element values.
+A legal partition is any non-empty part of an input satisfying these constraints.
+An original member may be undefined on such a part even when the full-input output is defined; a maintained state must be defined on every legal partition.
+A single pass must produce $m(\Ax)$, wherever the source output is defined, from information gathered part by part.
+
+\begin{definition}[Single-pass reducer]
+\label{def:reducer}
+A \emph{state map} is a tuple $\st=(\st_1,\dots,\st_k)$ of functions of non-empty parts.
+A \emph{single-pass reducer} for a chain is a tuple $(\leaf,\Mrg,\epi)$ of a leaf $\leaf(x_j)=\st(\{j\})$, a binary operation $\Mrg$ and an epilogue $\epi$ such that, for all disjoint non-empty parts $\pa$ and $\pb$,
+\begin{equation}
+\label{eq:invariant}
+\Mrg(\st(\pa),\st(\pb))=\st(\pa\dunion\pb),\qquad
+\epi(\st(\Ax))=\bigl(m(\Ax)\bigr)_{m\text{ required}}.
+\end{equation}
+The \emph{required} members are those the rest of the program reads.
+\end{definition}
+
+The generated reduction starts from the first leaf and folds the remaining leaves.
+No numerical state represents an empty partition: execution skips empty partitions, and the input axis must be non-empty.
+The join invariant of \cref{eq:invariant} connects the chosen summary to the original program.
+
+\begin{lemma}[Laws from the invariant]
+\label{lem:laws}
+If the invariant holds, $\Mrg$ is commutative and associative when applied to states of pairwise disjoint non-empty parts.
+For every partition of $\Ax$ into non-empty parts and every binary join tree over them, joining the leaves yields $\st(\Ax)$.
+The serial fold initialised from its first leaf has the same property.
+\end{lemma}
+
+\begin{proof}
+$\Mrg(\st(\pa),\st(\pb))=\st(\pa\dunion\pb)=\st(\pb\dunion\pa)=\Mrg(\st(\pb),\st(\pa))$, and associativity follows in the same way from that of $\dunion$.
+The rest is induction on the join tree and on the length of the fold.
+\end{proof}
+
+Each non-empty partition can therefore compute its state tuple independently.
+A tree of joins combines these tuples without another traversal of the partitions.
+This parallel structure follows from the invariant, independently of a particular schedule.
+
+In the vocabulary of program calculation, $S\mapsto\st(S)$ is a homomorphism from finite non-empty bags under $\dunion$ to the states under $\Mrg$: a list homomorphism~\citep{bird87,gibbons96} whose join is order-free.
+In the vocabulary of databases, the chain is an \emph{algebraic} aggregate, computable from a fixed number of \emph{distributive} ones~\citep{datacube}.
+Empty partitions are handled by control flow, outside the algebraic join contract.
+
+\paragraph{Problem.}
+Given a dependent chain, establish a sufficient condition for a single-pass reducer, construct one, prove \cref{eq:invariant}, and accept it only if in floating point it introduces no additional non-finite result on the checked inputs and its measured error stays within a stated bound of the program's.
+
+\input{sections/03-pipeline}

@@ -1,0 +1,50 @@
+Source-state motivation and introduction review, 2026-11-03
+
+Revision
+The abstract and introduction now connect algebraic reference states to the
+numerical motivation for retaining source reduction results. Context corrections
+expose aggregate expressions for supplemental-state synthesis; complete recovery
+of reference states supplies the sufficiency criterion and the derived merge.
+Direct corrections reuse source centring and scaling to pursue source-level
+accuracy. Fusion is the objective; parallel reduction trees follow from the merge
+property. The standalone abstract sentence about accuracy acceptance was removed.
+
+The dependent-loop figure has a short caption and explicit Loop 1 / Loop 2 labels.
+Its instance notation and edge meaning are explained in the introduction. Chinese
+prose was synchronised; headings, figures, mathematical content and citations
+remain shared or unchanged between editions.
+
+Consistency pass
+Read the main-paper sections in sequence and obtained a separate read-only audit.
+Small linked edits clarify the variance transition, the numerical purpose of the
+pipeline rewrite, preservation of centred/scaled definitions in state selection,
+the proven domain-failure condition for source repair, and the distinction between
+source-guided merge formulation and numerical acceptance in related work.
+No compiler, proof, algorithm, benchmark data or numerical criteria were changed.
+
+Independent cold reads
+Two fresh agents read only the abstract, introduction and dependent-loop figure;
+the second also read the corresponding Chinese prose. Neither was given method
+notes, implementation sources, earlier reviews or the intended interpretation.
+Both independently reconstructed why reference states already merge, why source
+states are retained, how context corrections expose synthesis building blocks,
+how complete recovery yields a merge, and why direct numerical corrections matter.
+Both distinguished real-arithmetic verification from the numerical design goal.
+
+The first reader identified an ambiguity in the count example. The text now says
+that the fused representation carries each part's count alongside the source
+results, whereas the source obtains the full-input size from its loop extent.
+A repeated reference-versus-maintained summary sentence was removed. The second
+reader found no remaining material break in the causal argument, and suggested
+restoring the explicit variance context in one Chinese sentence; this was fixed.
+Detailed grammar, recovery procedures and applicability conditions were judged
+appropriate for the method sections rather than necessary additions to the intro.
+
+Validation
+bash Hapax/build.sh: passed; English main PDF 23 pages, body through page 20.
+bash Hapax/build_zh.sh: passed; Chinese main PDF 20 pages.
+Translation, protected-content, source-fingerprint and citation checks passed.
+Both main PDF logs have no undefined references, missing characters or overfull
+boxes. Inspected English pages 1-4 and Chinese pages 1-3 visually, including the
+wrapped dependency figure and the following variance figure and listings.
+The two pre-existing GPU-work draft placeholders remain outside this revision.

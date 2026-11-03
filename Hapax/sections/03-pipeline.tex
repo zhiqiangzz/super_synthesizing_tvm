@@ -1,0 +1,27 @@
+\noindent\begin{minipage}{\linewidth}
+\begin{minipage}[t]{0.50\linewidth}
+\vspace{0pt}
+\paragraph{Execution overview.}
+The derivation starts from a TE chain and its declared input domain, as shown in \cref{fig:pipeline}.
+The algebraic analysis separates reduction bodies from their contexts, producing a reference state tuple whose components join independently and determine the outputs.
+Its size gives a state-count upper bound, used as the default selection limit.
+
+Selection retains the source reduction results, repairs demonstrated domain failures, and extracts features from their context-correction formulas.
+Syntax-guided synthesis combines these features into supplemental states.
+For each candidate tuple, verification establishes recovery of all context-free coordinates used by its states and outputs, with operations defined on legal partitions.
+An unsuccessful proof leads to another synthesized tuple within the search limits.
+
+Verified recovery enables the procedure to derive a join satisfying the partition-summary invariant.
+The join is rewritten into direct corrections on maintained states, retaining centring and scaling where possible to stay close to the source program's numerical behaviour.
+The emitted leaf, tuple join and epilogue form a trial TE rewrite.
+Static checks and differential numerical measurements in the rebuilt program decide acceptance; rejection retains the source chain.
+This separates the algebraic proof from assessment of the executable floating-point formulation.
+\end{minipage}\hfill
+\begin{paperdiagram}
+\captionsetup{type=figure}
+\centering
+\input{figures/pipeline.tikz}
+\caption{End-to-end derivation. Failed proofs retry synthesis; search exhaustion or numerical rejection retains the source.}
+\label{fig:pipeline}
+\end{paperdiagram}
+\end{minipage}\par\medskip
