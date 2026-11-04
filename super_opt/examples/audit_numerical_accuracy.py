@@ -44,7 +44,7 @@ from chain_ops.run import extents, sample
 from numerical_audit.cases import HAZARDS, LENGTHS, SCANS, SEEDS, representative_cases
 from numerical_audit.prior import PRIORS
 from numerical_audit.programs import TARGET, Program, compile_strict, reference_programs
-from numerical_audit.records import Ledger, dump
+from numerical_audit.records import Ledger, dump, output_record
 
 import tvm
 import tvm_tirx
@@ -205,10 +205,19 @@ def fusion_report(ledger, key, inputs, outputs, config, max_states=None):
         entry["checks"] = [dataclasses.asdict(r) for r in observed["checks"]]
         entry["actual_extents"] = [g.var_values for g in observed["gates"]]
         entry["gate_inputs"] = {}
+        entry["gate_source_diagnostics"] = {}
         for index, gate in enumerate(observed["gates"]):
             for family in gate.cases:
                 case = f"gate/{key}/{index}/{family[0]}"
                 entry["gate_inputs"][case] = ledger.store_inputs(case, family[1])
+                entry["gate_source_diagnostics"][case] = [
+                    {
+                        "output_name": t.op.name,
+                        "dtype": dtype,
+                        **output_record(got, want, dtype, family[7]),
+                    }
+                    for t, got, want, dtype in zip(outputs, family[3], family[2], gate.dtypes)
+                ]
     if result is not None:
         entry["accuracy"] = dataclasses.asdict(result.accuracy) if result.accuracy else None
         entry["chains"] = [
@@ -436,7 +445,12 @@ counts actual output elements; `reference_nonfinite` counts MPFR elements.
 `finite_metrics` reports only finite pairs, with its denominator separately;
 the main metrics and status retain all failures. `exact_zero` means an entirely
 zero reference and exactly matching output. `zero_comparison` preserves both-zero
-versus candidate-nonzero when source error is zero.
+versus candidate-nonzero when source error is zero. `absolute_error_mpfr` retains
+the MPFR error as a decimal string; `absolute_metric_underflow` marks nonzero
+errors rounded to zero in float diagnostics. Exact-zero and error-order decisions
+use MPFR, including for such tiny errors.
+`accuracy_reports.json` also includes `gate_source_diagnostics` for the exact
+source errors in gate families; the original AccuracyReport remains unmodified.
 
 `accuracy_reports.json` retains dataclasses.asdict of each actual AccuracyReport,
 including failed checks, full config, output names/dtypes and actual dimensions.

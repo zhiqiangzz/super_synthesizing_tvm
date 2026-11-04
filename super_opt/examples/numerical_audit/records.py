@@ -76,6 +76,19 @@ def output_record(actual, reference, dtype, precision):
     result["zero_reference_elements"] = int(zeros.sum())
     result["exact_zero_elements"] = int(np.count_nonzero(zeros & (actual == 0)))
     result["exact_equal"] = bool(np.all(mask) and np.all(numeric.mp_array(actual) == reference))
+    # The standard float diagnostics can underflow when, for example, exp(-5e7)
+    # is a nonzero MPFR reference. Retain that magnitude and never infer exact
+    # agreement from a rounded diagnostic zero.
+    result["absolute_error_mpfr"] = None
+    result["absolute_metric_underflow"] = False
+    if not result["reference_nonfinite"]:
+        if result["nonfinite"]:
+            result["absolute_error_mpfr"] = "Infinity"
+        else:
+            with numeric.context(precision + 64):
+                error = max(abs(numeric.mp_array(actual) - reference).flat)
+                result["absolute_error_mpfr"] = str(error)
+                result["absolute_metric_underflow"] = bool(error != 0 and result["absolute"] == 0)
     if result["reference_nonfinite"]:
         result["status"] = "reference_nonfinite"
     elif result["nonfinite"]:
@@ -144,16 +157,20 @@ class Ledger:
                 if label == "source":
                     source_records.append(row)
                 elif source_records:
-                    original = source_records[k]["absolute"]
-                    error = row["absolute"]
+                    original = source_records[k].get("absolute_error_mpfr")
+                    error = row.get("absolute_error_mpfr")
                     if original is not None and error is not None:
-                        row["source_error_zero"] = original == 0
+                        row["source_error_zero"] = source_records[k]["exact_equal"]
                         row["zero_comparison"] = (
-                            ("both_zero" if error == 0 else "candidate_nonzero")
-                            if original == 0
+                            ("both_zero" if row["exact_equal"] else "candidate_nonzero")
+                            if row["source_error_zero"]
                             else "source_nonzero"
                         )
-                        row["larger_absolute_error_than_source"] = error > original
+                        with numeric.context(bits + 64):
+                            mp = numeric.require_mpfr()
+                            row["larger_absolute_error_than_source"] = mp.mpfr(error) > mp.mpfr(
+                                original
+                            )
                 self.rows.append(row)
                 with (self.directory / "measurements.jsonl").open("a") as stream:
                     stream.write(

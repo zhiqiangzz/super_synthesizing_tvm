@@ -121,6 +121,35 @@ def test_zero_and_nonfinite_serialization():
     assert json.loads(encoded)["absolute"] == "Infinity"
 
 
+def test_tiny_nonzero_error_is_not_classified_as_exact_agreement(programs, tmp_path, monkeypatch):
+    from numerical_audit import records
+
+    _, progs, _, _ = programs
+    source = progs["source"]
+    arrays = [np.zeros((3, 1), dtype=np.float32)]
+    values = {"n": 3, "m": 1}
+    actual = source.run(arrays, values)
+    # Variance's zero output exercises errors below float64's exponent range;
+    # softmax's unit output exercises an ordinary nonzero difference as well.
+    with numeric.context(256):
+        reference = [
+            np.full(x.shape, numeric.require_mpfr().mpfr(2) ** -2000, dtype=object) for x in actual
+        ]
+    monkeypatch.setattr(records, "high_precision_references", lambda *a, **k: (reference, 256))
+    ledger = Ledger(tmp_path)
+    ledger.measure(
+        "tiny-error", source, {"source": source, "candidate": source}, arrays, values, {}
+    )
+    row = ledger.rows[-1]
+    assert not row["exact_equal"] and not row["source_error_zero"]
+    assert row["zero_comparison"] == "source_nonzero"
+    assert not row["larger_absolute_error_than_source"]
+    if np.all(actual[0] == 0):
+        assert row["absolute"] == 0
+        assert row["absolute_metric_underflow"]
+        assert numeric.require_mpfr().mpfr(row["absolute_error_mpfr"]) > 0
+
+
 def test_reference_failure_and_missing_implementation_are_recorded(programs, tmp_path, monkeypatch):
     from numerical_audit import records
 

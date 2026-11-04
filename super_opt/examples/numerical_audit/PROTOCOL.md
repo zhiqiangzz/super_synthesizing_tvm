@@ -130,5 +130,13 @@ JSON Infinity/-Infinity/NaN are strings, not nonstandard JSON numbers; null is
 missing. Finite-pair errors have their own counts and never replace aggregate
 failure metrics. Zero reference uses absolute error with exact-zero indicators.
 Source error zero preserves both-zero versus candidate-nonzero comparisons.
+`absolute_error_mpfr` retains the MPFR magnitude as a decimal string;
+`absolute_metric_underflow` marks a nonzero error rounded to zero in the standard
+float diagnostics. Exact-zero and pairwise error comparisons use MPFR, not that
+rounded float. This corrects a collector bug found in the first complete run:
+extremely small errors could otherwise be labelled both-zero. No rows in that
+run's measurements.jsonl actually had a nonzero error rounded to zero, but the
+gate's Performer g3 offset family exposed this risk. The unmodified AccuracyReport
+float fields are supplemented by `gate_source_diagnostics`, including MPFR strings.
 ULPs are diagnostics, not universal acceptance limits. Unknown or unsupported
 references are reported as reference_failed, with no invented numerical result.
