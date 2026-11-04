@@ -1,33 +1,36 @@
 \section{Implementation}
 \label{sec:impl}
 
-\sys is a Python package on top of TVM's tensor expressions, about \nLoC{} non-blank lines with \nTests tests in \nTestFiles files.
-% src: gen/stats.tex nLoC, nTests, nTestFiles (counted by scripts/gen_tex.py; tests from data/pytest.log)
-Its entry point \code{fuse(outputs, inputs)} rewrites every chain behind the outputs and returns the rewritten TE together with one report per chain; \code{judge(outputs)} runs only the judgement.
+\sys is a Python package on top of TVM's tensor expressions, about \nLoC{} non-blank lines.
+% src: gen/stats.tex nLoC (counted by scripts/gen_tex.py)
+Its entry point \code{fuse(outputs, inputs)} rewrites every chain behind the outputs and returns the rewritten TE together with one report per chain; \code{judge(outputs)} runs only the reference-state construction.
 The frontend reads chains from TE and translates reduction bodies into a symbolic form whose terms are hash-consed and kept canonical by the rewrites of \cref{tab:rules}.
-The judgement, the selection, the derivation and the proofs work on that form; SymPy handles identities not settled by canonical normalisation.
-Internally, domain cardinality has a compact node representing the constant-body sum; the implementation reports it through a separate flag, equivalent to including that atom in the reference set.
-Z3 checks source domains, guarded recovery domains and polynomial recovery uniqueness over an abstraction of reachable states.
+Reference-state construction, state selection, join derivation and the proofs work on that form; SymPy handles identities not settled by canonical normalisation.
+Internally, domain cardinality has a compact node representing the constant-body sum; the implementation reports it through a separate flag, equivalent to including that reduction in the reference set.
+The frontend treats the full-input extent as a fixed parameter if it appears inside a reduction body other than as the divisor of the entire body; otherwise, extent reads denote the part's size.
+This choice applies to the whole chain.
+Z3 checks source domains, guarded recovery domains and injectivity of polynomial state representations over an abstraction of reachable states.
 An unknown solver result rejects the obligation; it is never treated as a proof or as permission to replace a defined source result.
-The back end prints each join as TE expressions, emits one \commreducer per chain with its first leaf as the initial value and a reduction over the remaining leaves, adds the epilogue as elementwise computations, and rebuilds the downstream tensors to read the new states.
+The back end emits each join as TE expressions and creates one \commreducer per chain, initialised from the first element's state tuple and joining the remaining elements' tuples.
+It implements the output function as elementwise computations and rebuilds downstream tensors to read the new states.
 A chain that is not fused is left exactly as written, and its report gives the reason.
 
 
 Native cvc5 SyGuS~\citep{cvc5} searches for auxiliary states; it owns candidate enumeration and internal refinement.
 Within each grammar stage, the implementation first tries the largest permitted number of auxiliary states, then smaller numbers in increasing order.
-It allows at most 256 proposals, three feature occurrences per auxiliary state and a 20-second synthesis deadline, shared among grammar stages and choices of state count.
-Semantic synthesis calls have a 1500\,ms limit; an in-flight independent proof may finish after the overall deadline.
+It allows at most 256 proposals, three occurrences of candidate expressions per auxiliary state and a 20-second synthesis deadline, shared among grammar stages and choices of state count.
+SyGuS calls with the injectivity specification have a 1500\,ms limit; an in-flight independent proof may finish after the overall deadline.
 On an unknown synthesis result, cvc5's native grammar enumerator can supply proposals for independent verification.
-For polynomial tuples, that checker also rejects any unresolved two-copy uniqueness query, supplementing the constructive recovery proof.
-Source repair is limited to 64 rounds, and individual Z3 queries to 1500\,ms.
-Numerical rejection retains the source chain; it does not restart state synthesis.
+For polynomial tuples, that checker independently verifies injectivity by ruling out distinct reference tuples with the same maintained representation, supplementing the constructive recovery proof.
+Domain repair is limited to 64 rounds, and individual Z3 queries to 1500\,ms.
+Rejection by the accuracy acceptance check retains the source chain; it does not restart state synthesis.
 
-The required domain property concerns every legal non-empty input partition.
+The required domain property concerns every legal non-empty input part.
 To authorise replacement of an original reduction result, the current implementation seeks a concrete witness by substituting a singleton into the source definition and asking whether it is undefined for a legal element value.
-Such a singleton is itself a legal partition and therefore suffices to refute the domain property.
-The witness search is restricted to this case; it does not test arbitrary partition sizes.
-An unresolved recovery equation or a satisfying model in the abstract coordinate domain does not establish a source-domain failure.
-This distinction preserves defined original results while permitting repair when their partial semantics actually fail.
+Such a singleton is itself a legal part and therefore suffices to refute the domain property.
+The witness search is restricted to this case; it does not test arbitrary part sizes.
+An unresolved recovery equation or a satisfying model in the abstract domain of reference tuples does not establish a source-domain failure.
+This distinction preserves defined original results while permitting repair when their evaluation on a legal part is undefined.
 
 The frontend accepts the arithmetic language given above, one reduction axis, and sum, maximum and minimum reducers.
 Unsupported control flow, indexing or functions cause the chain to be retained.
@@ -38,17 +41,19 @@ Timeouts and unsupported obligations cause rejection.
 
 The output is ordinary TE.
 \code{te.create\_function} lowers it to a function in TIRx, the tensor IR that the TVM version we build on provides as the separate package \code{tvm\_tirx}, and TVM compiles it for the CPU through LLVM.
-\sys uses this path to evaluate the float64 agreement check and the accuracy gate on the rebuilt program.
+The accuracy acceptance check uses this compiled execution path, comparing its working-precision outputs with MPFR results.
+A separate reconstruction check interprets both the source and rebuilt TE on three small shapes using MPFR, then converts the results to float64 for a shape and tolerance comparison.
+Unlike this reconstruction check, numerical acceptance computes its errors directly against the MPFR arrays.
 \sys performs no scheduling: the evaluation concerns which programs fuse, what is derived and proven, and how accurate the result is.
 
 \textbf{GPU lowering.}\par
 \label{sec:gpu}
 
 \ifsubmit\else
-\placeholder{GPU code generation through TIRx. To be written with the back end: how a derived \commreducer is scheduled (thread, warp and block levels, split-K over the reduction axis), how the boundary producers such as $QK^\top$ are computed tile by tile inside the pass, and how empty partitions are skipped and each active partition is initialised (\cref{sec:accuracy-limits}).}
+\placeholder{GPU code generation through TIRx. To be written with the back end: how a derived \commreducer is scheduled (thread, warp and block levels, split-K over the reduction axis), how the boundary producers such as $QK^\top$ are computed tile by tile inside the pass, and how empty parts are skipped and each active part is initialised (\cref{sec:accuracy-limits}).}
 \fi
 A derived reducer is an associative and commutative join over tuples, which is what a GPU tree reduction and a split of the axis across thread blocks require.
 Turning it into fast kernels is the job of TVM's scheduling and of the TIRx tile primitives, and is outside the scope of this paper.
 Two issues are specific to derived joins and must be handled there.
 First, producers that the chain reads along the axis, such as the scores of attention, are still materialised; they must be computed in tiles inside the fused loop, as FlashAttention does by hand.
-Second, each active partition must start from its own first leaf, and inactive partitions must be skipped. The TE initialisation expression is not a neutral element that a generic reduction schedule may duplicate.
+Second, each active part must start from its first element's state tuple, and inactive parts must be skipped. The TE initialisation expression is not a neutral element that a generic reduction schedule may duplicate.

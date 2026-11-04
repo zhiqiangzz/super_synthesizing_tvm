@@ -1,4 +1,4 @@
-\reservewrapspace{28\baselineskip}
+\reservewrapspace{26\baselineskip}
 \section{System Overview}
 \label{sec:chains}
 
@@ -10,7 +10,7 @@
 \label{sec:input-chains}
 
 The extracted chains contain reductions and intervening computations over a shared axis.
-\Cref{fig:grammar} gives the language of reduction bodies; the definitions below specify the dependencies within a chain and its meaning on a partition.
+\Cref{fig:grammar} gives the language of reduction bodies; the definitions below specify the dependencies within a chain and its meaning on an input part.
 
 \begin{figure}[htbp]
 \small
@@ -28,26 +28,29 @@ m \;::=\;& \textstyle\bigoplus_{j} f \mid g(\ctx_1,\dots,\ctx_p)
 \label{def:chain}
 Fix an axis $\Ax=\{0,\dots,N-1\}$ and, for each position $j\in\Ax$, the tuple $x_j$ of values that the chain reads at $j$ from tensors outside it.
 A \emph{reduction chain} is a sequence of members $m_1,\dots,m_n$ in producer order.
-A member is either a \emph{link} $m=\bigoplus_{j\in\Ax} f_m(x_j,\ctx_m)$ with $\oplus\in\{\Sigma,\max,\min\}$, or a \emph{value} $m=g_m(\ctx_m)$.
-The \emph{contexts} $\ctx_m$ are earlier members that $m$ reads at an index that does not involve $j$, that is, their final values.
-A chain is \emph{dependent} if some link reads a context.
+A member is either a \emph{reduction} $m=\bigoplus_{j\in\Ax} f_m(x_j,\ctx_m)$ with $\oplus\in\{\Sigma,\max,\min\}$, or a \emph{value} $m=g_m(\ctx_m)$.
+The \emph{contexts} $\ctx_m$ are the final values of earlier reductions, or scalar computations derived from them, that $m$ reads at an index that does not involve $j$.
+They are invariant along the axis, although computing them may require completing earlier reductions.
+A chain is \emph{dependent} if some reduction reads a context.
 \end{definition}
 
 In the running variance example, the final sum reads the mean as a context.
-\sys reads chains from TE programs: a TE reduction becomes a link, and an elementwise tensor that the chain reads along $j$ is inlined into the bodies.
+\sys extracts chains from TE programs by treating reductions over the shared axis as chain members and inlining elementwise tensors read along $j$ into their bodies.
 A reduction over another axis, such as $QK^\top$ in attention, stays outside the chain and supplies values $x_j$.
 
 To speak about a part of the axis, we evaluate the chain on that part alone.
 
-\begin{definition}[Partial semantics]
+\begin{definition}[Semantics on an input part]
 \label{def:partial}
-For a non-empty $S\subseteq\Ax$, $m(S)$ is the value of member $m$ when every link reduces over $S$ only, every context is its own value on $S$, and the extent $N$ read as a value is $|S|$.
+For a non-empty $S\subseteq\Ax$, $m(S)$ is the value of member $m$ when every reduction is evaluated over $S$ only and every context is its own value on $S$.
+The interpretation of extent reads is fixed for each chain before analysis: reads of $N$ denote $|S|$ when the extent represents the size of the current part, or retain the full-input value $N$ when it is a fixed program parameter.
+Both interpretations agree on the full input.
 The program computes $m(\Ax)$.
 \end{definition}
 
 The declared input domain constrains the element values.
-A legal partition is any non-empty part of an input satisfying these constraints.
-An original member may be undefined on such a part even when the full-input output is defined; a maintained state must be defined on every legal partition.
+A legal part is any non-empty part of an input satisfying these constraints.
+An original member may be undefined on such a part even when the full-input output is defined; a maintained state must be defined on every legal part.
 A single pass must produce $m(\Ax)$, wherever the source output is defined, from information gathered part by part.
 
 \subsection{Single-Pass Reducer Contract}
@@ -58,8 +61,8 @@ The following contract states the relation that each join must preserve over the
 \begin{definition}[Single-pass reducer]
 \label{def:reducer}
 A \emph{state map} is a tuple $\st=(\st_1,\dots,\st_k)$ of functions of non-empty parts.
-For fixed non-reduction indices, each function is scalar-valued, and the tuple size $k$ is fixed for a given reducer, independently of the reduction length $N$.
-A \emph{single-pass reducer} for a chain is a tuple $(\leaf,\Mrg,\epi)$ of a leaf $\leaf(x_j)=\st(\{j\})$, a binary operation $\Mrg$ and an epilogue $\epi$ such that, for all disjoint non-empty parts $\pa$ and $\pb$,
+For fixed non-reduction indices, each function is scalar-valued, so $\st(S)$ is a state tuple with components $\st_i(S)$; its size $k$ is fixed for a given reducer, independently of the reduction length $N$.
+A \emph{single-pass reducer} for a chain is a tuple $(\leaf,\Mrg,\epi)$ of an initialisation function $\leaf(x_j)=\st(\{j\})$, a binary join $\Mrg$ and an output function $\epi$ such that, for all disjoint non-empty parts $\pa$ and $\pb$,
 \begin{equation}
 \label{eq:invariant}
 \Mrg(\st(\pa),\st(\pb))=\st(\pa\dunion\pb),\qquad
@@ -68,15 +71,15 @@ A \emph{single-pass reducer} for a chain is a tuple $(\leaf,\Mrg,\epi)$ of a lea
 The \emph{required} members are those the rest of the program reads.
 \end{definition}
 
-The generated reduction starts from the first leaf and folds the remaining leaves.
-No numerical state represents an empty partition: execution skips empty partitions, and the input axis must be non-empty.
+The initialisation function produces a singleton state tuple for each input element; the generated reduction starts from the first tuple and folds the remaining tuples.
+No numerical state tuple represents an empty part: execution skips empty parts, and the input axis must be non-empty.
 The join invariant of \cref{eq:invariant} connects the maintained state tuple to the original program.
 
 \begin{lemma}[Laws from the invariant]
 \label{lem:laws}
-If the invariant holds, $\Mrg$ is commutative and associative when applied to states of pairwise disjoint non-empty parts.
+If the invariant holds, $\Mrg$ is commutative and associative when applied to state tuples of pairwise disjoint non-empty parts.
 For every partition of $\Ax$ into non-empty parts and every binary join tree over them, joining the leaves yields $\st(\Ax)$.
-The serial fold initialised from its first leaf has the same property.
+The serial fold initialised from its first singleton state tuple has the same property.
 \end{lemma}
 
 \begin{proof}
@@ -84,13 +87,13 @@ $\Mrg(\st(\pa),\st(\pb))=\st(\pa\dunion\pb)=\st(\pb\dunion\pa)=\Mrg(\st(\pb),\st
 The rest is induction on the join tree and on the length of the fold.
 \end{proof}
 
-Each non-empty partition can therefore compute its state tuple independently.
-A tree of joins combines these tuples without another traversal of the partitions.
+Each non-empty part can therefore compute its state tuple independently.
+A tree of joins combines these tuples without another traversal of the parts.
 This parallel structure follows from the invariant, independently of a particular schedule.
 
-In the vocabulary of program calculation, $S\mapsto\st(S)$ is a homomorphism from finite non-empty bags under $\dunion$ to the states under $\Mrg$: a list homomorphism~\citep{bird87,gibbons96} whose join is order-free.
-In the vocabulary of databases, a chain with a context-free reference construction is an \emph{algebraic} aggregate, computable from a fixed number of \emph{distributive} ones~\citep{datacube}.
-Empty partitions are handled by control flow, outside the algebraic join contract.
+In the vocabulary of program calculation, $S\mapsto\st(S)$ is a homomorphism from finite non-empty bags under $\dunion$ to the state tuples under $\Mrg$: equivalently, a list homomorphism~\citep{bird87,gibbons96} invariant under permutation of its input.
+In the vocabulary of databases, a chain with a context-independent reference construction is an \emph{algebraic} aggregate, computable from a fixed number of \emph{distributive} ones~\citep{datacube}.
+Empty parts are handled by control flow, outside the algebraic join contract.
 
 \paragraph{Problem.}
-Given a dependent chain, establish a sufficient condition for a single-pass reducer, construct one, prove \cref{eq:invariant}, and accept it only if in floating point it introduces no additional non-finite result on the checked inputs and its measured error stays within a stated bound of the program's.
+Given a dependent chain, establish a sufficient condition for a single-pass reducer, construct one, prove \cref{eq:invariant}, and accept it only if in floating point it introduces no additional non-finite result on the checked inputs and its measured error stays within the stated acceptance threshold relative to the source program.

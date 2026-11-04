@@ -1,80 +1,102 @@
-\section{Keeping the Accuracy of the Original Program}
+\section{Checking Floating-Point Accuracy}
 \label{sec:accuracy}
 
-推导出的归约器现在具有经验证的合并操作和选定的数值形式。
-它在浮点数上执行，求值顺序和中间量与源程序不同~\citep{higham,goldberg}。
-为判断这一形式是否可接受，\sys 将生成表达式的静态检查与相对于原程序的差分测量结合起来。
-测量采用以下接受判据。
-
-\begin{definition}[Accuracy acceptance]
-\label{def:gate}
-对于结果 $\hat y$，以原程序在 float64 中的计算结果 $y$ 为参考，定义误差为 $\max|\hat y-y|/\max|y|$；若 $\hat y$ 的任一值非有限，则误差为 $\infty$。
-如果对一组输入中的每个输入，融合后的程序仅在原程序产生非有限值的地方产生非有限值，且误差不超过 $100\max(\mathit{err}_{\mathrm{orig}},\mathit{err}_{\mathrm{inh}})+64u$，就称其在这组输入上\emph{通过精度检查}。其中 $\mathit{err}_{\mathrm{inh}}$ 是通过输入扰动得到的经验敏感度估计，$u=2^{-23}$。
-\end{definition}
-
-这一界限相对于原程序，而不是精确答案：融合程序允许的精度损失，以原程序或问题条件性所导致的损失为基准，并允许一个常数因子。
-检查仅施加于采样输入，因此提供的是证据，而非保证。
+维护状态既提供融合所需的信息，也提供一种数值表示。
+保留中心化后的量，使合并能够直接修正局部结果，无需通过原点矩相减来重建它们；保留缩放后的量，则使合并能够调整局部尺度，无需物化未缩放的值。
+这些选择沿用了中心矩和在线归一化中的成熟方法~\citep{chan,pebay,milakov,blanchard}。
+其收益取决于实际生成的运算：即使采用中心化更新，其舍入行为也可能与两遍计算不同~\citep{chan}。
+因此，我们通过表达式静态检查、采样精度验收，以及独立的生成输入和合并树测试来评估生成程序。
 
 \subsection{Static Checks on the Emitted Join}
 \label{sec:hazards}
 \label{sec:static}
 
-单遍计算同时改变求值顺序和中间量。
-并行归约必然涉及运算重结合，而展开为原点矩可能引入相消，移除缩放则可能导致溢出。
-另一个风险是除以上下文：该上下文在完整输入上非零，却可能在某个真子分区上为零。
-这些风险促使我们在合并允许的情况下，保留源程序的中心化和缩放表示。
-
-\textbf{Proven guarantees.}
-随后，\sys 检查所推导合并的两个性质。
-只有原程序具有某个性质时，才要求候选也具有该性质。
+合并可能引入自变量无上界的指数运算，或除以在某个真子分块上为零的上下文。
+\sys 在实数算术下检查所生成表达式的以下性质。
+当原程序通过某个性质的相应检查时，候选也必须满足该性质。
 
 \begin{proposition}[Bounded exponents]
 \label{prop:exp}
-合并中每个 $\exp$ 的自变量都不超过 8：每个正项都被同一轴上减去的最大值，或运行中的最大值状态所抵消。
+若指数有界性检查通过，则合并中每个 $\exp$ 的自变量都不超过 8，这一性质通过支配各项的最大值和常量界确立。
 \end{proposition}
 
 \begin{proposition}[Positive divisors]
 \label{prop:div}
-沿从第一个叶状态初始化的串行折叠，本条件所检查的每个实际执行的除数和对数自变量均为正。
-分析结合了符号格 $\{\text{any},\geq0,>0\}$ 上的最大不动点，以及分支条件下的 SMT 蕴含关系。
+若正性检查通过，则沿从第一个元素初始化的串行折叠，本条件所检查的每个实际执行的除数和对数自变量均为正。
+分析结合了按性质强弱递增排序的正负性抽象格 $\{\text{any},\geq0,>0\}$ 上的最大不动点，以及分支条件下的 SMT 蕴含关系。
 \end{proposition}
 
-\textbf{Where the join departs from the program.}
-程序自身的计算并不总能保留。
-当证明某个源归约结果在合法分区上无定义时，\textsc{Select} 将导致问题的上下文移出归约，并将所得系数保留为状态，以修复该定义。
-% src: data/fused_ops.json actions; reducer/states.py and reducer/smt.py
-即使合并只对原程序状态进行上下文重基，它仍是一个更新公式；当数据偏移相对于其离散程度很大时，更新公式可能比两遍算法损失更多精度，差异可达到问题条件数的量级~\citep{chan}。
-这些情况下没有舍入误差证明，只能由下述验收检查决定是否接受。
+定义域修复改变源状态的定义后，仍需执行这些检查。
+它们约束指数范围和实际执行的运算的定义域；舍入和下溢则通过数值测量来评估。
 
-\subsection{Acceptance Measurements and Their Limits}
-上述证明并不判定舍入误差。
-因此，\sys 在接受融合之前，会将融合后的程序与原程序进行比较。
-系统从五类输入族采样：中心化输入、平移 $10^4$ 的输入、大离散度输入，以及接近溢出和下溢阈值的输入；以原程序的 float64 求值为参考，分别计算两个程序，并在每类输入上检查 \cref{def:gate}。
-补充材料的附录 E 详细说明了输入族和测量方法。
+\subsection{MPFR-Based Acceptance Measurements}
 
+源程序与融合程序通过 LLVM 在工作精度下执行，使用相同的已量化输入。
+解释器使用 MPFR~\citep{mpfr} 对源表达式求值，将浮点类型转换提升到求值精度。
+我们将该值称为\emph{MPFR 结果}，以区别于推导中使用的参考状态元组。
+求值从 128 位开始，将精度逐次加倍，直到相邻两次结果满足 80 位相对精度的一致性要求，并在接近零时使用单独的容差，或达到 2048 位上限。
+若结果未能稳定，数值检查被标记为不支持。
+这一一致性检查提供经验性的高精度结果，并不证明整个表达式已被正确舍入。
 
+默认输入族覆盖中心化数据、大偏移、大离散度和两种极端尺度。
+仅在源程序仍足够准确时计入极端尺度输入族；MPFR 结果非有限的样本被跳过。
+必要时缩小符号轴长度的预设值，以满足 MPFR 求值工作量的上限，并记录实际尺寸。
+附录 E 给出采样参数和跳过规则。
+
+为测量局部输入敏感度，检查使用 \code{nextafter} 将每个输入元素移动到其工作浮点类型中的一个相邻值，并独立选择移动方向。
+对于每个输出元素，$s_i$ 是有效扰动试验中观察到的 MPFR 结果的最大绝对变化。
+默认进行两次试验；非有限的扰动输入或求值结果不参与 $s_i$ 的计算。
+若没有有效试验，则 $s_i=0$。
+报告记录有效试验次数。
+
+\begin{definition}[Accuracy acceptance]
+\label{def:gate}
+对于每个输出元素 $i$，令 $\hat y_i^{S}$ 和 $\hat y_i^{F}$ 分别为源程序和融合程序的浮点结果，$y_i$ 为 MPFR 结果。
+当融合程序的输出均有限，且每个元素都满足以下条件时，就称其通过一个纳入检查的输入样本：
+\[
+|\hat y_i^{F}-y_i|
+\leq
+\alpha\max\!\left(|\hat y_i^{S}-y_i|,s_i\right)
++\beta\epsilon_d|y_i|+\tau.
+\]
+其中 $\epsilon_d$ 是输出类型 $d$ 中 1 与下一个更大数之间的间距。
+这些参数可配置，默认值为 $\alpha=100$、$\beta=64$ 和 $\tau=0$；当允许误差为零时，结果必须完全一致，无定义的比较判为失败。
+\end{definition}
+
+该判据允许误差相对于源程序误差或采样敏感度按指定幅度增加。
+敏感度来自局部扰动测量，并非覆盖所有扰动的界。
+报告还提供绝对误差、相对误差、按范数度量的误差和 ULP 误差作为诊断指标；数值验收仅由逐元素判据决定。
+
+\subsection{Independent Property Tests}
 \label{sec:accuracy-limits}
 
-\Cref{tab:assurance} 区分了 \sys 所证明的性质与仅在样本上检查的性质。
-验收检查是对五类输入族的差分测试，而非证明；没有采样到的输入不在其覆盖范围内，例如声明为正的定义域之外、恰好为零的权重。
-执行约定排除了空分区参与合并。
-并行实现必须用各自的第一个叶状态初始化每个活动分区，并跳过非活动分区，而不能注入数值单位元。
-这是对降层实现的要求，而非精度检查所建立的浮点性质。
+独立的 Hypothesis 测试集~\citep{hypothesis} 为展示算子生成不同的输入和归约长度，将源程序与融合程序的 LLVM 执行结果同转换为 float64 的 MPFR 结果进行比较，并使用显式容差。
+对于中心矩，测试还生成非空分块、合并树和操作数交换，在 float32 和 float64 下执行所生成的单元素初始化与合并表达式。
+这些测试覆盖了快速验收检查所用串行路径之外的执行顺序。
+Hypothesis 负责生成、缩减反例和重放；这一更广泛的搜索在各次融合尝试之外运行。
+
+代数合并证明与这些数值检查针对不同的性质。
+\Cref{tab:assurance} 列出了各项证明或成功通过的检查所确立的性质。
+证明允许在实数算术下采用任意非空分块划分；测试则测量生成用例上的浮点行为。
+执行约定排除了空分块参与合并。
+并行实现必须从各自的第一个元素初始化每个活动分块，并跳过非活动分块。
+单元素初始化不是空分块的数值单位元。
 
 \begin{table}[t]
-\caption{What each step establishes. \tagP: proven; \tagS: checked on samples; ---: not established.}
+\caption{Properties established by proofs or passing the corresponding checks. \tagP: proven; \tagS: checked on samples; ---: not established.}
 \label{tab:assurance}
 \footnotesize
-\begin{tabular}{@{}lp{0.62\linewidth}l@{}}
+\begin{tabular}{@{}p{0.25\linewidth}p{0.62\linewidth}l@{}}
 \toprule
 \textbf{Step} & \textbf{Property} & \\
 \midrule
-Judgement (\cref{alg:judge}) & defined reference atoms give a single pass with at most $|\mathcal Q|$ states & \tagP\\
+Reference construction (\cref{alg:judge}) & defined reference reductions give a single pass with at most $|\mathcal Q|$ states & \tagP\\
 Selection (\cref{alg:select}) & complete recovery and defined states on legal non-empty parts & \tagP\\
-Join & invariant and leaves (\cref{thm:correct,thm:printed}) & \tagP\\
-Join & bounded exponents, positive divisors on the serial fold (\cref{prop:exp,prop:div}) & \tagP\\
-Rebuilt program & agrees with the original in float64 on three small shapes & \tagS\\
-Rebuilt program & passes the accuracy check (\cref{def:gate}) on five input families & \tagS\\
+Join & invariant and initialisation (\cref{thm:correct,thm:printed}) & \tagP\\
+Join & real-arithmetic exponent bounds and divisor positivity on the serial fold (\cref{prop:exp,prop:div}) & \tagP\\
+Rebuilt program & MPFR evaluations agree on three small shapes, compared after conversion to float64 & \tagS\\
+Rebuilt program & meets the elementwise criterion (\cref{def:gate}) on retained input families & \tagS\\
+Property tests & generated inputs and non-empty moment joins meet explicit numerical tolerances & \tagS\\
 Rebuilt program & a bound on its floating-point error for every input & ---\\
 \bottomrule
 \end{tabular}

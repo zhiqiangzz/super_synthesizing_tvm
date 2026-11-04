@@ -16,6 +16,7 @@
 \centerline{\sffamily\bfseries (b) Derivation}
 \medskip
 On each part, let $t=\sum_jx_j$, $q=\sum_jx_j^2$ and $n=\sum_j1$.
+Shifting the mean by $\delta$ exposes $n$ as the coefficient of $\delta^2$.
 Expanding the source definition gives
 \[
 G(t,q,n)=(t,q-t^2/n,n).
@@ -26,7 +27,7 @@ Adding $n$ gives the complete recovery
 H(t,ss,n)=(t,ss+t^2/n,n).
 \]
 Since $n>0$, both maps are defined and $H\circ G=\mathrm{id}$.
-The reference join $\oplus$ adds coordinates.
+The reference join $\oplus$ adds components.
 The upper arrow follows by composition:
 \[
 \Mrg(a,b)=G\bigl(H(a)\oplus H(b)\bigr).
@@ -44,7 +45,7 @@ The emitted join evaluates this correction without materialising $q$.
 \caption{Variance: auxiliary states, recovery and join derivation.
 Here $p\in\{S,T\}$ and $U=S\dunion T$ for disjoint non-empty parts.
 Arrow annotations identify the subsections that develop each step:
-feature construction and synthesis (\S\ref{sec:selection}--\ref{sec:synthesis}), information equivalence (\S\ref{sec:recovery}),
+constructing candidate expressions and synthesising states (\S\ref{sec:selection}--\ref{sec:synthesis}), recovery of reference states (\S\ref{sec:recovery}),
 join derivation (\S\ref{sec:correctness}), and numerical formulation (\S\ref{sec:rebase}).}
 \label{fig:recovery-square}
 \end{minipage}\par\medskip

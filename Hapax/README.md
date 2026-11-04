@@ -8,7 +8,6 @@ Statement, references and supplementary material.
 
 ```bash
 bash Hapax/build.sh            # draft: macros from data/, main.pdf + supplement.pdf + pipeline.pdf, checks
-bash Hapax/build.sh --data     # first regenerate every data file at the current HEAD (~10 min)
 bash Hapax/build.sh --submit   # refuses stale data, placeholders, unverified citations
 ```
 
@@ -35,7 +34,8 @@ bash Hapax/build.sh --submit   # refuses stale data, placeholders, unverified ci
 ## Chinese prose edition
 
 ```bash
-bash Hapax/build_zh.sh         # build/main-zh.pdf; validates English/Chinese consistency
+bash Hapax/build_zh.sh         # draft build/main-zh.pdf; validates English/Chinese consistency
+bash Hapax/build_zh.sh --submit # requires current data and no placeholders
 ```
 
 `main-zh.tex` uses the same ACM class, dimensions, Latin and mathematical fonts,
@@ -59,6 +59,8 @@ requires review if that source changes. This build leaves the English PDFs intac
 * `scripts/gen_tex.py` turns the data into `gen/stats.tex` (one macro per number, each followed
   by a `% src:` line), the generated tables `gen/tab-*.tex`, and `gen/accuracy.csv`. Never edit
   `gen/` by hand. A number typed into a section carries a `% src:` comment.
+  It also exports `gen/state-definitions.txt`, which maps every maintained state identifier
+  in the registry table to the recorded source or derived expression without rerunning synthesis.
 * Claims are labelled proven / measured / sampled in the assurance table.
 * `bib/refs.bib` is written only from looked-up records (`bib/lookup.json`, Crossref, arXiv,
   publisher pages, first pages of the PDFs); `bib/VERIFIED.md` says, per key, what was read.
@@ -67,6 +69,28 @@ requires review if that source changes. This build leaves the English PDFs intac
   is about programs), never "first", "speedup", "infusible" ("no single pass is known"),
   "as accurate as", "preserves/guarantees the accuracy" (say "close to the original's accuracy" and
   "passes the accuracy check"); no em dashes.
+
+## Numerical-method update and development handoff
+
+This worktree is for the manuscript, bibliography, imported results and typesetting.
+New compiler code, numerical tests, reference-state code generation and experimental
+collection belong in a development worktree. The complete task and result-package
+contract are in [the numerical evaluation handoff](notes/numerical-evaluation-handoff.md).
+Do not run `build.sh --data` or the legacy collectors here during this transition:
+they have not been adapted to the new accuracy-report interface.
+
+Sections 6--7 and Appendix E now describe the MPFR/Hypothesis implementation from
+`d2b0653238`. The checked-in data still records the synthesis snapshot `6c46fb1b02`.
+Its coverage/state inventory and algebraic derivation measurements are explicitly
+identified as that snapshot. Old numerical error ratios, acceptance margins and
+complete-fusion timings are not presented as measurements of the new protocol.
+The draft marks the replacement results as pending; the old JSON files remain
+unchanged for provenance. Existing hand-calculated examples illustrate numerical
+mechanisms and are not measurements of generated reference-state programs.
+
+The registry table prints state information only until new numerical evidence is
+imported. Draft builds retain the stale-data notice. Submission builds must pass
+the normal freshness checks and contain no pending-results placeholders.
 
 ## Layout
 
@@ -110,9 +134,16 @@ paper-figures-tables, paper-review, paper-policy; MIT). Overrides for this paper
 
 ## Revision conventions
 
-The manuscript follows the non-empty-part reducer contract at `6c46fb1b02`: initialise from a leaf and skip empty partitions. A TE initialisation expression is not a neutral element.
-Let the abstract and introduction length follow the argument; do not force them into two pages or pin the variance figure to page three. Define state as a partition summary before describing selection. Keep concrete examples concentrated in the running variance example; use abstract correction relations for supplementation.
-The end-to-end flow is included by `sections/03-pipeline.tex`, with shared vector source in `figures/pipeline.tikz` and a standalone export in `build/pipeline.pdf`. Maintained states and verification coordinates are distinct; complete recovery is mandatory. A failed proof never licenses dropping a defined original state. The reference state-count upper bound supplies the default search limit, not a guarantee of a preserving representation within that count.
-Data collection requires `z3-solver` and `cvc5` (both versions recorded in JSON metadata). State synthesis uses rebase features before the mixed feature grammar, followed by independent recovery/domain/merge verification. Numerical rejection does not restart synthesis. Stage measurements apply the same index-view specialisation as `fuse`, including covariance cases; compiler sources remain unchanged.
+The manuscript follows the non-empty-part reducer contract at `6c46fb1b02`: initialise from a leaf and skip empty parts. A TE initialisation expression is not a neutral element. Use **part** for one subset of the axis and **partition** for a division of the axis into disjoint parts. The Chinese equivalents are 分块 and 划分.
+
+Use **state tuple** for the information associated with a non-empty part and **state component** for one scalar value in that tuple; the **state map** supplies these values as functions of the part. State counts refer to the number of components. A tuple summarises a part, but **summary** does not introduce a separate object type. Define the tuple and its join contract before describing synthesis. Use **reference state tuple/components**, **maintained state tuple**, **auxiliary states**, **join**, and **context-independent** consistently for Hapax. Context-independent means that a reduction body does not read a context as defined in the manuscript. Preserve the terminology of cited work, such as lifting, compression function, or merge operator, when describing that work; shared terminology does not imply identical synthesis problems.
+
+Keep the reference construction `Q` in the existence argument distinct from the reference state tuple `B` used for recovery. `Q` is collected from the required outputs and their dependencies; `B` is obtained by expanding the repaired source state tuple and the required outputs. These constructions serve different purposes and do not by themselves establish a set-inclusion relation between their components. The bound `|Q|` supplies the default limit on maintained tuple size; it does not guarantee a representation that preserves source results within that limit. Complete recovery of `B` from the maintained state tuple remains mandatory. A failed proof never licenses dropping a defined source state component. A recovery map reconstructs reference components, not input elements; any inverse claim must state its domain and direction.
+
+Describe the expressions supplied to synthesis as **candidate expressions** and, when discussing their grammar role, as **grammar terminals**. They are not all maintained states. The search uses expressions from context-correction analysis before adding reference components to the grammar, followed by independent recovery, domain and join verification. Describe augmentation with all admissible correction coefficients directly; do not call it a closure without a corresponding closure property. Describe rewriting the join in local contexts directly. These are manuscript terminology conventions, not claims that every phrase is a standard term from prior work.
+
+Let the abstract and introduction length follow the argument; do not force them into two pages or pin the variance figure to page three. Keep concrete examples concentrated in the running variance example; use abstract correction relations for supplementation. The end-to-end flow is included by `sections/03-pipeline.tex`, with shared vector source in `figures/pipeline.tikz` and a standalone export in `build/pipeline.pdf`.
+
+Development-side data collection requires `z3-solver`, `cvc5` and `gmpy2`; property tests additionally require `hypothesis`. The result package records their versions and the MPFR version. Numerical rejection does not restart synthesis. Stage measurements apply the same index-view specialisation as `fuse`, including covariance cases; compiler sources remain unchanged in this paper worktree.
 
 The pipeline and both algorithms use half-width layouts with adjacent prose. Chinese headings, floats, algorithms, formulas, footnotes and citations remain identical to English; only body prose is translated. `check_zh.py` also protects the half-width visual columns.

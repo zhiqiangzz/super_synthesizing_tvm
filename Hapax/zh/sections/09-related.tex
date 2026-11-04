@@ -8,14 +8,14 @@
 \emph{Neptune}~\citep{neptune} 先按不存在依赖的方式融合归约，再通过符号求解得到修复函数 $h(t,r,r')$，将使用较早归约的过时值 $r$ 计算出的部分结果 $t$，转换为对应新值 $r'$ 的结果。
 融合通过用户在调度模板中指定的滚动更新和 split-K 调度实现，并由 Triton 编译~\citep{triton}；根据 Neptune 的结论，其后续工作 Nautilus~\citep{nautilus} 将调度自动化。
 \emph{RedFuser}~\citep{redfuser} 检查每个归约体能否分解为 $G(x)\otimes H(d)$，即数据的函数与较早结果的函数的组合，其中 $\otimes$ 由归约类型决定；随后推导通过 $H$ 重新缩放的融合形式与增量形式，并生成 TileLang 内核~\citep{tilelang}。
-两者都为原程序的每个归约保留一个状态，也都评估 GPU 性能；\sys 目前尚未进行此类性能评估。
+两者都为原程序的每个归约保留一个状态分量，也都评估 GPU 性能；\sys 目前尚未进行此类性能评估。
 
 \textbf{Their conditions.}
-我们比较两者融合单个归约的条件：归约运算为 $\oplus\in\{\Sigma,\max\}$（$\min$ 为其对偶），归约体为 $g(r,c)$，上下文为 $r$，无上下文的值为 $c$。
+我们比较两者融合单个归约的条件：归约运算为 $\oplus\in\{\Sigma,\max\}$（$\min$ 为其对偶），归约体为 $g(r,c)$，上下文为 $r$，不依赖上下文的值为 $c$。
 \begin{itemize}
 \item[$\Cls{N}$:] Neptune 的条件~\citep[Eq.~3--4]{neptune}：存在某个 $h$，使得对所有 $r,r',c,t,t'$，有 $h(g(r,c),r,r')=g(r',c)$ 和 $h(t\oplus t',r,r')=h(t,r,r')\oplus h(t',r,r')$。
 \item[$\Cls{R}$:] RedFuser 的条件~\citep[Eq.~4, Tab.~1]{redfuser}：当 $\oplus=\Sigma$ 时，$g(r,c)=G(c)\cdot H(r)$；当 $\oplus=\max$ 时，$g(r,c)=G(c)+H(r)$。
-\item[$\Cls{H}$:] \cref{lem:regroup} 的条件，其中包含有限个无上下文的 $G_k$：
+\item[$\Cls{H}$:] \cref{lem:regroup} 的条件，其中包含有限个不依赖上下文的 $G_k$：
 \[
 g(r,c)=\sum_{k=1}^{K}a_k(r)\,G_k(c)\ \text{ when }\oplus=\Sigma,\qquad
 g(r,c)=\max_{k=1}^{K}\psi_k(r,G_k(c))\ \text{ when }\oplus=\max,
@@ -26,7 +26,7 @@ g(r,c)=\max_{k=1}^{K}\psi_k(r,G_k(c))\ \text{ when }\oplus=\max,
 \begin{theorem}[Containment]
 \label{thm:containment}
 (a) $\Cls{R}\subseteq\Cls{H}$。
-(b) $\Cls{N}$ 中的每个归约环节都属于 $\Cls{H}$，但在 $\oplus=\Sigma$ 时，要求其修复函数 $h(\cdot,r,r')$ 至少在某一点连续。
+(b) $\Cls{N}$ 中的每个归约都属于 $\Cls{H}$，但在 $\oplus=\Sigma$ 时，要求其修复函数 $h(\cdot,r,r')$ 至少在某一点连续。
 (c) 两个包含关系都是严格的：$\sum_j (c_j-r)^2$ 和 $\max_j |c_j-r|$ 属于 $\Cls{H}$，但既不属于 $\Cls{N}$，也不属于 $\Cls{R}$。
 \end{theorem}
 
@@ -42,18 +42,18 @@ g(r,c)=\max_{k=1}^{K}\psi_k(r,G_k(c))\ \text{ when }\oplus=\max,
 \end{proof}
 
 也就是说，前人的两个条件都允许上下文通过单个因子或单个项进入，并通过修复或重新缩放原程序的部分结果进行处理。
-中心矩等多项式形式的后续计算，以及绝对偏差的极值，都不满足这两个条件，因为它们的合并需要原程序未计算的状态。
+中心矩等多项式形式的后续计算，以及绝对偏差的极值，都不满足这两个条件，因为它们的合并需要原程序未计算的辅助状态。
 Neptune 报告了 Welford 方差的这一失败情况~\citep[\S4.2]{neptune}。
 RedFuser 报告了方差和转动惯量的加速结果~\citep[App.~A.6]{redfuser}，但没有说明 $\sum_l (x_l-m)^2$ 如何满足其条件；事实上，该表达式并不满足。
 定理比较的是论文中陈述的条件；各实现只识别其中的子语言，Neptune 和 RedFuser 通过 SymPy，\sys 则通过 \cref{tab:rules} 中的重写规则进行识别。
 连续性假设只排除了无法用闭式表达的不可测修复函数。
 
 \textbf{Their programs.}
-为比较实现，我们将两篇论文融合的 \nPriorPrograms 个程序改写为 TE，并交给 \sys 处理（补充材料附录 F）。
-\sys 成功融合其中 \nPriorFused 个，包括将掩码或偏置作为张量提供后的所有注意力变体、RMSNorm 后接最大值、Performer 的三种归约模式、MLA 解码、方差和转动惯量。
+为比较实现，我们将两篇论文融合的 \nPriorPrograms 个程序改写为 TE，并交给快照 \code{6c46fb1b02} 中的 \sys 处理（补充材料附录 F）。
+该版本成功融合其中 \nPriorFused 个，包括将掩码或偏置作为张量提供后的所有注意力变体、RMSNorm 后接最大值、Performer 的三种归约模式、MLA 解码、方差和转动惯量。
 六个程序使用了 \cref{fig:grammar} 语言之外的结构：用 \code{if\_then\_else} 构造掩码、由循环索引计算 ALiBi、使用 $\tanh$ 的软截断、通过 \code{n // G} 索引的分组查询，以及同时在两个轴上的归约。
-缩放 L2 范数和 FP8 量化后接 GEMM 得到了经验证的归约器，但在极端输入族上未通过数值检查。
-另有两个程序未通过状态选择：嵌套求和示例存在未解决的定义域义务，下文附录 A.1 程序所需的辅助状态则超出状态数限制。
+缩放 L2 范数和 FP8 量化后接 GEMM 得到了经验证的归约器，但在极端输入族上未通过当时版本的数值检查；它们在更新后的检验方法下的结果仍待测量。
+另有两个程序未通过状态选择：嵌套求和示例存在未解决的定义域义务，下文附录 A.1 程序所需的辅助状态则超出元组大小限制。
 Neptune 在 L2 范数中保留缩放，并除以运行中的最大值；在全零前缀之后，该值为零，而论文未讨论这种情况。
 
 \textbf{Contexts without an inverse.}
@@ -62,7 +62,7 @@ RedFuser 使用 $H(d_{\mathrm{old}})^{-1}\otimes H(d_{\mathrm{new}})$ 重新缩�
 \label{ex:a1}
 当零因子已经抹去某项贡献时，用单位元替代逆元无法恢复这部分信息。
 有效的合并必须保留足以重构被抹去贡献的信息，例如增加一个辅助状态。
-在 \sys 的保留策略下，该辅助状态必须与有定义的原始结果共同满足状态数限制；如果超出状态数限制，该链保持未融合。
+在 \sys 的保留策略下，该辅助状态必须与有定义的原始结果共同保留；如果所得元组超出大小限制，该链保持未融合。
 补充材料附录 D 给出具体反例，并评估增量形式。
 
 \Cref{tab:capabilities} 汇总了比较结果，也包括前人系统领先的方面。
@@ -79,8 +79,8 @@ RedFuser 使用 $H(d_{\mathrm{old}})^{-1}\otimes H(d_{\mathrm{new}})$ 重新缩�
 \midrule
 Sum with one multiplicative context (softmax, $P\cdot V$) & \cmark{} Eq.~3--5, p.~7 & \cmark{} Eq.~4, Tab.~1 & \cmark{}\\
 Max with an additive or a positive-scale context & \cmark{} p.~13 & \pmark{} additive only, Tab.~1 & \cmark{}\\
-Context in several terms (moments, centred extrema) & \xmark{} p.~10--11; \cref{thm:containment} & \xmark{} \cref{thm:containment} & \pmark{} subject to state limit\\
-States the program does not compute & \xmark{} & \xmark{} & \cmark{}\\
+Context in several terms (moments, centred extrema) & \xmark{} p.~10--11; \cref{thm:containment} & \xmark{} \cref{thm:containment} & \pmark{} subject to tuple size limit\\
+Auxiliary states absent from the source program & \xmark{} & \xmark{} & \cmark{}\\
 Join proven equal to the program over $\R$ & \cmark{} Thm.~4.1, 4.4 & \pmark{} derivation & \cmark{} \cref{thm:correct}\\
 Context that is zero on a part & \nr & \xmark{} App.~D & \pmark{} verified guards\\
 Accuracy relative to the original decides fusion & \xmark{} measured after, App.~F & \nr & \cmark{} \cref{def:gate}\\
@@ -96,22 +96,24 @@ Scheduling, GPU code generation, performance & \cmark{} Triton & \cmark{} TileLa
 \subsection{Other Related Work}
 
 \textbf{Hand-derived single passes.}
-Welford 更新~\citep{welford}、其加权形式~\citep{west}、\citet{chan} 的成对合并及误差分析，以及 \citet{pebay} 的任意阶矩合并，都是面向统计计算的单遍算法。
-在线 softmax~\citep{milakov}、FlashAttention~\citep{flashattention,flashattention2}、cut cross-entropy~\citep{cce} 和 FlashSinkhorn~\citep{flashsinkhorn} 是面向机器学习的单遍算法；缩放欧几里得范数~\citep{blue} 和高精度 log-sum-exp~\citep{blanchard} 则是为数值精度而设计的单遍算法。
-它们都针对某个算子手工推导；\sys 从算子定义推导 softmax、注意力和方差归约器。
+Welford 更新~\citep{welford}、其加权形式~\citep{west}、\citet{chan} 研究的成对合并，以及 \citet{pebay} 的任意阶矩合并，都是面向统计计算的单遍算法。
+在线 softmax~\citep{milakov}、FlashAttention~\citep{flashattention,flashattention2}、cut cross-entropy~\citep{cce} 和 FlashSinkhorn~\citep{flashsinkhorn} 是面向机器学习的单遍算法；缩放欧几里得范数~\citep{blue} 则通过维护缩放来控制中间值的范围。
+这些算法都针对特定算子手工推导；\sys 从算子定义推导 softmax、注意力和方差归约器。
 
 \textbf{Tensor compilers and superoptimisers.}
 Flashlight~\citep{flashlight} 利用指数函数的同态性质，将注意力变体重写为在线形式。
 Halide 的 \code{rfactor}~\citep{rfactor} 和 TVM~\citep{tvm,tensorir} 可以并行化满足结合律的归约，包括元组归约器，但不能将一个归约与读取其最终值的后续归约融合。
 Mirage~\citep{mirage} 搜索多层张量算子图，并在包含多线性算子、除法和每条路径至多一次指数运算的片段上，对候选进行概率验证，再用浮点测试过滤数值不稳定的候选；最大值不在该片段中。
 STENSO~\citep{stenso} 和 Prism~\citep{prism} 通过符号方法搜索等价张量程序。
-\sys 从上下文修正公式中提取特征，并在其上合成辅助状态；构造性恢复和定义域证明决定是否接受。
-合成的对象是分区摘要，而非任意算子图。
+\sys 利用上下文修正分析得到的表达式，在所维护的状态元组中合成辅助状态。
+参考状态元组的构造性恢复和定义域证明决定是否接受。
 
 \textbf{Program calculation and synthesis.}
 列表同态~\citep{bird87} 和第三同态定理~\citep{gibbons96} 刻画了列表函数何时具有分治形式；\citet{morita07} 从两个顺序程序构造这种形式，而 catamorphism 等递归模式~\citep{meijer91} 给出了此类推导背后的演算规律。
 元组化消除对同一数据结构的多次遍历~\citep{bird84,pettorossi87,hu96,hu97}。
-Farzan 和 Nicolet 通过展开循环体并收集辅助累加量来合成分治程序~\citep{farzan17,farzan19,farzan21}；AutoLifter 将问题分解为归纳合成任务，以寻找最小辅助值~\citep{autolifter}；SuFu 通过归纳合成融合函数式程序~\citep{sufu}；\citet{morihata21} 则通过半环多项式并行化归约。
+Farzan 和 Nicolet 通过展开循环体并收集辅助累加量来合成分治程序~\citep{farzan17,farzan19,farzan21}。
+AutoLifter 通过分解提升问题，合成辅助值和组合器~\citep{autolifter}；SuFu 则合成压缩函数和标量计算，以消除中间数据结构~\citep{sufu}。
+\citet{morihata21} 通过半环多项式并行化归约。
 Opera~\citep{opera} 从离线算法推导每次处理一个元素并更新状态的在线算法，在 51 个基准中解决了 50 个，唯一失败的是峰度。
 % src: notes/evidence/opera.txt lines 913, 934 (50 of 51; kurtosis)
 这些工作为顺序循环和递归程序发展了合成与演算方法。
@@ -120,9 +122,15 @@ Opera~\citep{opera} 从离线算法推导每次处理一个元素并更新状态
 
 \textbf{Aggregation.}
 在数据库中，如果部分结果可以直接组合，则聚合是\emph{分配型}的；如果固定元组的分配型聚合足以计算结果，则它是\emph{代数型}的~\citep{datacube}。分布式系统通过树或 gossip 协议计算此类聚合~\citep{jesus}。
-可融合的归约链是代数型聚合，\sys 推导其元组和合并操作。
+不依赖上下文的参考构造使归约链成为代数型聚合；\sys 随后推导所维护的状态元组及其合并操作。
+Ink~\citep{ink} 验证或否定给定的用户自定义数据框聚合是否为同态，并在建立该性质时构造合并运算。
+其问题是组合给定聚合的结果，而 \sys 发现组合源归约结果所需的辅助状态。
+Ink 允许不可交换的合并；\sys 则基于多重集语义推导可交换的合并。
 
 \textbf{Floating-point accuracy.}
-Herbie~\citep{herbie} 通过重写表达式改善精度，FPTaylor~\citep{fptaylor} 则严格界定其舍入误差。
-\sys 既不改进原程序，也不界定融合程序的误差；它尽量使融合后的程序接近原程序的精度，并相对于原程序检查结果（\cref{def:gate}）。
-采用 FPTaylor 类似方法为推导出的合并建立严格误差界，可以替代检查中的采样部分，这是未来工作。
+经过验证的浮点编译保留数值推理所依赖的源程序语义~\citep{boldo_fp}。
+数值分析也表明，中间表示的选择会影响误差传播~\citep{higham_decomposition}；平移后的 log-sum-exp 和 softmax 公式的分析给出了具体例子~\citep{blanchard}。
+这些结果为我们利用源归约定义指导状态选择和合并形式提供了依据。
+Herbie~\citep{herbie} 搜索更准确的表达式形式，FPTaylor~\citep{fptaylor} 则计算严格的舍入误差界。
+\sys 为融合发现辅助状态，并使用 MPFR 求值和采样误差容限，以源程序为基准检查所得实现（\cref{def:gate}）。
+对生成的合并及其归约树进行舍入误差分析，可以提供超出这些测量的保证。

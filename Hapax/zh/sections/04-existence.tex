@@ -1,22 +1,23 @@
 \section{A Sufficient Condition for a Single Pass}
 \label{sec:existence}
 
-归约环节在每个位置 $j$ 读取上下文，但只有到达轴的末尾才能知道上下文的最终值。
-当每个归约环节都能\emph{摆脱}其上下文时，就存在单遍算法：将它重写为上下文与不读取上下文的归约的函数。
-本节给出实现这种分离的规则、应用规则的算法，以及由此得到的结论。
+依赖归约读取由先前归约导出的上下文。
+只有这些归约完成后，上下文才可用，从而阻碍直接进行循环融合。
+当每个归约的上下文都能从归约体中分离时，就存在单遍算法：先累积不依赖上下文的归约结果，再结合上下文重构原结果。
+下面的规则和算法构造这种表示，并建立其状态数上界。
 
-\subsection{Freeing a Reduction from Its Contexts}
+\subsection{Separating Contexts from Reduction Bodies}
 \label{sec:freeing}
 
-若操作 $\varphi$ 满足 $\varphi(a\oplus b)=\varphi(a)\oplus\varphi(b)$，则称其与归约 $\oplus$ \emph{可交换}。
-\Cref{tab:rules} 列出 \sys 能够移到归约外部的操作；在附加条件成立且所有表达式有定义时，每条规则都是 $\R$ 上的恒等式。
-求和对加法满足分配律，并允许提取与 $j$ 无关的因子。
+若操作 $\varphi$ 满足 $\varphi(a\oplus b)=\varphi(a)\oplus\varphi(b)$，则称其\emph{保持归约运算} $\oplus$。
+\Cref{tab:rules} 列出 \sys 用于从归约体中分离上下文的代数规则；在附加条件成立且所有表达式有定义时，每条规则都是 $\R$ 上的恒等式。
+求和的线性性质允许拆分加法项，并提取与 $j$ 无关的因子。
 最大值归约允许提取加法项、已证明非负的因子或非递减函数。
 依赖上下文的项取偶次幂或绝对值时，可以转化为两个极值的较大者。
 
 \begin{table}[t]
 \footnotesize
-\caption{Operations that commute with a reduction over $j$; $a$, $c$ and $y$ do not depend on $j$. Each rule is an identity under its side condition, which \sys proves syntactically before applying it.}
+\caption{Algebraic rules for context separation; $a$, $c$ and $y$ do not depend on $j$. Each rule is an identity under its side condition, which \sys proves syntactically before applying it.}
 \label{tab:rules}
 \begin{tabular}{@{}llp{0.42\linewidth}@{}}
 \toprule
@@ -35,12 +36,12 @@ $\min_j$ & dual to $\max_j$ & dual\\
 
 下面的分离将归约体拆为 $r$ 个贡献项。
 每个 $g_k$ 包含依赖输入数据的部分，$\varphi_{k,\ctx}$ 则承载该项对上下文的依赖。
-重组时将上下文视为固定参数；因此，在尚不知道其值时，就可以先累积所得摘要。
+重组时将上下文视为固定参数；因此，在尚不知道其值时，就可以先累积所得参考状态。
 
 \begin{lemma}[Regrouping]
 \label{lem:regroup}
-设 $f(x,\ctx)=\bigoplus_{k=1}^{r}\varphi_{k,\ctx}(g_k(x))$，其中所有 $g_k$ 都不读取上下文，且每个 $\varphi_{k,\ctx}$ 都与 $\oplus$ 可交换。
-则对任意非空分区 $S$，有 $\bigoplus_{j\in S} f(x_j,\ctx)=\bigoplus_{k=1}^{r}\varphi_{k,\ctx}\bigl(\bigoplus_{j\in S} g_k(x_j)\bigr)$。
+设 $f(x,\ctx)=\bigoplus_{k=1}^{r}\varphi_{k,\ctx}(g_k(x))$，其中所有 $g_k$ 都不读取上下文，且每个 $\varphi_{k,\ctx}$ 都保持 $\oplus$。
+则对任意非空分块 $S$，有 $\bigoplus_{j\in S} f(x_j,\ctx)=\bigoplus_{k=1}^{r}\varphi_{k,\ctx}\bigl(\bigoplus_{j\in S} g_k(x_j)\bigr)$。
 \end{lemma}
 
 \begin{proof}
@@ -49,14 +50,14 @@ $\min_j$ & dual to $\max_j$ & dual\\
 
 所得元组无需知道最终上下文即可计算。上下文仅在从元组重构所需成员时使用。
 
-\subsection{The Judgement}
+\subsection{Constructing Reference States}
 \label{sec:judge}
 
-参考原子是无上下文归约 $q(S)=\bigoplus_{j\in S}g(x_j)$，由其归约操作及规范化的归约体标识。
-归约体允许为常量：$|S|=\sum_{j\in S}1$ 就是以加法为操作、以 $1$ 为归约体的原子。
-收集原子前，按照部分语义，将所有作为数值读取的归约轴长度规范化为这一求和。
-从求和中提取常量项也可能产生同一个原子。
-这两种来源进入同一集合，并通过规范形式相等进行共享；只有所需表达式使用某个原子时，才将其加入集合。
+参考状态是不依赖上下文的归约 $q(S)=\bigoplus_{j\in S}g(x_j)$，由其归约操作及规范化的归约体标识。
+归约体允许为常量：$|S|=\sum_{j\in S}1$ 就是以加法为操作、以 $1$ 为归约体的参考状态。
+收集参考状态前，将解释为分块大小的轴长度读取规范化为这一求和；解释为固定程序参数的读取则保留完整输入上的值。
+从求和中提取常量项也可能产生同一个参考状态。
+这两种来源进入同一集合，并通过规范形式相等进行共享；只有所需表达式使用某个参考状态时，才将其加入集合。
 
 \begingroup
 \setlength{\intextsep}{2pt}
@@ -67,14 +68,14 @@ $\min_j$ & dual to $\max_j$ & dual\\
 \small
 \caption{\textsc{Judge}$(\mathit{chain}, \mathit{req})$}
 \label{alg:judge}
-\KwOut{reference atoms $\mathcal Q$, or failure}
-Normalise extent reads in $\mathit{chain}$\;
+\KwOut{reference states $\mathcal Q$, or failure}
+Normalise extent reads denoting part size\;
 $W\leftarrow \mathit{req}$;\ $\mathcal Q\leftarrow\emptyset$\;
 \While{$W$ not empty}{
   $m\leftarrow$ pop $W$\;
-  $e\leftarrow$ free contexts from body of $m$\;
+  $e\leftarrow$ separate contexts from body of $m$\;
   push unvisited dependencies of $e$ onto $W$\;
-  \ForEach{atom $q$ in $e$}{
+  \ForEach{residual reduction $q$ in $e$}{
     \lIf{$q$ reads a context}{\Return \textsc{Stuck}$(m,q)$}
     $\mathcal Q\leftarrow\mathcal Q\cup\{q\}$ (canonical form)\;
   }
@@ -83,15 +84,16 @@ $W\leftarrow \mathit{req}$;\ $\mathcal Q\leftarrow\emptyset$\;
 \end{algorithm}
 \end{minipage}
 \end{wrapfigure}
-\Cref{alg:judge} 访问每个所需成员及其依赖，每个成员只处理一次。
-算法将上下文替换为沿归约轴保持不变的符号，通过 \cref{tab:rules} 重写归约体，并将剩余原子收集到 $\mathcal Q$ 中。
-仍然读取上下文的原子称为\emph{受阻}：这些规则无法将它与上下文分离。
-否则，收集到的原子构成参考状态元组，每个不同的原子对应一个状态。
+在存在性分析中，\cref{alg:judge} 的 $\mathit{req}$ 包含程序其余部分读取的链成员。
+算法访问这些成员及其依赖，每个成员只处理一次。
+算法将上下文替换为沿归约轴保持不变的符号，并通过 \cref{tab:rules} 重写归约体。
+若剩余归约仍读取某个上下文，算法返回 \textsc{Stuck}，表示这些规则无法分离该上下文。
+否则，剩余归约作为参考状态加入 $\mathcal Q$，每个不同的归约对应一个元组分量。
 
-这一构造给出有限摘要，其分量可以独立合并，其值能够确定所需输出。
+这一构造给出固定大小的状态元组，其分量可以独立合并，其值能够确定所需输出。
 它的大小界定了这一构造的状态数；状态选择将该上界用作默认状态数限制。
-它也确定了验证所选表示时使用的无上下文量。
-这两种作用需要区分：这一构造的存在性并不意味着每种保留原始结果的表示都能满足同一限制。
+状态选择对保留的源结果和所需输出应用相同的展开，构造用于恢复的参考元组；该元组在辅助状态合成前固定，其中可能包含 $\mathcal Q$ 中没有的分量。
+因此，初始构造的存在性并不意味着每种保留原始结果的表示都能满足同一限制。
 
 \finishwrapspace
 \endgroup
@@ -104,21 +106,21 @@ $W\leftarrow \mathit{req}$;\ $\mathcal Q\leftarrow\emptyset$\;
 q_i(S)=\bigoplus_{j\in S}^{(i)}g_i(x_j).
 \]
 如果收集到的归约体在声明的元素域上都有定义，则该链存在至多使用 $|\mathcal Q|$ 个状态的单遍归约器。
-其状态元组为 $(q_1(S),\dots,q_k(S))$，合并逐分量进行，收尾计算在源输出的定义域上重构所需输出。
+其状态元组为 $(q_1(S),\dots,q_k(S))$，合并逐分量进行，输出函数在源输出的定义域上重构所需输出。
 \end{theorem}
 
 \begin{proof}[Proof sketch]
-轴长度的规范化保持部分语义；在已证明的附加条件下，每条代数重写在源定义域上都是 $\R$ 上的恒等式。
-由 \cref{lem:regroup} 并按生产者顺序归纳可知，在源计算有定义的地方，每个所需成员都具有以收集到的原子表达的重构表达式。
-对于每个原子，都有 $q_i(S\dunion T)=q_i(S)\oplus_i q_i(T)$。
-因此，该元组可以逐分量合并，其叶子为 $(g_1(x_j),\dots,g_k(x_j))$。
-定义域假设保证这些状态在合法非空分区上都有定义；在根节点应用重构表达式，即得到所需输出。
-每个原子对应一个坐标，从而得到状态数上界。
+轴长度的规范化保持输入分块上的语义；在已证明的附加条件下，每条代数重写在源定义域上都是 $\R$ 上的恒等式。
+由 \cref{lem:regroup} 并按生产者顺序归纳可知，在源计算有定义的地方，每个所需成员都具有以收集到的参考状态表达的重构表达式。
+对于每个参考状态，都有 $q_i(S\dunion T)=q_i(S)\oplus_i q_i(T)$。
+因此，该元组可以逐分量合并，其初始化函数为 $\leaf(x_j)=(g_1(x_j),\dots,g_k(x_j))$。
+定义域假设保证这些状态在合法非空分块上都有定义；在根节点应用重构表达式，即得到所需输出。
+每个不同的已收集归约对应一个状态分量，从而得到状态数上界。
 \end{proof}
 
-该判定识别能够通过这些规则分离上下文的归约链。
+该构造识别能够通过这些规则分离上下文的归约链。
 当剩余归约仍依赖某个上下文时，分析停止，不产生构造。
-更多恒等式或更强的输入关系可能在这一已识别类别之外进一步建立可归约性。
+更多恒等式或更强的输入关系可能在这一已识别类别之外进一步建立单遍可计算性。
 
 这一构造是代数参考，不一定是适合实际执行的数值形式。
 将上下文从归约体中分离会改变中间量：原本相消的项可能变成很大的独立求和，有界表达式可能变成无界因子的乘积。

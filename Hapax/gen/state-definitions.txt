@@ -1,0 +1,460 @@
+State definitions for the fused registry operators
+Source: data/fused_ops.json; expressions retain the recorded compiler notation.
+Identifiers are local to each operator and chain. Source member definitions reproduce full-input formulas.
+On a part S, interpret extent reads as specified in the paper: part-size reads become |S|,
+while fixed program parameters retain their full-input values. For variance the denominator m becomes |S|;
+the class count in label smoothing remains fixed. Derived reductions range over S.
+
+exponential sum about the mean [exp_centered]
+  Chain 1, axis j
+  Maintained state identifiers: total_mean, zc, synth0
+  Source member definitions:
+    total_mean[i] = Σ_j X[i, j]
+    mean[i] = total_mean[i] / m
+    zc[i] = Σ_j exp(X[i, j] - mean[i])
+  Derived state definitions:
+    synth0 = Σ_j 1
+
+mean after min-max scaling [minmax_mean]
+  Chain 1, axis j
+  Maintained state identifiers: lo, hi, scaled.h0, scaled.h0.r0
+  Source member definitions:
+    lo[i] = min_j X[i, j]
+    hi[i] = max_j X[i, j]
+    scaled.ctx0[i] = hi[i] - lo[i]
+    scaled[i] = Σ_j X[i, j] / scaled.ctx0[i] - Σ_j lo[i] / scaled.ctx0[i]
+  Derived state definitions:
+    scaled.h0 = Σ_j X[i, j] - Σ_j lo[i]
+    scaled.h0.r0 = Σ_j 1
+
+scaled dot-product attention [attention]
+  Chain 1, axis j
+  Maintained state identifiers: row_max, den, O
+  Source member definitions:
+    row_max[b, h, i] = max_j QK[b, h, i, j] / dim^1/2
+    den[b, h, i] = Σ_j exp(QK[b, h, i, j] / dim^1/2 - row_max[b, h, i])
+    O[b, h, i, e] = Σ_j V[b, h, j, e]·exp(QK[b, h, i, j] / dim^1/2 - row_max[b, h, i]) / den[b, h, i]
+
+attention with an additive bias [attention_bias]
+  Chain 1, axis j
+  Maintained state identifiers: row_max, den, O
+  Source member definitions:
+    row_max[b, h, i] = max_j (B[h, i, j] + QK[b, h, i, j] / dim^1/2)
+    den[b, h, i] = Σ_j exp(B[h, i, j] + QK[b, h, i, j] / dim^1/2 - row_max[b, h, i])
+    O[b, h, i, e] = Σ_j V[b, h, j, e]·exp(B[h, i, j] + QK[b, h, i, j] / dim^1/2 - row_max[b, h, i]) / den[b, h, i]
+
+collision probability of a softmax [collision]
+  Chain 1, axis j
+  Maintained state identifiers: mx, den, coll
+  Source member definitions:
+    mx[i] = max_j X[i, j]
+    den[i] = Σ_j exp(X[i, j] - mx[i])
+    coll[i] = Σ_j exp(2·X[i, j] - 2·mx[i]) / den[i]^2
+
+symmetric contrastive loss [contrastive]
+  Chain 1, axis j
+  Maintained state identifiers: mx_row, den_row
+  Source member definitions:
+    mx_row[i] = max_j S[i, j]
+    den_row[i] = Σ_j exp(S[i, j] - mx_row[i])
+  Chain 2, axis r
+  Maintained state identifiers: mx_col, den_col
+  Source member definitions:
+    mx_col[q] = max_r S[r, q]
+    den_col[q] = Σ_r exp(S[r, q] - mx_col[q])
+
+cosine similarity [cosine]
+  Chain 1, axis j
+  Maintained state identifiers: sxx, syy, cos.h0
+  Source member definitions:
+    sxx[i] = Σ_j X[i, j]^2
+    nx[i] = sqrt(sxx[i])
+    syy[i] = Σ_j Y[i, j]^2
+    ny[i] = sqrt(syy[i])
+    cos[i] = Σ_j X[i, j]·Y[i, j] / ny[i] / nx[i]
+  Derived state definitions:
+    cos.h0 = Σ_j X[i, j]·Y[i, j]
+
+cross-entropy (on logits) [cross_entropy]
+  Chain 1, axis v
+  Maintained state identifiers: mx, den, t
+  Source member definitions:
+    mx[i] = max_v logits[i, v]
+    den[i] = Σ_v exp(logits[i, v] - mx[i])
+    t[i] = Σ_v logits[i, v]·Y[i, v]
+
+InstanceNorm (1-D) [instance_norm]
+  Chain 1, axis l
+  Maintained state identifiers: total, ss, ss.r0
+  Source member definitions:
+    total[b, c] = Σ_l X[b, c, l]
+    mean[b, c] = total[b, c] / L
+    ss[b, c] = Σ_l mean[b, c]^2 + Σ_l X[b, c, l]^2 - 2·Σ_l mean[b, c]·X[b, c, l]
+  Derived state definitions:
+    ss.r0 = Σ_l 1
+
+label-smoothing cross-entropy [label_smoothing]
+  Chain 1, axis j
+  Maintained state identifiers: mx, den, loss, synth0, synth1, synth2
+  Source member definitions:
+    mx[i] = max_j X[i, j]
+    den[i] = Σ_j exp(X[i, j] - mx[i])
+    loss.ctx0[i] = log(den[i])
+    loss[i] = 0.9·Σ_j mx[i]·Q[i, j] + 0.9·Σ_j Q[i, j]·loss.ctx0[i] + 0.1·Σ_j mx[i] / m + 0.1·Σ_j loss.ctx0[i] / m - 0.9·Σ_j X[i, j]·Q[i, j] - 0.1·Σ_j X[i, j] / m
+  Derived state definitions:
+    synth0 = Σ_j X[i, j]·Q[i, j]
+    synth1 = Σ_j 1
+    synth2 = Σ_j Q[i, j]
+
+LayerNorm [layernorm]
+  Chain 1, axis j
+  Maintained state identifiers: total_mean, ss, ss.r0
+  Source member definitions:
+    total_mean[i] = Σ_j X[i, j]
+    mean[i] = total_mean[i] / m
+    ss[i] = Σ_j X[i, j]^2 + Σ_j mean[i]^2 - 2·Σ_j X[i, j]·mean[i]
+  Derived state definitions:
+    ss.r0 = Σ_j 1
+
+LayerNorm backward [layernorm_backward]
+  Chain 1, axis j
+  Maintained state identifiers: sg, total, ss, sgx, ss.r0
+  Source member definitions:
+    sg[i] = Σ_j G[i, j]
+    total[i] = Σ_j X[i, j]
+    mean[i] = total[i] / m
+    ss[i] = Σ_j X[i, j]^2 + Σ_j mean[i]^2 - 2·Σ_j X[i, j]·mean[i]
+    sigma[i] = sqrt(ss[i] / m + 1e-05)
+    sgx[i] = Σ_j G[i, j]·X[i, j] / sigma[i] - Σ_j G[i, j]·mean[i] / sigma[i]
+  Derived state definitions:
+    ss.r0 = Σ_j 1
+
+log-softmax [log_softmax]
+  Chain 1, axis j
+  Maintained state identifiers: mx, den
+  Source member definitions:
+    mx[i] = max_j X[i, j]
+    den[i] = Σ_j exp(X[i, j] - mx[i])
+
+log-sum-exp [logsumexp]
+  Chain 1, axis j
+  Maintained state identifiers: mx, den
+  Source member definitions:
+    mx[i] = max_j X[i, j]
+    den[i] = Σ_j exp(X[i, j] - mx[i])
+
+normalised policy loss [normalized_policy_loss]
+  Chain 1, axis sample
+  Maintained state identifiers: total, ss, loss_sum.h0, ss.r0, loss_sum.h0.r0
+  Source member definitions:
+    total[i0] = Σ_sample Advantage[i0, sample]
+    mean[i0] = total[i0] / samples
+    ss[i0] = Σ_sample Advantage[i0, sample]^2 + Σ_sample mean[i0]^2 - 2·Σ_sample Advantage[i0, sample]·mean[i0]
+    scale[i0] = sqrt(ss[i0]) / (samples - 1)^1/2 + 1e-08
+    loss_sum[i0] = Σ_sample Advantage[i0, sample]·LogProb[i0, sample] / scale[i0] - Σ_sample LogProb[i0, sample]·mean[i0] / scale[i0]
+  Derived state definitions:
+    loss_sum.h0 = Σ_sample Advantage[i0, sample]·LogProb[i0, sample] - Σ_sample LogProb[i0, sample]·mean[i0]
+    ss.r0 = Σ_sample 1
+    loss_sum.h0.r0 = Σ_sample LogProb[i0, sample]
+
+soft-label cross-entropy [soft_cross_entropy]
+  Chain 1, axis j
+  Maintained state identifiers: mx, den, loss, loss.r0
+  Source member definitions:
+    mx[i] = max_j X[i, j]
+    den[i] = Σ_j exp(X[i, j] - mx[i])
+    loss.ctx0[i] = log(den[i])
+    loss[i] = Σ_j mx[i]·Q[i, j] + Σ_j Q[i, j]·loss.ctx0[i] - Σ_j X[i, j]·Q[i, j]
+  Derived state definitions:
+    loss.r0 = Σ_j Q[i, j]
+
+softmax [softmax]
+  Chain 1, axis j
+  Maintained state identifiers: mx, den
+  Source member definitions:
+    mx[i] = max_j X[i, j]
+    den[i] = Σ_j exp(X[i, j] - mx[i])
+
+entropy of a softmax [softmax_entropy]
+  Chain 1, axis j
+  Maintained state identifiers: mx, den, H
+  Source member definitions:
+    mx[i] = max_j X[i, j]
+    den[i] = Σ_j exp(X[i, j] - mx[i])
+    H.ctx0[i] = log(den[i])
+    H[i] = Σ_j mx[i]·exp(X[i, j] - mx[i]) / den[i] + Σ_j H.ctx0[i]·exp(X[i, j] - mx[i]) / den[i] - Σ_j X[i, j]·exp(X[i, j] - mx[i]) / den[i]
+
+softmax backward (JVP) [softmax_jvp]
+  Chain 1, axis j
+  Maintained state identifiers: mx, den, gp
+  Source member definitions:
+    mx[i] = max_j X[i, j]
+    den[i] = Σ_j exp(X[i, j] - mx[i])
+    gp[i] = Σ_j G[i, j]·exp(X[i, j] - mx[i]) / den[i]
+
+Householder-type norm [householder]
+  Chain 1, axis j
+  Maintained state identifiers: ssq, vv, vv.r0
+  Source member definitions:
+    ssq[i] = Σ_j X[i, j]^2
+    nrm[i] = sqrt(ssq[i])
+    vv[i] = 2·Σ_j X[i, j]·E[i, j]·nrm[i] + Σ_j X[i, j]^2 + Σ_j E[i, j]^2·nrm[i]^2
+  Derived state definitions:
+    vv.r0 = Σ_j E[i, j]^2
+
+Gram-Schmidt remainder [projection]
+  Chain 1, axis j
+  Maintained state identifiers: r, rem, rem.r0
+  Source member definitions:
+    r[i] = Σ_j Q[i, j]·A[i, j]
+    rem[i] = Σ_j Q[i, j]^2·r[i]^2 + Σ_j A[i, j]^2 - 2·Σ_j Q[i, j]·r[i]·A[i, j]
+  Derived state definitions:
+    rem.r0 = Σ_j Q[i, j]^2
+
+log-domain Sinkhorn half step [sinkhorn_half]
+  Chain 1, axis j
+  Maintained state identifiers: S_max, S_sumexp
+  Source member definitions:
+    S_max[r] = max_j (2·g[j] + log(b[j]) - 2·C[r, j])
+    S_sumexp[r] = Σ_j b[j]·exp(2·g[j] - S_max[r] - 2·C[r, j])
+
+log-domain Sinkhorn iteration [sinkhorn_iteration]
+  Chain 1, axis j
+  Maintained state identifiers: S_max, S_sumexp
+  Source member definitions:
+    S_max[r] = max_j (2·g[j] + log(b[j]) - 2·C[r, j])
+    S_sumexp[r] = Σ_j b[j]·exp(2·g[j] - S_max[r] - 2·C[r, j])
+  Chain 2, axis i
+  Maintained state identifiers: S2_max, S2_sumexp
+  Source member definitions:
+    S2_max[r] = max_i (2·f[i] + log(a[i]) - 2·C[i, r])
+    S2_sumexp[r] = Σ_i a[i]·exp(2·f[i] - S2_max[r] - 2·C[i, r])
+
+Sinkhorn iteration, equal sizes [sinkhorn_square]
+  Chain 1, axis j
+  Maintained state identifiers: S_max, S_sumexp
+  Source member definitions:
+    S_max[r] = max_j (2·g[j] + log(b[j]) - 2·C[r, j])
+    S_sumexp[r] = Σ_j b[j]·exp(2·g[j] - S_max[r] - 2·C[r, j])
+  Chain 2, axis i
+  Maintained state identifiers: S2_max, S2_sumexp
+  Source member definitions:
+    S2_max[r] = max_i (2·f[i] + log(a[i]) - 2·C[i, r])
+    S2_sumexp[r] = Σ_i a[i]·exp(2·f[i] - S2_max[r] - 2·C[i, r])
+
+peak-to-average power ratio [papr]
+  Chain 1, axis j
+  Maintained state identifiers: total, peak, ss, ss.r0, synth1
+  Source member definitions:
+    total[i] = Σ_j X[i, j]
+    mean[i] = total[i] / m
+    peak[i] = max(max_j (X[i, j] - mean[i]), max_j (mean[i] - X[i, j]))^2
+    ss[i] = Σ_j X[i, j]^2 + Σ_j mean[i]^2 - 2·Σ_j X[i, j]·mean[i]
+  Derived state definitions:
+    ss.r0 = Σ_j 1
+    synth1 = max_j X[i, j] - max_j -X[i, j]
+
+peak power after mean removal [peak_power]
+  Chain 1, axis j
+  Maintained state identifiers: total, peak, synth0, synth1
+  Source member definitions:
+    total[i] = Σ_j X[i, j]
+    mean[i] = total[i] / m
+    peak[i] = max(max_j (X[i, j] - mean[i]), max_j (mean[i] - X[i, j]))^2
+  Derived state definitions:
+    synth0 = max_j -X[i, j] - max_j X[i, j]
+    synth1 = Σ_j 1
+
+heat capacity (energy fluctuation) [heat_capacity]
+  Chain 1, axis j
+  Maintained state identifiers: lo, e1s, Z, cs
+  Source member definitions:
+    lo[i] = min_j E[i, j]
+    e1s[i] = Σ_j E[i, j]·exp(lo[i] - E[i, j])
+    Z[i] = Σ_j exp(lo[i] - E[i, j])
+    e1[i] = e1s[i] / Z[i]
+    cs[i] = Σ_j E[i, j]^2·exp(lo[i] - E[i, j]) + Σ_j e1[i]^2·exp(lo[i] - E[i, j]) - 2·Σ_j E[i, j]·e1[i]·exp(lo[i] - E[i, j])
+
+covariance matrix [cov_matrix]
+  Chain 1, axis j
+  Maintained state identifiers: total_mean, total_mean_view_i1, C, C.r0
+  Source member definitions:
+    total_mean[a] = Σ_j X[a, j]
+    mean[a] = total_mean[a] / m
+    total_mean_view_i1[b] = Σ_j X[b, j]
+    mean_view_i1[b] = total_mean_view_i1[b] / m
+    C[a, b] = Σ_j X[a, j]·X[b, j] + Σ_j mean[a]·mean_view_i1[b] - Σ_j X[a, j]·mean_view_i1[b] - Σ_j mean[a]·X[b, j]
+  Derived state definitions:
+    C.r0 = Σ_j 1
+
+covariance [covariance]
+  Chain 1, axis j
+  Maintained state identifiers: total_mean_x, total_mean_y, co, co.r0
+  Source member definitions:
+    total_mean_x[i] = Σ_j X[i, j]
+    mean_x[i] = total_mean_x[i] / m
+    total_mean_y[i] = Σ_j Y[i, j]
+    mean_y[i] = total_mean_y[i] / m
+    co[i] = Σ_j X[i, j]·Y[i, j] + Σ_j mean_x[i]·mean_y[i] - Σ_j Y[i, j]·mean_x[i] - Σ_j X[i, j]·mean_y[i]
+  Derived state definitions:
+    co.r0 = Σ_j 1
+
+effective sample size [ess]
+  Chain 1, axis j
+  Maintained state identifiers: mx, sw, sw2
+  Source member definitions:
+    mx[i] = max_j LW[i, j]
+    sw[i] = Σ_j exp(LW[i, j] - mx[i])
+    sw2[i] = Σ_j exp(2·LW[i, j] - 2·mx[i])
+
+kurtosis [kurtosis]
+  Chain 1, axis j
+  Maintained state identifiers: total_mean, ss, s4.h0, ss.r0, s4.h0.r0
+  Source member definitions:
+    total_mean[i] = Σ_j X[i, j]
+    mean[i] = total_mean[i] / m
+    ss[i] = Σ_j X[i, j]^2 + Σ_j mean[i]^2 - 2·Σ_j X[i, j]·mean[i]
+    m2[i] = ss[i] / m
+    s4.ctx0[i] = sqrt(m2[i])
+    s4[i] = 6·Σ_j X[i, j]^2·mean[i]^2 / s4.ctx0[i]^4 + Σ_j X[i, j]^4 / s4.ctx0[i]^4 + Σ_j mean[i]^4 / s4.ctx0[i]^4 - 4·Σ_j mean[i]·X[i, j]^3 / s4.ctx0[i]^4 - 4·Σ_j X[i, j]·mean[i]^3 / s4.ctx0[i]^4
+  Derived state definitions:
+    s4.h0 = 6·Σ_j X[i, j]^2·mean[i]^2 + Σ_j X[i, j]^4 + Σ_j mean[i]^4 - 4·Σ_j mean[i]·X[i, j]^3 - 4·Σ_j X[i, j]·mean[i]^3
+    ss.r0 = Σ_j 1
+    s4.h0.r0 = 3·Σ_j X[i, j]·mean[i]^2 + Σ_j X[i, j]^3 - 3·Σ_j mean[i]·X[i, j]^2 - Σ_j mean[i]^3
+
+Ledoit--Wolf covariance [ledoit_wolf]
+  Chain 1, axis sample
+  Maintained state identifiers: total, total_view_i0_reduction_i2, v22, covsum, v22.r0, v22.r1, v22.r2, v22.r3, v22.r4
+  Source member definitions:
+    total[i0, i1] = Σ_sample X[i0, sample, i1]
+    mean[i0, i1] = total[i0, i1] / samples
+    total_view_i0_reduction_i2[i0, i2] = Σ_sample X[i0, sample, i2]
+    mean_view_i0_reduction_i2[i0, i2] = total_view_i0_reduction_i2[i0, i2] / samples
+    v22[i0, i1, i2] = 4·Σ_sample X[i0, sample, i1]·X[i0, sample, i2]·mean[i0, i1]·mean_view_i0_reduction_i2[i0, i2] + Σ_sample X[i0, sample, i1]^2·X[i0, sample, i2]^2 + Σ_sample X[i0, sample, i1]^2·mean_view_i0_reduction_i2[i0, i2]^2 + Σ_sample X[i0, sample, i2]^2·mean[i0, i1]^2 + Σ_sample mean_view_i0_reduction_i2[i0, i2]^2·mean[i0, i1]^2 - 2·Σ_sample X[i0, sample, i2]·mean_view_i0_reduction_i2[i0, i2]·X[i0, sample, i1]^2 - 2·Σ_sample X[i0, sample, i1]·mean[i0, i1]·X[i0, sample, i2]^2 - 2·Σ_sample X[i0, sample, i1]·mean[i0, i1]·mean_view_i0_reduction_i2[i0, i2]^2 - 2·Σ_sample X[i0, sample, i2]·mean_view_i0_reduction_i2[i0, i2]·mean[i0, i1]^2
+    covsum[i0, i1, i2] = Σ_sample X[i0, sample, i1]·X[i0, sample, i2] + Σ_sample mean[i0, i1]·mean_view_i0_reduction_i2[i0, i2] - Σ_sample X[i0, sample, i1]·mean_view_i0_reduction_i2[i0, i2] - Σ_sample X[i0, sample, i2]·mean[i0, i1]
+  Derived state definitions:
+    v22.r0 = Σ_sample 1
+    v22.r1 = Σ_sample X[i0, sample, i1]^2 + Σ_sample mean[i0, i1]^2 - 2·Σ_sample X[i0, sample, i1]·mean[i0, i1]
+    v22.r2 = Σ_sample X[i0, sample, i2]^2 + Σ_sample mean_view_i0_reduction_i2[i0, i2]^2 - 2·Σ_sample X[i0, sample, i2]·mean_view_i0_reduction_i2[i0, i2]
+    v22.r3 = 2·Σ_sample X[i0, sample, i2]·mean[i0, i1]·mean_view_i0_reduction_i2[i0, i2] + Σ_sample X[i0, sample, i1]·X[i0, sample, i2]^2 + Σ_sample X[i0, sample, i1]·mean_view_i0_reduction_i2[i0, i2]^2 - Σ_sample mean[i0, i1]·X[i0, sample, i2]^2 - 2·Σ_sample X[i0, sample, i1]·X[i0, sample, i2]·mean_view_i0_reduction_i2[i0, i2] - Σ_sample mean[i0, i1]·mean_view_i0_reduction_i2[i0, i2]^2
+    v22.r4 = 2·Σ_sample X[i0, sample, i1]·mean[i0, i1]·mean_view_i0_reduction_i2[i0, i2] + Σ_sample X[i0, sample, i2]·X[i0, sample, i1]^2 + Σ_sample X[i0, sample, i2]·mean[i0, i1]^2 - Σ_sample mean_view_i0_reduction_i2[i0, i2]·X[i0, sample, i1]^2 - 2·Σ_sample X[i0, sample, i1]·X[i0, sample, i2]·mean[i0, i1] - Σ_sample mean_view_i0_reduction_i2[i0, i2]·mean[i0, i1]^2
+
+largest absolute deviation [max_abs_deviation]
+  Chain 1, axis j
+  Maintained state identifiers: total, dmax, synth0, synth1
+  Source member definitions:
+    total[i] = Σ_j X[i, j]
+    mean[i] = total[i] / m
+    dmax[i] = max(max_j (X[i, j] - mean[i]), max_j (mean[i] - X[i, j]))
+  Derived state definitions:
+    synth0 = max_j -X[i, j] - max_j X[i, j]
+    synth1 = Σ_j 1
+
+3rd central moment [moment3]
+  Chain 1, axis j
+  Maintained state identifiers: total_mean, s3, s3.r0, s3.r1
+  Source member definitions:
+    total_mean[i] = Σ_j X[i, j]
+    mean[i] = total_mean[i] / m
+    s3[i] = 3·Σ_j X[i, j]·mean[i]^2 + Σ_j X[i, j]^3 - Σ_j mean[i]^3 - 3·Σ_j mean[i]·X[i, j]^2
+  Derived state definitions:
+    s3.r0 = Σ_j 1
+    s3.r1 = Σ_j X[i, j]^2 + Σ_j mean[i]^2 - 2·Σ_j X[i, j]·mean[i]
+
+4th central moment [moment4]
+  Chain 1, axis j
+  Maintained state identifiers: total_mean, s4, s4.r0, s4.r1, s4.r2
+  Source member definitions:
+    total_mean[i] = Σ_j X[i, j]
+    mean[i] = total_mean[i] / m
+    s4[i] = 6·Σ_j X[i, j]^2·mean[i]^2 + Σ_j X[i, j]^4 + Σ_j mean[i]^4 - 4·Σ_j X[i, j]·mean[i]^3 - 4·Σ_j mean[i]·X[i, j]^3
+  Derived state definitions:
+    s4.r0 = Σ_j 1
+    s4.r1 = Σ_j X[i, j]^2 + Σ_j mean[i]^2 - 2·Σ_j X[i, j]·mean[i]
+    s4.r2 = 3·Σ_j X[i, j]·mean[i]^2 + Σ_j X[i, j]^3 - 3·Σ_j mean[i]·X[i, j]^2 - Σ_j mean[i]^3
+
+5th central moment [moment5]
+  Chain 1, axis j
+  Maintained state identifiers: total_mean, s5, s5.r0, s5.r1, s5.r2, s5.r3
+  Source member definitions:
+    total_mean[i] = Σ_j X[i, j]
+    mean[i] = total_mean[i] / m
+    s5[i] = 5·Σ_j X[i, j]·mean[i]^4 + 10·Σ_j X[i, j]^3·mean[i]^2 + Σ_j X[i, j]^5 - Σ_j mean[i]^5 - 10·Σ_j X[i, j]^2·mean[i]^3 - 5·Σ_j mean[i]·X[i, j]^4
+  Derived state definitions:
+    s5.r0 = Σ_j 1
+    s5.r1 = Σ_j X[i, j]^2 + Σ_j mean[i]^2 - 2·Σ_j X[i, j]·mean[i]
+    s5.r2 = 3·Σ_j X[i, j]·mean[i]^2 + Σ_j X[i, j]^3 - Σ_j mean[i]^3 - 3·Σ_j mean[i]·X[i, j]^2
+    s5.r3 = 6·Σ_j X[i, j]^2·mean[i]^2 + Σ_j X[i, j]^4 + Σ_j mean[i]^4 - 4·Σ_j X[i, j]·mean[i]^3 - 4·Σ_j mean[i]·X[i, j]^3
+
+scalar OLS HC0 covariance [ols_hc0]
+  Chain 1, axis sample
+  Maintained state identifiers: xx, xy, meat, meat.r0, meat.r1
+  Source member definitions:
+    xx[i0] = Σ_sample X[i0, sample]^2
+    xy[i0] = Σ_sample X[i0, sample]·Y[i0, sample]
+    theta[i0] = if xx[i0] == 0 then 0 else xy[i0] / xx[i0]
+    meat[i0] = Σ_sample X[i0, sample]^2·Y[i0, sample]^2 + Σ_sample X[i0, sample]^4·theta[i0]^2 - 2·Σ_sample Y[i0, sample]·theta[i0]·X[i0, sample]^3
+  Derived state definitions:
+    meat.r0 = Σ_sample X[i0, sample]^4
+    meat.r1 = Σ_sample Y[i0, sample]·X[i0, sample]^3 - Σ_sample theta[i0]·X[i0, sample]^4
+
+Pearson correlation [pearson]
+  Chain 1, axis j
+  Maintained state identifiers: total_mean_x, total_mean_y, sxy, sxx, syy, sxy.r0
+  Source member definitions:
+    total_mean_x[i] = Σ_j X[i, j]
+    mean_x[i] = total_mean_x[i] / m
+    total_mean_y[i] = Σ_j Y[i, j]
+    mean_y[i] = total_mean_y[i] / m
+    sxy[i] = Σ_j X[i, j]·Y[i, j] + Σ_j mean_x[i]·mean_y[i] - Σ_j Y[i, j]·mean_x[i] - Σ_j X[i, j]·mean_y[i]
+    sxx[i] = Σ_j X[i, j]^2 + Σ_j mean_x[i]^2 - 2·Σ_j X[i, j]·mean_x[i]
+    syy[i] = Σ_j Y[i, j]^2 + Σ_j mean_y[i]^2 - 2·Σ_j Y[i, j]·mean_y[i]
+  Derived state definitions:
+    sxy.r0 = Σ_j 1
+
+skewness [skewness]
+  Chain 1, axis j
+  Maintained state identifiers: total_mean, ss, s3.h0, ss.r0
+  Source member definitions:
+    total_mean[i] = Σ_j X[i, j]
+    mean[i] = total_mean[i] / m
+    ss[i] = Σ_j X[i, j]^2 + Σ_j mean[i]^2 - 2·Σ_j X[i, j]·mean[i]
+    m2[i] = ss[i] / m
+    s3.ctx0[i] = sqrt(m2[i])
+    s3[i] = 3·Σ_j X[i, j]·mean[i]^2 / s3.ctx0[i]^3 + Σ_j X[i, j]^3 / s3.ctx0[i]^3 - Σ_j mean[i]^3 / s3.ctx0[i]^3 - 3·Σ_j mean[i]·X[i, j]^2 / s3.ctx0[i]^3
+  Derived state definitions:
+    s3.h0 = 3·Σ_j X[i, j]·mean[i]^2 + Σ_j X[i, j]^3 - Σ_j mean[i]^3 - 3·Σ_j mean[i]·X[i, j]^2
+    ss.r0 = Σ_j 1
+
+variance [variance]
+  Chain 1, axis j
+  Maintained state identifiers: total_mean, ss, ss.r0
+  Source member definitions:
+    total_mean[i] = Σ_j X[i, j]
+    mean[i] = total_mean[i] / m
+    ss[i] = Σ_j X[i, j]^2 + Σ_j mean[i]^2 - 2·Σ_j X[i, j]·mean[i]
+  Derived state definitions:
+    ss.r0 = Σ_j 1
+
+weighted variance [weighted_variance]
+  Declared positive inputs: W
+  Chain 1, axis j
+  Maintained state identifiers: swx, sw, ss
+  Source member definitions:
+    swx[i] = Σ_j W[i, j]·X[i, j]
+    sw[i] = Σ_j W[i, j]
+    mean[i] = swx[i] / sw[i]
+    ss[i] = Σ_j W[i, j]·X[i, j]^2 + Σ_j W[i, j]·mean[i]^2 - 2·Σ_j W[i, j]·X[i, j]·mean[i]
+
+largest z-score [zscore_max]
+  Chain 1, axis j
+  Maintained state identifiers: total, ss, zmax.h0, ss.r0
+  Source member definitions:
+    total[i] = Σ_j X[i, j]
+    mean[i] = total[i] / m
+    ss[i] = Σ_j X[i, j]^2 + Σ_j mean[i]^2 - 2·Σ_j X[i, j]·mean[i]
+    sigma[i] = sqrt(ss[i]) / m^1/2
+    zmax[i] = max_j (X[i, j] / sigma[i] - mean[i] / sigma[i])
+  Derived state definitions:
+    zmax.h0 = min_j (mean[i] - X[i, j])
+    ss.r0 = Σ_j 1

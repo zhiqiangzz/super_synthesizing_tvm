@@ -68,14 +68,15 @@ INFO = {
     "abs_from_max": ("sum of distances to the max", CONS),
 }
 
-# mechanism classes, by the heaviest selection step a fused operator needed
+# Recorded action classes, displayed as state changes rather than search routes.
+# Domain repair takes precedence when a chain also adds auxiliary states.
 MECH_ORDER = [("hoist", "hoist"), ("parts", "parts"), ("promote", "promote"), ("supplement", "supplement")]
 MECH_NAME = {
-    "rebase": "rebasing only",
-    "supplement": "supplement",
+    "rebase": "none",
+    "supplement": "auxiliary states",
     "promote": "promote",
     "parts": "take a max apart",
-    "hoist": "hoist",
+    "hoist": "domain repair",
 }
 
 

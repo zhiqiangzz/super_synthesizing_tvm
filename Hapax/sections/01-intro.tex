@@ -5,14 +5,14 @@ However, placing loops together is insufficient when a later computation needs a
 Such dependencies occur in normalisation, attention and statistical computations.
 
 \input{figures/dependent-loops}
-We call these computations \emph{dependent reductions}: a reduction reads the final result of an earlier reduction over the same axis.
-That earlier result is its \emph{context}.
-The dependency shown by the orange arrows in \cref{fig:dependent-loops} cannot be satisfied by interleaving corresponding iterations.
+We call these computations \emph{dependent reductions}: a reduction reads an earlier reduction's final result over the same axis, directly or through intervening scalar computations.
+Such a value is its \emph{context}: it is invariant along the reduction axis, but becomes available only after the earlier computation completes.
+In \cref{fig:dependent-loops}, $I_i(j)$ denotes iteration $j$ of loop $i$; the dependency shown by the orange arrows cannot be satisfied by interleaving corresponding iterations.
 
 Fusion therefore requires changing how the dependent reductions are computed.
 During a single traversal, the final context is not yet available: a result computed over the input seen so far uses a local context that may change when more input arrives.
 To avoid revisiting the processed input, the fused computation must retain enough information to correct that result when incorporating new data.
-We call an aggregate quantity retained for the processed input a \emph{state}; these quantities form its \emph{state tuple}.
+We call an aggregate quantity retained for the processed input a \emph{state component}, or \emph{state}; these quantities form its \emph{state tuple}.
 
 We express this correction as a \emph{join} of state tuples for disjoint parts of the input.
 The join must produce the state tuple that the combined input would have produced, including the effect of its changed context.
@@ -23,51 +23,48 @@ Online normalisation, stable moment accumulation and tiled attention require ide
 Recent fusion compilers automate corrections expressible using the original reduction results, but these results can omit information needed by more general corrections~\citep{neptune,redfuser}.
 
 \textbf{Our Work.}
-We present \sys,\footnote{Greek \emph{hapax}, ``once''.} which fuses dependent tensor reductions by synthesising states around the source reduction results and deriving their joins.
-An algebraic analysis separates reduction bodies from their contexts, producing \emph{reference states} that combine independently and determine the required results.
-When this construction succeeds, it already provides a single-pass representation whose state count is independent of the reduction length.
-Executing that representation directly can, however, expand source expressions whose centring and scaling control numerical error and range~\citep{chan,blanchard}.
-Reconstructing centred quantities from expanded sums can subtract large, nearly equal values; removing scaling can expose intermediate values to overflow.
-These effects motivate retaining the source reduction results and their centred or scaled definitions when constructing the fused computation.
-
-We call the representation accumulated by the fused program its \emph{maintained state tuple}.
-It combines the retained results with \emph{auxiliary states} that supply the information needed to correct them as local contexts change.
-Farzan and Nicolet augment loops with auxiliary accumulators so that partial results can be combined~\citep{farzan17,farzan21}; AutoLifter synthesises additional information for divide-and-conquer computations~\citep{autolifter}.
-We adapt this construction of auxiliary states and joins to fuse dependent reductions while retaining the source program's numerical structure.
+We present \sys,\footnote{Greek \emph{hapax}, ``once''.} which fuses dependent tensor reductions by augmenting source reduction results and deriving their joins.
+We draw on methods developed for divide-and-conquer parallelisation: Farzan and Nicolet synthesise auxiliary accumulators and joins~\citep{farzan17,farzan21}, while AutoLifter synthesises auxiliary values and combinators for divide-and-conquer computations~\citep{autolifter}.
+Their joins combine results from independently processed parts.
+We adapt this idea to fusion by introducing \emph{auxiliary states} that supply the information needed to correct source reduction results as their local contexts change.
 
 \par\medskip
 \noindent\begin{minipage}{\linewidth}
 \begin{minipage}[t]{0.50\linewidth}
 \vspace{0pt}
-Computing a partition's maintained state tuple may still require multiple traversals.
+Computing a part's state tuple may still require multiple traversals.
 The derived join corrects and combines two such tuples to obtain the tuple for their union (\cref{fig:dc-fusion}).
-When each partition contains exactly one element, its tuple can be computed from that element alone.
-A fused loop initialises the running tuple from the first element, then computes and joins each subsequent element's tuple during the same traversal.
+A {\bfseries fused loop} processes one input element per part, computing and joining the parts' state tuples sequentially in one traversal.
 \end{minipage}\hfill
 \input{figures/divide-conquer-fusion}
 \end{minipage}\par\medskip
 
-To discover useful auxiliary states, \sys symbolically expresses a changed context as a shift or scale of the local one and expands the resulting correction.
-Factoring out the context changes exposes coefficients that are themselves aggregates over the processed input.
-For variance, correcting a part's centred sum of squares requires weighting the correction by that part's size.
-The fused representation therefore carries a count alongside the source results, even though the source obtains its full-input size from the loop extent.
-When additive terms in the body of a sum reduction require different context corrections, the analysis also exposes their separate reduction results.
-These aggregate expressions provide the building blocks for state synthesis.
+To derive such a join, \sys separates reduction bodies from their contexts, producing \emph{reference states} that combine independently and determine the required results.
+Their reduction bodies do not read the original reductions' contexts; we call them \emph{context-independent}.
+When this construction succeeds, it provides a single-pass representation whose state count is independent of the reduction length.
+Directly executing this representation can expand the source's centred or scaled expressions.
+Reconstructing centred quantities from expanded sums can subtract large, nearly equal values; removing scaling can expose intermediate values to overflow~\citep{chan,blanchard}.
+More generally, the source program's evaluation structure can encode numerical properties that algebraically equivalent transformations disrupt~\citep{boldo_fp}.
+We therefore start from the source reduction results and use reference states to guide and verify their augmentation with auxiliary states.
+The resulting \emph{maintained state tuple} is the representation accumulated by the fused program.
 
-\sys first checks whether these quantities suffice as auxiliary states; syntax-guided synthesis searches their combinations when needed.
-Every maintained state, including each retained source result, has an expression in the reference states.
-A candidate tuple must support constructive recovery: \sys must also find and verify expressions that recover all reference states from the maintained tuple.
-This establishes that the selected representation retains sufficient information for joining.
-The verified transformations symbolically define the join by recovering the reference tuples, combining them componentwise, and evaluating the maintained-state definitions on the combined tuple.
-To keep the numerical benefit of the source representation, \sys rewrites this composition into direct corrections on maintained states, reusing their local centring and scaling where possible.
+To discover the missing information, \sys analyses how partial results change when their local contexts are shifted or scaled.
+Applying its algebraic rules exposes aggregate quantities needed by these corrections.
+Both the retained source results and these candidate quantities are expressed as functions of the reference states.
+\sys first tests simple augmentations with these quantities; syntax-guided synthesis searches their combinations when needed.
+Reference components can also enter this search when the correction quantities alone are insufficient.
+Throughout selection, the reference representation supplies the criterion for sufficient information: \sys must find and verify expressions that recover all reference states from the maintained tuple.
+
+Together with the maintained-state definitions, this recovery specifies a join: recover the two reference tuples, combine them componentwise, and evaluate the maintained-state definitions on the combined tuple.
+To carry the source's numerical structure into execution, \sys rewrites this composition into direct corrections on maintained states in their local contexts, reusing source centring and scaling where possible.
 
 Over the reals, the resulting join computes the maintained state tuple of the combined input.
-Because the join also applies to arbitrary disjoint non-empty parts, the derived reducer admits independent partition computations followed by a reduction tree.
+Because the join also applies to arbitrary disjoint non-empty parts, the derived reducer admits independent computations on parts followed by a reduction tree.
 Fewer traversals create opportunities for reducing data movement; realised performance also depends on state size, join cost and scheduling.
 
 We implement \sys as a rewrite of TVM tensor expressions (TE)~\citep{tvm}.
 It derives single-pass reducers for \nShowFused of \nShowcase selected operators from machine learning and scientific computing.
-The evaluation examines coverage, discovered states and derivation cost, and measures the emitted floating-point programs' accuracy against their sources.
+We report coverage, discovered states and derivation cost, and specify a validation protocol using high-precision MPFR evaluation to compare the emitted programs' accuracy with their sources.
 GPU scheduling and performance evaluation remain subsequent work.
 
 \noindent This paper makes the following contributions:
@@ -77,7 +74,7 @@ An algebraic analysis constructs reference states and bounds their number, cover
 \item \textbf{State discovery and join derivation.}
 Analysis of source context corrections supplies building blocks for synthesising auxiliary states; verified recovery of reference states establishes their sufficiency and determines the join.
 \item \textbf{Accuracy-aware formulation.}
-Retained source results guide direct context corrections that reuse centring and scaling where possible, aiming to preserve numerical accuracy.
+Source reduction definitions guide state selection and direct context corrections, retaining centring and scaling where possible; a numerical validation protocol specifies how to assess the emitted programs against their sources.
 \item \textbf{Implementation and evaluation.}
-A TVM implementation and an evaluation of coverage, states, derivation cost and accuracy on \nShowcase operators.
+A TVM implementation and recorded results on coverage, state discovery and derivation cost for \nShowcase operators.
 \end{itemize}

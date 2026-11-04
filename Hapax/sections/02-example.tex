@@ -1,14 +1,12 @@
-% Allow the overview to float near the section opening without blocking prose.
-\input{figures/variance-overview}
 \begingroup
 \setlength{\intextsep}{2pt}
-\reservewrapspace{12\baselineskip}
+\captionsetup[lstlisting]{justification=raggedright,singlelinecheck=false}
+\reservewrapspace{13\baselineskip}
 \section{Motivating Example}
 \label{sec:example}
 
-\begin{wrapfigure}{r}{0.48\textwidth}
+\begin{wrapfigure}{r}{0.32\textwidth}
 \begin{lstlisting}[style=pseudocode,caption={Two-pass source program.},label={lst:variance-before}]
-Input: $x_0,\ldots,x_{N-1}$, $N>0$
 $t\gets0$
 for $j=0,\ldots,N-1$:
     $t\gets t+x_j$
@@ -20,7 +18,7 @@ return $\;ss/N$
 \end{lstlisting}
 \end{wrapfigure}
 Variance illustrates the dependency that fusion must remove.
-For a row of length $N$, the source program in \cref{lst:variance-before} first computes the total $t$ and the mean $\mu=t/N$, then accumulates the centred sum of squares $ss$; the variance is $ss/N$.
+For a row $x_0,\ldots,x_{N-1}$ with $N>0$, the source program in \cref{lst:variance-before} first computes the total $t$ and the mean $\mu=t/N$, then accumulates the centred sum of squares $ss$; the variance is $ss/N$.
 The second traversal cannot begin its original computation until the first has produced the final mean.
 
 To replace this dependency with a join, we first consider results computed using local means.
@@ -39,10 +37,24 @@ ss_S=\sum_{j\in S}(x_j-\mu_S)^2
  -2\mu_S\underbracket{\colorbox{boxgray}{$\displaystyle\sum_{j\in S}x_j$}}_{t_S}
  +\mu_S^2\underbracket{\colorbox{boxgray}{$\displaystyle\sum_{j\in S}1$}}_{n_S}.
 \end{equation}
+% Queue the overview with the reference-state discussion.
+\input{figures/variance-overview}
+\reservewrapspace{12\baselineskip}
+\begin{wrapfigure}{r}{0.32\textwidth}
+\begin{lstlisting}[style=pseudocode,caption={Single pass with reference states.},label={lst:variance-reference}]
+$(t,q,n)\gets(0,0,0)$
+for $j=0,\ldots,N-1$:
+    $t\gets t+x_j$
+    $q\gets q+x_j^2$
+    $n\gets n+1$
+$ss\gets q-t^2/n$
+return $\;ss/n$
+\end{lstlisting}
+\end{wrapfigure}
 The highlighted reductions do not read $\mu_S$: they are the square sum $q_S$, the total $t_S$ and the count $n_S$.
 They form the reference state tuple $(t_S,q_S,n_S)$ in panel (b).
 Each state combines by addition, and together they recover the source result through $\mu_S=t_S/n_S$ and $ss_S=q_S-t_S^2/n_S$.
-This establishes a sufficient three-state representation, independent of the input length.
+This establishes a sufficient three-state representation, independent of the input length; \cref{lst:variance-reference} accumulates these states together in one traversal and reconstructs the result afterwards.
 
 The reference representation makes a single pass algebraically possible, but its reconstruction of $ss$ subtracts potentially large, nearly equal quantities.
 The shifted float32 input in \cref{fig:variance} illustrates the resulting cancellation.
@@ -55,39 +67,33 @@ Expanding around the local mean gives
 =ss_\pa-2\delta_\pa\sum_{j\in\pa}(x_j-\mu_\pa)+\delta_\pa^2 n_\pa
 =ss_\pa+\delta_\pa^2 n_\pa.
 \end{equation}
-The linear term vanishes because deviations from a partition's own mean sum to zero.
+Over the reals, the linear term vanishes because deviations from a part's own mean sum to zero.
 The remaining correction is weighted by $n_\pa$, the number of elements whose centre changes.
 The source results $(t_\pa,ss_\pa)$ do not retain this count.
 Thus context-correction analysis exposes $n$ as information missing from the chosen representation, and \sys tests it as an auxiliary state.
 Here that coefficient alone supplies a sufficient augmentation: since $n_S>0$, the maintained state tuple $(t_S,ss_S,n_S)$ recovers $q_S=ss_S+t_S^2/n_S$, with the other reference states read directly.
 The state-selection procedure verifies this recovery before accepting the tuple.
 
-\reservewrapspace{14\baselineskip}
-\begin{wrapfigure}{r}{0.48\textwidth}
-\begin{lstlisting}[style=pseudocode,caption={Fused single-pass program.},label={lst:variance-after}]
+\reservewrapspace{10\baselineskip}
+\begin{wrapfigure}{r}{0.32\textwidth}
+\begin{lstlisting}[style=pseudocode,caption={Single pass with maintained states.},label={lst:variance-after}]
 $\leaf(x)=(x,0,1)$
-function $\Mrg(\pa,\pb)$:
-    $t\gets t_\pa+t_\pb$; $n\gets n_\pa+n_\pb$
-    $\mu\gets t/n$; $ss\gets ss_\pa+ss_\pb$
-    for $p\in\{\pa,\pb\}$:
-        $ss\gets ss+n_p(\mu-t_p/n_p)^2$
-    return $\;(t,ss,n)$
-$(t,ss,n)\gets\leaf(x_0)$
+$a\gets\leaf(x_0)$
 for $j=1,\ldots,N-1$:
-    $(t,ss,n)\gets\Mrg((t,ss,n),\leaf(x_j))$
+    $a\gets\Mrg(a,\leaf(x_j))$
+$(t,ss,n)\gets a$
 return $\;ss/n$
 \end{lstlisting}
 \end{wrapfigure}
-Using the recovery to derive a join and expressing it around the local means gives panel (c).
+Using the recovery to derive a join and expressing it around the local means gives the operation $\Mrg$ in \cref{fig:variance}(c).
 The join adds totals and counts, and corrects each local centred sum to the combined mean before adding them.
 \sys verifies that the result is the maintained state tuple of the union.
-On the illustrated shifted input, the corrected join matches the two-pass result.
+For the two illustrated parts of the shifted input, this corrected join matches the two-pass result.
 
 To turn this join into fusion, choose each part to contain exactly one element.
-Its mean is $x_j$, its centred sum is zero and its count is one, so its maintained state tuple is immediately $\leaf(x_j)=(x_j,0,1)$.
-\Cref{lst:variance-after} initialises the running tuple from the first element and computes and joins each subsequent tuple as its element is read.
+Its mean is $x_j$, its centred sum is zero and its count is one, so the initialisation function $\leaf(x_j)=(x_j,0,1)$ directly produces its singleton state tuple.
+\Cref{lst:variance-after} stores the running tuple in $a$, initialises it from the first element, and applies this join to each subsequent singleton tuple as its input element is read.
 This removes the local traversals as well as the global dependency: the input is read once, and the final variance is $ss/n$.
-Subscripts in the listing identify fields of the two input tuples.
 
 Over the reals, the resulting join recovers the pairwise variance formula of \citet{chan} and, applied one element at a time, is algebraically equivalent to Welford's update~\citep{welford}.
 The same union property also permits a parallel reduction tree.

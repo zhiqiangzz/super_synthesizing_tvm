@@ -1,80 +1,102 @@
-\section{Keeping the Accuracy of the Original Program}
+\section{Checking Floating-Point Accuracy}
 \label{sec:accuracy}
 
-The derived reducer now has a verified join and a chosen numerical formulation.
-It runs in floating point, where its evaluation order and intermediate values differ from those of the source~\citep{higham,goldberg}.
-To decide whether this formulation is acceptable, \sys combines static checks on the emitted expressions with differential measurements against the original program.
-The measurements use the following acceptance criterion.
-
-\begin{definition}[Accuracy acceptance]
-\label{def:gate}
-Let the error of a result $\hat y$ be $\max|\hat y-y|/\max|y|$ against the reference result $y$, the original program evaluated in float64, and $\infty$ if any value of $\hat y$ is not finite.
-A fused program \emph{passes the accuracy check} on a set of inputs if, on each of them, it produces a non-finite value only where the original does, and its error is at most $100\max(\mathit{err}_{\mathrm{orig}},\mathit{err}_{\mathrm{inh}})+64u$, where $\mathit{err}_{\mathrm{inh}}$ is an empirical sensitivity estimate from input perturbations and $u=2^{-23}$.
-\end{definition}
-
-The bound is relative to the original program, not to an exact answer: the fused program may lose what the original or the problem's conditioning already lose, up to a constant factor.
-The check is applied to sampled inputs, so it is evidence, not a guarantee.
+The maintained states provide a numerical representation as well as the information needed for fusion.
+Retaining centred quantities allows a join to correct local results without reconstructing them by subtracting raw moments; retaining scaled quantities allows it to adjust local scales without materialising unscaled values.
+These choices follow established methods for central moments and online normalisation~\citep{chan,pebay,milakov,blanchard}.
+Their benefit depends on the emitted arithmetic: even a centred update can have different rounding behaviour from a two-pass computation~\citep{chan}.
+We therefore assess the generated program through static expression checks, a sampled accuracy acceptance check, and separate tests of generated inputs and join trees.
 
 \subsection{Static Checks on the Emitted Join}
 \label{sec:hazards}
 \label{sec:static}
 
-A single pass changes both the order of evaluation and the intermediate quantities.
-Reassociation is inherent in parallel reductions, while expansion into raw moments can introduce cancellation and removal of scaling can expose overflow.
-A further risk is division by a context that vanishes on a proper part even though it is non-zero on the full input.
-These risks motivate retaining the source program's centring and scaling when the join admits that representation.
-
-\textbf{Proven guarantees.}
-\sys then checks two properties of the derived join.
-Each is required of a candidate only if the original program has it.
+A join can introduce an unbounded exponential or divide by a context that vanishes on a proper part.
+\sys checks the following properties of its emitted expressions under real arithmetic.
+Each property is required of a candidate when the original program satisfies the corresponding check.
 
 \begin{proposition}[Bounded exponents]
 \label{prop:exp}
-Every argument of $\exp$ in the join is at most 8: each positive term is absorbed by a subtracted maximum over its own axis or by a running-maximum state.
+If the bounded-exponent check succeeds, every argument of $\exp$ in the join is at most 8, as established using dominating maxima and constant bounds.
 \end{proposition}
 
 \begin{proposition}[Positive divisors]
 \label{prop:div}
-Every executed divisor and logarithm argument checked by this condition is positive along the serial fold initialised from its first leaf.
-The analysis combines a greatest fixpoint over the sign lattice $\{\text{any},\geq0,>0\}$ with SMT implications under branch guards.
+If the positivity check succeeds, every executed divisor and logarithm argument checked by this condition is positive along the serial fold initialised from its first element.
+The analysis combines a greatest fixpoint over the sign lattice $\{\text{any},\geq0,>0\}$, ordered by increasing strength, with SMT implications under branch guards.
 \end{proposition}
 
-\textbf{Where the join departs from the program.}
-The program's own computation cannot always be kept.
-When a source result is proved undefined on a legal partition, \textsc{Select} repairs its definition by moving the offending context outside the reduction and retaining the resulting coefficients as states.
-% src: data/fused_ops.json actions; reducer/states.py and reducer/smt.py
-A join that only re-bases the program's states is still an update formula, and on data whose offset is large relative to its spread an update formula can lose more than two passes do, by a factor of the problem's condition number~\citep{chan}.
-In these cases nothing is proven about rounding error, and only the acceptance check below decides.
+These checks also apply after domain repair changes a source-state definition.
+They constrain exponent ranges and the domains of executed operations; rounding and underflow are assessed through the numerical measurements.
 
-\subsection{Acceptance Measurements and Their Limits}
-Rounding error is not decided by these proofs.
-\sys therefore compares each fused program with the original before it accepts the fusion.
-It evaluates both on inputs drawn from five families, centred, shifted by $10^4$, wide, and near the overflow and underflow thresholds, against a float64 interpretation of the original, and checks \cref{def:gate} on each family.
-The families and the measurement are detailed in Appendix~E of the supplementary material.
+\subsection{MPFR-Based Acceptance Measurements}
 
+The source and fused programs run through LLVM in their working precision on the same quantised inputs.
+An interpreter evaluates the source expressions using MPFR~\citep{mpfr}, lifting floating-point casts to the evaluation precision.
+We call this value the \emph{MPFR result}, to distinguish it from the reference state tuple used in derivation.
+Evaluation begins at 128 bits and doubles the precision until consecutive results agree to 80 relative bits, with a separate near-zero tolerance, or reaches a limit of 2048 bits.
+Failure to stabilise leaves the numerical check unsupported.
+This agreement check supplies an empirical high-precision result; it does not certify correct rounding of the complete expression.
 
+The default input families cover centred data, a large offset, a wide range and two extreme scales.
+The extreme families are counted only where the source remains sufficiently accurate, and samples with non-finite MPFR results are omitted.
+Nominal symbolic extents are reduced when necessary to respect a limit on MPFR evaluation work; actual dimensions are recorded.
+Appendix~E gives the sampling parameters and omission rules.
+
+To measure local input sensitivity, the check moves each input element to an adjacent value of its working floating-point type using \code{nextafter}, choosing the direction independently.
+For each output element, $s_i$ is the largest absolute change of its MPFR result observed in the valid perturbation trials.
+The default is two trials; non-finite perturbed inputs or results do not contribute to $s_i$.
+If no trial is valid, $s_i=0$.
+The report records the number of valid trials.
+
+\begin{definition}[Accuracy acceptance]
+\label{def:gate}
+For each output element $i$, let $\hat y_i^{S}$ and $\hat y_i^{F}$ be the source and fused floating-point results, and let $y_i$ be the MPFR result.
+The fused program passes a retained input sample when its outputs are finite and, for every element,
+\[
+|\hat y_i^{F}-y_i|
+\leq
+\alpha\max\!\left(|\hat y_i^{S}-y_i|,s_i\right)
++\beta\epsilon_d|y_i|+\tau.
+\]
+Here $\epsilon_d$ is the spacing from 1 to the next larger number in output type $d$.
+The configurable defaults are $\alpha=100$, $\beta=64$ and $\tau=0$; a zero allowance requires exact agreement, and undefined comparisons fail.
+\end{definition}
+
+The criterion permits a specified increase over the source error or sampled sensitivity.
+Sensitivity is measured on local perturbations, rather than bounded for every perturbation.
+Absolute, relative, normwise and ULP errors are also reported as diagnostics; the elementwise criterion alone determines numerical acceptance.
+
+\subsection{Independent Property Tests}
 \label{sec:accuracy-limits}
 
-\Cref{tab:assurance} separates what \sys proves from what it checks on samples.
-The acceptance check is a differential test on five families, not a proof: inputs it does not sample, such as exactly zero weights outside a declared positive domain, are not covered.
-The execution contract excludes empty partitions from the join.
-A parallel implementation must initialise each active partition from its own first leaf and skip inactive partitions, rather than inject a numerical identity.
-This is a requirement on lowering, not a floating-point property established by the accuracy check.
+A separate Hypothesis suite~\citep{hypothesis} varies inputs and reduction lengths for the showcase operators, comparing both source and fused LLVM executions with MPFR results converted to float64 under explicit tolerances.
+For central moments, it also generates non-empty parts, join trees and operand exchanges, and executes the emitted singleton and join expressions in float32 and float64.
+These tests exercise execution orders beyond the serial path used by the fast acceptance check.
+Hypothesis supplies generation, counterexample shrinking and replay; this broader search runs outside individual fusion attempts.
+
+The algebraic join proof and these numerical checks address different properties.
+\Cref{tab:assurance} states what each proof or successful check establishes.
+The proof permits arbitrary non-empty partitions over the reals; the tests measure floating-point behaviour on the generated cases.
+The execution contract excludes empty parts from the join.
+A parallel implementation must initialise each active part from its own first element and skip inactive parts.
+The singleton initialisation is not a numerical identity for an empty part.
 
 \begin{table}[t]
-\caption{What each step establishes. \tagP: proven; \tagS: checked on samples; ---: not established.}
+\caption{Properties established by proofs or passing the corresponding checks. \tagP: proven; \tagS: checked on samples; ---: not established.}
 \label{tab:assurance}
 \footnotesize
-\begin{tabular}{@{}lp{0.62\linewidth}l@{}}
+\begin{tabular}{@{}p{0.25\linewidth}p{0.62\linewidth}l@{}}
 \toprule
 \textbf{Step} & \textbf{Property} & \\
 \midrule
-Judgement (\cref{alg:judge}) & defined reference atoms give a single pass with at most $|\mathcal Q|$ states & \tagP\\
+Reference construction (\cref{alg:judge}) & defined reference reductions give a single pass with at most $|\mathcal Q|$ states & \tagP\\
 Selection (\cref{alg:select}) & complete recovery and defined states on legal non-empty parts & \tagP\\
-Join & invariant and leaves (\cref{thm:correct,thm:printed}) & \tagP\\
-Join & bounded exponents, positive divisors on the serial fold (\cref{prop:exp,prop:div}) & \tagP\\
-Rebuilt program & agrees with the original in float64 on three small shapes & \tagS\\
-Rebuilt program & passes the accuracy check (\cref{def:gate}) on five input families & \tagS\\
+Join & invariant and initialisation (\cref{thm:correct,thm:printed}) & \tagP\\
+Join & real-arithmetic exponent bounds and divisor positivity on the serial fold (\cref{prop:exp,prop:div}) & \tagP\\
+Rebuilt program & MPFR evaluations agree on three small shapes, compared after conversion to float64 & \tagS\\
+Rebuilt program & meets the elementwise criterion (\cref{def:gate}) on retained input families & \tagS\\
+Property tests & generated inputs and non-empty moment joins meet explicit numerical tolerances & \tagS\\
 Rebuilt program & a bound on its floating-point error for every input & ---\\
 \bottomrule
 \end{tabular}

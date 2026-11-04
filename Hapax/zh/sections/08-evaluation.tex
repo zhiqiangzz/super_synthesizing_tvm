@@ -5,29 +5,32 @@
 \textbf{RQ1}：\sys 能否融合实际使用的依赖归约？
 \textbf{RQ2}：它引入了哪些状态？
 \textbf{RQ3}：推导和证明的开销是多少？
-\textbf{RQ4}：融合程序的精度与原程序有多接近？
+\textbf{RQ4}：相对于源程序和直接执行参考状态的程序，维护状态如何影响数值精度？
+
+下文的覆盖范围、所选状态和推导耗时记录于合成版本 \code{6c46fb1b02}。
+\placeholder{使用更新后的数值检验协议，重新测量依赖验收判定的结果、MPFR 精度和完整融合耗时。}
 
 
 我们从应用中选取了 \nShowcase 个算子，其归约之间具有不同的依赖方式（\cref{tab:showcase}）。
 应用包括语言模型（注意力、交叉熵、LayerNorm 及其反向计算）、强化学习与多模态预训练、最优传输、统计计算、无线通信、数值线性代数和统计物理。
 多数算子已有库中的手工单遍实现；表格列出已记录的实现，条目缺失不表示不存在相应实现。
-每个算子均按其定义写为 TE，并提供 float64 参考和手写单遍实现用于比较。
-它们来自包含 \nRegistry 个算子的注册表，其中许多是这些算子的变体；补充材料附录 B 报告全部结果，附录 C 列出所有未融合程序及原因。
+每个算子均按其定义写为 TE，并提供手写单遍实现用于比较。
+它们来自包含 \nRegistry 个算子的注册表，其中许多是这些算子的变体；补充材料附录 B 报告注册表中已融合的算子，附录 C 列出其他融合结果及失败原因。
 
 
 所有程序采用 float32 和符号维度。
-实验使用 Python \pythonVersion、SymPy \sympyVersion、Z3 \zThreeVersion 和 cvc5 \cvcFiveVersion。
-计时是在 Intel Xeon Platinum 8468H 上预热后运行五次的中位数。
+已记录的实验使用 Python \pythonVersion、SymPy \sympyVersion、Z3 \zThreeVersion 和 cvc5 \cvcFiveVersion。
+所报告的推导耗时是在 Intel Xeon Platinum 8468H 上预热后运行五次的中位数。
 % src: data/fused_ops.json meta (cpu, extent, seed, offset); data/proofs_timing.json meta.repeats
 
 \begin{table}[t]
-\caption{Coverage and state discovery. ``Hand-fused in'' lists identified library implementations; a dash means none is recorded. Passes count traversals of the fused axes. Added counts derived coordinates, including repairs. Selection reports source states alone, the rebase closure, or native synthesis (including independently verified enumeration).}
+\caption{Recorded coverage and state discovery. ``Hand-fused in'' lists identified library implementations; a dash means none is recorded. Passes count traversals of the fused axes. Derived components are absent from the source reduction results, including replacements after domain repair. Selection route reports the initial tuple alone, augmentation with all correction coefficients, or synthesis (including independently verified enumeration).}
 \label{tab:showcase}
 \footnotesize
 \setlength{\tabcolsep}{3pt}
 \begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.24\linewidth}>{\raggedright\arraybackslash}p{0.28\linewidth}ccc>{\raggedright\arraybackslash}p{0.12\linewidth}@{}}
 \toprule
-\textbf{Operator} & \textbf{Hand-fused in} & \textbf{Passes} & \textbf{States} & \textbf{Added} & \textbf{Selection}\\
+\textbf{Operator} & \textbf{Hand-fused in} & \textbf{Passes} & \textbf{States} & \shortstack{\textbf{Derived}\\\textbf{components}} & \shortstack[l]{\textbf{Selection}\\\textbf{route}}\\
 \midrule
 \tabShowcaseRows
 \bottomrule
@@ -37,10 +40,10 @@
 \subsection{Fusion Coverage and State Selection}
 \label{sec:eval-coverage}
 
-\sys 成功融合了 \nShowcase 个算子中的 \nShowFused 个。
-被接受算子的 \showChains 条链在融合前共遍历各自归约轴 \showPassesBefore 次，融合后为 \showPassesAfter 次，每条链一次；对比损失和 Sinkhorn 迭代均有两条链，分别沿行和列归约。
+在所记录的版本中，\sys 融合了 \nShowcase 个算子中的 \nShowFused 个。
+这些算子的 \showChains 条链在融合前共遍历各自归约轴 \showPassesBefore 次，融合后为 \showPassesAfter 次，每条链一次；对比损失和 Sinkhorn 迭代均有两条链，分别沿行和列归约。
 手写单遍实现具有相同的遍历次数。
-推导出的归约器包括在线 softmax、FlashAttention 的归一化归约器，以及 LayerNorm 和 Pearson 相关系数中的 Welford 合并。
+推导出的归约器包括在线 softmax、FlashAttention 的归一化归约器，以及 LayerNorm 和 Pearson 相关系数中的成对中心矩合并~\citep{chan}。
 热容通过加权多项式读取均值，超出了已有融合编译器所述条件（\cref{thm:containment}）。
 
 
@@ -48,12 +51,12 @@
 \label{sec:eval-states}
 
 这 \showChains 个归约器共有 \showStates 个状态，其中 \showDerived 个是原程序未计算的量，分布于 \showDerivedOps 个算子中（\cref{tab:showcase}）。
-\showOriginalOps 个算子仅凭源状态即可通过验证，\showRebaseOps 个使用重定基闭包，\showSygusOps 个使用原生合成。
+\showOriginalOps 个算子仅凭初始元组即可通过验证，\showRebaseOps 个补充全部修正系数，\showSygusOps 个使用原生合成。
 对于 PAPR，源程序保留总和、中心化峰值和平方偏差和。
-合成增加计数和一个联合极值坐标，即输入最大值与最小值之和，而不是分别存储两个极值。
+合成增加计数和输入最大值与最小值之和，而不是分别存储两个极值。
 该提案来自带量词合成返回未知之后的原生枚举，并通过独立的恢复和合并检查。
-Householder 通过语义 SyGuS 选择重定基特征，并使用带守卫的恢复。
-峰度和归一化策略损失首先修复在单元素分区上无定义的归一化源状态。
+Householder 通过使用单射性规约的 SyGuS，从上下文修正分析中选择候选表达式，并使用带守卫的恢复。
+峰度和归一化策略损失首先修复在单元素分块上无定义的归一化源状态。
 其他推导得到的状态包括上下文修正的系数；Ledoit--Wolf 协方差和标量 OLS HC0 展示了含多个此类系数的修正。
 表~\ref{tab:showcase} 报告核心算子的表示；附录 B 包括标签平滑及其他注册表算子。
 % src: data/fused_ops.json showcase chains[].states, auxiliaries, actions
@@ -62,25 +65,24 @@ Householder 通过语义 SyGuS 选择重定基特征，并使用带守卫的恢�
 \subsection{Derivation Cost and Numerical Accuracy}
 \label{sec:eval-cost}
 
-每个算子的判定时间至多为 \showJudgeMaxMs{}\,ms。
-状态选择同时推导合并并完成所有证明义务，在被接受的核心算子上，其中位时间为 \showSelectMedianMs{}\,ms，最大时间为 \showSelectMaxMs{}\,ms。
-\showInvCanonical 个合并不变量由规范恒等式证明。
+在所记录的版本中，每个算子的参考状态构造耗时至多为 \showJudgeMaxMs{}\,ms。
+状态选择同时推导合并并完成所有证明义务，在被接受的核心算子上，其中位耗时为 \showSelectMedianMs{}\,ms，最大耗时为 \showSelectMaxMs{}\,ms。
+\showInvCanonical 个合并不变量通过符号规范化后的相等性得到证明。
 这一数量描述最终不变量；状态选择还调用恢复和定义域证明，包括 SMT，因此不反映全部验证工作。
-完整的 \code{fuse} 包括重建、LLVM 编译和接受检查，在被接受的核心算子上的中位时间为 \showFuseMedian{}\,s，最大时间为 \showFuseMax{}\,s。
-
+完整融合耗时包括重建、LLVM 编译和数值验收，因此需要在启用 MPFR 检查的条件下测量。
 
 \paragraph{Numerical results.}
 \label{sec:eval-accuracy}
 
-全部 \nShowFused 个被接受的核心程序都在检查所计入的输入族上通过精度检查（\cref{def:gate}）。
-其中 \showRatioLeOne 个在中心附近数据上的融合精度至少与原程序相当。
-所有这些程序对误差上界的最大占用为上界的 \showGateWorstMargin。
-% src: gen/stats.tex showGateWorstMargin (candidate / bound over families)
-Pearson 相关系数和热容在偏移 $10^4$ 的数据上比各自的两遍原程序精度低；这与更新公式的敏感性~\citep{chan} 一致，两者仍在接受界内。
-峰度替换了原始归约，而 Householder 类型范数引入带守卫的恢复（\cref{sec:static}）。
-两者都改变了数值求值，其实测精度由检查支持，而非舍入误差界保证。
-% src: data/fused_ops.json pearson, heat_capacity err_synth[1] / err_unfused[1]
-各算子的误差见补充材料附录 E。
+更新后的数值评估将在相同的量化输入上，将源程序、手写程序和合成程序与同一 MPFR 结果比较。
+每个输出的误差和非有限结果将与 \cref{def:gate} 中的验收判定分别报告。
+该比较衡量生成程序的精度与源程序有多接近，也包括源程序精度更高的情况。
+
+为考察状态表示的作用，我们还将针对方差和 softmax，比较源程序、直接执行实际参考状态元组 $B$ 的程序和执行维护元组的程序。
+两个生成版本都将保留各自生成的输出重建表达式，并使用相同的编译设置和归约顺序。
+偏移量与尺度扫描将检验保留源程序中心化和缩放所针对的消去与数值范围问题。
+现有的说明性实例展示了这些效应，但并非这一编译后三方比较的测量结果。
+补充材料附录 E 给出了数值检验协议。
 
 \textbf{Performance scope.}\par
 \label{sec:eval-perf}

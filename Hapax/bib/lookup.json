@@ -1646,6 +1646,30 @@
    }
   ]
  },
+ "ink": {
+  "source": "crossref",
+  "query": "Homomorphism Calculus for User-Defined Aggregations",
+  "matches": [
+   {
+    "title": "Homomorphism Calculus for User-Defined Aggregations",
+    "authors": [
+     "Ziteng Wang",
+     "Ruijie Fang",
+     "Linus Zheng",
+     "Dixin Tang",
+     "Işıl Dillig"
+    ],
+    "venue": "Proceedings of the ACM on Programming Languages",
+    "year": 2025,
+    "volume": "9",
+    "issue": "OOPSLA2",
+    "pages": "615-641",
+    "doi": "10.1145/3763072",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery (ACM)"
+   }
+  ]
+ },
  "datacube": {
   "source": "crossref",
   "query": "Data Cube: A Relational Aggregation Operator Generalizing Group-By, Cross-Tab, and Sub-Totals",
@@ -2562,6 +2586,110 @@
     ],
     "arxiv": "2604.14825v1",
     "year": 2026
+   }
+  ]
+ },
+ "boldo_fp": {
+  "source": "publisher",
+  "source_url": "https://link.springer.com/article/10.1007/s10817-014-9317-x",
+  "checked": "2026-11-04",
+  "query": "Verified Compilation of Floating-Point Computations",
+  "matches": [
+   {
+    "title": "Verified Compilation of Floating-Point Computations",
+    "authors": [
+     "Sylvie Boldo",
+     "Jacques-Henri Jourdan",
+     "Xavier Leroy",
+     "Guillaume Melquiond"
+    ],
+    "venue": "Journal of Automated Reasoning",
+    "year": 2015,
+    "volume": "54",
+    "issue": "2",
+    "pages": "135-163",
+    "doi": "10.1007/s10817-014-9317-x",
+    "type": "journal-article",
+    "publisher": "Springer"
+   }
+  ],
+  "issue_source_url": "https://xavierleroy.org/bibrefs/Boldo-Jourdan-Leroy-Melquiond-JAR.html"
+ },
+ "higham_decomposition": {
+  "source": "author-institution",
+  "source_url": "https://research.manchester.ac.uk/en/publications/the-sensitivity-of-computational-control-problems/",
+  "checked": "2026-11-04",
+  "query": "The Sensitivity of Computational Control Problems",
+  "matches": [
+   {
+    "title": "The Sensitivity of Computational Control Problems",
+    "authors": [
+     "Nicholas J. Higham",
+     "Mihail Konstantinov",
+     "Volker Mehrmann",
+     "Petko Petkov"
+    ],
+    "venue": "IEEE Control Systems Magazine",
+    "year": 2004,
+    "volume": "24",
+    "issue": "1",
+    "pages": "28-43",
+    "doi": "10.1109/MCS.2004.1272744",
+    "type": "journal-article",
+    "publisher": "IEEE"
+   }
+  ]
+ },
+ "mpfr": {
+  "source": "official-project",
+  "source_url": "https://www.mpfr.org/credit.html",
+  "checked": "2026-11-04",
+  "query": "MPFR: A Multiple-Precision Binary Floating-Point Library with Correct Rounding",
+  "matches": [
+   {
+    "title": "MPFR: A Multiple-Precision Binary Floating-Point Library with Correct Rounding",
+    "authors": [
+     "Laurent Fousse",
+     "Guillaume Hanrot",
+     "Vincent Lefèvre",
+     "Patrick Pélissier",
+     "Paul Zimmermann"
+    ],
+    "venue": "ACM Transactions on Mathematical Software",
+    "year": 2007,
+    "volume": "33",
+    "issue": "2",
+    "pages": null,
+    "numpages": 15,
+    "doi": "10.1145/1236463.1236468",
+    "type": "journal-article",
+    "publisher": "Association for Computing Machinery",
+    "article-number": "13"
+   }
+  ],
+  "article_number_source_url": "https://www.mpfr.org/mpfr-current/mpfr.html#References"
+ },
+ "hypothesis": {
+  "source": "publisher",
+  "source_url": "https://joss.theoj.org/papers/10.21105/joss.01891",
+  "checked": "2026-11-04",
+  "query": "Hypothesis: A New Approach to Property-Based Testing",
+  "matches": [
+   {
+    "title": "Hypothesis: A New Approach to Property-Based Testing",
+    "authors": [
+     "David R. MacIver",
+     "Zac Hatfield-Dodds",
+     "Many Other Contributors"
+    ],
+    "venue": "Journal of Open Source Software",
+    "year": 2019,
+    "volume": "4",
+    "issue": "43",
+    "pages": "1891",
+    "doi": "10.21105/joss.01891",
+    "type": "journal-article",
+    "publisher": "The Open Journal"
    }
   ]
  }

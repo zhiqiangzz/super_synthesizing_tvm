@@ -1,14 +1,12 @@
-% Allow the overview to float near the section opening without blocking prose.
-\input{figures/variance-overview}
 \begingroup
 \setlength{\intextsep}{2pt}
-\reservewrapspace{12\baselineskip}
+\captionsetup[lstlisting]{justification=raggedright,singlelinecheck=false}
+\reservewrapspace{13\baselineskip}
 \section{Motivating Example}
 \label{sec:example}
 
-\begin{wrapfigure}{r}{0.48\textwidth}
+\begin{wrapfigure}{r}{0.32\textwidth}
 \begin{lstlisting}[style=pseudocode,caption={Two-pass source program.},label={lst:variance-before}]
-Input: $x_0,\ldots,x_{N-1}$, $N>0$
 $t\gets0$
 for $j=0,\ldots,N-1$:
     $t\gets t+x_j$
@@ -20,13 +18,13 @@ return $\;ss/N$
 \end{lstlisting}
 \end{wrapfigure}
 方差展示了融合必须消除的依赖。
-对于长度为 $N$ 的一行数据，\cref{lst:variance-before} 中的源程序先计算总和 $t$ 与均值 $\mu=t/N$，再累加中心化平方和 $ss$；方差为 $ss/N$。
+对于一行数据 $x_0,\ldots,x_{N-1}$，其中 $N>0$，\cref{lst:variance-before} 中的源程序先计算总和 $t$ 与均值 $\mu=t/N$，再累加中心化平方和 $ss$；方差为 $ss/N$。
 只有第一次遍历得到最终均值后，第二次遍历才能开始原有计算。
 
 为将这一依赖转化为合并操作，我们先考察使用局部均值计算的结果。
-对于非空分区 $S$，令 $t_S$ 和 $ss_S$ 为源程序在该分区上的归约结果，$\mu_S$ 为该分区的均值。
-直接计算这些结果仍需遍历该分区两次。
-对于不相交分区 $\pa$ 和 $\pb$，沿用源归约运算（本例为 $\oplus=+$）得到 $ss_\pa\oplus ss_\pb=ss_\pa+ss_\pb$。
+对于非空分块 $S$，令 $t_S$ 和 $ss_S$ 为源程序在该分块上的归约结果，$\mu_S$ 为该分块的均值。
+直接计算这些结果仍需遍历该分块两次。
+对于不相交分块 $\pa$ 和 $\pb$，沿用源归约运算（本例为 $\oplus=+$）得到 $ss_\pa\oplus ss_\pb=ss_\pa+ss_\pb$。
 它通常不等于并集的中心化平方和，因为两个局部结果使用不同的均值，如 \cref{fig:variance}(a) 所示。
 正确的合并操作必须处理均值变为共同均值时带来的变化。
 
@@ -39,10 +37,24 @@ ss_S=\sum_{j\in S}(x_j-\mu_S)^2
  -2\mu_S\underbracket{\colorbox{boxgray}{$\displaystyle\sum_{j\in S}x_j$}}_{t_S}
  +\mu_S^2\underbracket{\colorbox{boxgray}{$\displaystyle\sum_{j\in S}1$}}_{n_S}.
 \end{equation}
+% Queue the overview with the reference-state discussion.
+\input{figures/variance-overview}
+\reservewrapspace{12\baselineskip}
+\begin{wrapfigure}{r}{0.32\textwidth}
+\begin{lstlisting}[style=pseudocode,caption={Single pass with reference states.},label={lst:variance-reference}]
+$(t,q,n)\gets(0,0,0)$
+for $j=0,\ldots,N-1$:
+    $t\gets t+x_j$
+    $q\gets q+x_j^2$
+    $n\gets n+1$
+$ss\gets q-t^2/n$
+return $\;ss/n$
+\end{lstlisting}
+\end{wrapfigure}
 高亮的归约均不读取 $\mu_S$：它们分别是平方和 $q_S$、总和 $t_S$ 与计数 $n_S$。
 它们构成子图 (b) 中的参考状态元组 $(t_S,q_S,n_S)$。
 每个状态都可以通过加法组合，三者共同通过 $\mu_S=t_S/n_S$ 和 $ss_S=q_S-t_S^2/n_S$ 恢复源结果。
-这就确立了一个状态数与输入长度无关的充分三状态表示。
+这就确立了一个状态数与输入长度无关的充分三状态表示；\cref{lst:variance-reference} 在同一次遍历中累积这些状态，再重构所需结果。
 
 参考表示说明单遍计算在代数上可行，但它重构 $ss$ 时需要对两个可能很大且彼此接近的量做减法。
 \cref{fig:variance} 中平移后的 float32 输入展示了由此产生的相消。
@@ -55,39 +67,33 @@ ss_S=\sum_{j\in S}(x_j-\mu_S)^2
 =ss_\pa-2\delta_\pa\sum_{j\in\pa}(x_j-\mu_\pa)+\delta_\pa^2 n_\pa
 =ss_\pa+\delta_\pa^2 n_\pa.
 \end{equation}
-由于相对于分区自身均值的偏差之和为零，一次项消失。
+在实数语义下，由于相对于分块自身均值的偏差之和为零，一次项消失。
 剩余修正项以 $n_\pa$ 加权，它表示中心发生变化的元素数量。
 源结果 $(t_\pa,ss_\pa)$ 并未保留这一计数。
 因此，上下文修正分析将 $n$ 识别为所选表示缺失的信息，\sys 随后将其作为辅助状态进行检验。
 在本例中，仅这个系数就足以补全表示：由于 $n_S>0$，维护状态元组 $(t_S,ss_S,n_S)$ 可以恢复 $q_S=ss_S+t_S^2/n_S$，其余参考状态则可直接读取。
 状态选择过程验证这一恢复关系后，才接受该元组。
 
-\reservewrapspace{14\baselineskip}
-\begin{wrapfigure}{r}{0.48\textwidth}
-\begin{lstlisting}[style=pseudocode,caption={Fused single-pass program.},label={lst:variance-after}]
+\reservewrapspace{10\baselineskip}
+\begin{wrapfigure}{r}{0.32\textwidth}
+\begin{lstlisting}[style=pseudocode,caption={Single pass with maintained states.},label={lst:variance-after}]
 $\leaf(x)=(x,0,1)$
-function $\Mrg(\pa,\pb)$:
-    $t\gets t_\pa+t_\pb$; $n\gets n_\pa+n_\pb$
-    $\mu\gets t/n$; $ss\gets ss_\pa+ss_\pb$
-    for $p\in\{\pa,\pb\}$:
-        $ss\gets ss+n_p(\mu-t_p/n_p)^2$
-    return $\;(t,ss,n)$
-$(t,ss,n)\gets\leaf(x_0)$
+$a\gets\leaf(x_0)$
 for $j=1,\ldots,N-1$:
-    $(t,ss,n)\gets\Mrg((t,ss,n),\leaf(x_j))$
+    $a\gets\Mrg(a,\leaf(x_j))$
+$(t,ss,n)\gets a$
 return $\;ss/n$
 \end{lstlisting}
 \end{wrapfigure}
-利用恢复关系推导合并，再围绕局部均值组织计算，便得到子图 (c)。
+利用恢复关系推导合并，再围绕局部均值组织计算，便得到 \cref{fig:variance}(c) 中的操作 $\Mrg$。
 合并操作对总和及计数做加法，并在相加之前，将每个局部中心化平方和修正到组合后的均值。
 \sys 验证所得结果正是并集的维护状态元组。
-在图示的平移输入上，修正后的合并与两遍程序的结果一致。
+对于图示的平移输入的两个分块，这一修正合并与两遍程序的结果一致。
 
-为将这一合并转化为融合，令每个分区恰好包含一个元素。
-此时均值为 $x_j$，中心化平方和为零，计数为一，因此可直接得到维护状态元组 $\leaf(x_j)=(x_j,0,1)$。
-\Cref{lst:variance-after} 从第一个元素初始化累积元组，之后每读入一个元素，就计算其元组并立即合并。
-这同时消除了分区内部的多次遍历和对全局均值的依赖：输入只读取一次，最终方差为 $ss/n$。
-伪代码中的下标标识两个输入元组的对应分量。
+为将这一合并转化为融合，令每个分块恰好包含一个元素。
+此时均值为 $x_j$，中心化平方和为零，计数为一，因此初始化函数 $\leaf(x_j)=(x_j,0,1)$ 可直接生成其单元素状态元组。
+\Cref{lst:variance-after} 用 $a$ 保存累积元组，从第一个元素初始化，之后每读入一个输入元素，就将这一合并操作应用于相应的单元素状态元组。
+这同时消除了分块内部的多次遍历和对全局均值的依赖：输入只读取一次，最终方差为 $ss/n$。
 
 在实数语义下，所得合并恢复了 \citet{chan} 的成对方差公式；逐元素应用时，它在代数上等价于 Welford 更新~\citep{welford}。
 同一并集性质还允许通过并行归约树组合。
