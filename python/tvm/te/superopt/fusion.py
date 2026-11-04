@@ -45,9 +45,9 @@ open, and the chain is left as it is when one of them fails:
 
 * it must not take ``exp`` of an unbounded argument, divide by or take the
   ``log`` of a value of unknown sign, unless the original already does;
-* the rebuilt program must agree with the original, evaluated in float64 on
+* the rebuilt program must agree with the original under MPFR evaluation on
   a few small shapes (this is a check of the code generation);
-* compiled, it may not be less accurate than the original on adversarial
+* compiled, it must meet the configured empirical error budget on adversarial
   inputs (:mod:`accuracy`).
 
 A chain nothing passes for is left as it was, with the reason reported next
@@ -331,11 +331,11 @@ def fuse(
         theoretical construction's state count. A chain with no verified
         preserving representation within the budget is left unchanged.
     accuracy : {"filter", "report", "off"}
-        ``"filter"`` only accepts a reducer that is as accurate as the original
+        ``"filter"`` only accepts a reducer that meets the empirical precision budget
         (see :mod:`accuracy`); ``"report"`` accepts the first one that is
         correct and attaches its accuracy report; ``"off"`` skips the
         comparison (the rebuilt program is still checked against the original
-        in float64).
+        using high-precision references).
 
     Returns
     -------

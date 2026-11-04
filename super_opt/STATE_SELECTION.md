@@ -56,7 +56,7 @@ impossibility prover authorizing replacements of otherwise defined originals.
 ## Tools and trusted boundary
 
 Install the `superopt` optional dependencies (`sympy`, `z3-solver>=4.13`,
-`cvc5>=1.3,<2`) into the worktree environment. TVM itself must still be imported using PYTHONPATH,
+`cvc5>=1.3,<2`, `gmpy2>=2.2,<3`) into the worktree environment. TVM itself must still be imported using PYTHONPATH,
 not an editable install. Missing Z3 refuses proof-dependent selection; missing
 cvc5 reports `unavailable` when native synthesis is needed. There is no custom
 CEGIS fallback. The native interfaces were exercised with cvc5 1.4.2.
@@ -401,8 +401,7 @@ For HC0 on large-offset data, the residual cross moment F can have a much
 larger relative error than H: perturbing theta by one floating-point ulp
 perturbs F by approximately `D*ulp(theta)`. The merge-tree test therefore
 checks F against this explicit conditioning scale, while H and the complete
-covariance keep their ordinary tolerances. The default accuracy gate is
-unchanged. Current synthesis retains sums a,b, rather than storing a separate
+covariance keep their ordinary tolerances. The empirical accuracy gate also checks the complete output. Current synthesis retains sums a,b, rather than storing a separate
 higher-precision theta; this sensitivity remains a limitation.
 
 The showcase now contains 17 operators. The three additions have no claimed
@@ -540,3 +539,81 @@ because their normalized source reductions are undefined on singleton segments.
 A regression test bypasses the first complete-closure proposal for kurtosis:
 native search still selects the centered third-moment feature, preserves its
 structural reduction representation, and passes the default numerical gate.
+
+
+## Numerical validation: MPFR references and Hypothesis properties
+
+The fast precision gate uses gmpy2/MPFR arithmetic on the **same quantized inputs**
+as the original and generated LLVM programs. The TE interpreter supplies program
+semantics; gmpy2 supplies arithmetic. Floating storage casts are lifted to the
+reference precision, so this is a high-precision mathematical reference, not an
+IEEE execution emulator. Integer/bool casts retain their conversion semantics.
+Existing NumPy and external-library oracles remain independent cross-checks.
+
+References start at 128 bits and are recomputed at doubled precision, up to 2048
+bits. Successive values must agree to 80 relative bits, with an absolute floor
+of `2**-16` times the output dtype's smallest subnormal near zero. Nonfinite
+results must agree in classification/sign. Lack of convergence is unsupported,
+not a pass. This is an empirical precision-stability check, **not a certified
+interval or a proof that the reference is correctly rounded**. Matching low
+precision results can still miss cancellation; MPFR does not remove that limit.
+The gate retains MPFR arrays when computing errors; the older `references()`
+convenience interface converts to float64 only for its NumPy-facing callers.
+
+The regression policy is now explicit and **elementwise**:
+
+```text
+abs(candidate - reference)
+  <= factor * max(abs(original - reference), sampled_sensitivity)
+     + relative_eps * eps(dtype) * abs(reference)
+     + absolute_tolerance
+
+defaults: factor=100, relative_eps=64, absolute_tolerance=0
+```
+
+These configurable values permit bounded empirical degradation relative to the
+source; they do not mean "never less accurate". Sampled sensitivity is the
+largest observed absolute output change under two adjacent-float perturbations
+(`numpy.nextafter`). It is neither a condition-number upper bound nor a proof of
+backward stability. Invalid perturbed references do not enlarge the budget.
+`floor_ulps` was removed: the new relative epsilon floor is not a ULP distance.
+`FamilyError.inherent` is now `sensitivity`.
+
+Each family records original and candidate absolute error, maximum elementwise
+relative error, normwise error, and actual ULP distances computed with
+`numpy.testing.assert_array_max_ulp` against a directly dtype-rounded reference.
+ULPs are diagnostic, not a fixed acceptance limit for long reductions. New
+NaN/Inf values are rejected where the source was finite. A nonzero error at a
+zero reference has infinite relative error; an explicit absolute tolerance can
+be configured for such a problem. NumPy assertions implement the normalized
+budget check. Static domain and bounded-exp checks remain separate.
+
+The fast gate keeps the fixed unit/offset/wide/huge/tiny regression families.
+Its default per-operation reference iteration-volume budget is 16384 elements:
+large symbolic dimensions are deterministically reduced, while one-dimensional
+reductions still use the configured 256 elements when within budget. The report
+records actual sampled extents. Fixed shapes beyond the budget are unsupported;
+`max_reference_elements` is configurable. This keeps large covariance feature
+axes from making every optimization run perform millions of MPFR operations.
+
+Install `superopt` and `superopt-test` dependencies to run the property suite:
+
+```bash
+python -m pytest tests/python/te/superopt/test_numeric.py \
+  tests/python/te/superopt/test_numeric_properties.py
+```
+
+Hypothesis generates dyadic float32 arrays and lengths for all 17 showcase
+operators, comparing both original and fused LLVM programs with MPFR results.
+It also generates float32/float64 central-moment inputs, nonempty cut positions,
+merge trees, and operand swaps, executing the generated singleton and merge code.
+These tests use explicit domain-specific tolerances; they do not assert exact
+floating-point associativity. Fixed offset/extreme/domain and external-library
+regressions remain in the suite. Hypothesis owns generation, shrinking, and
+replay through its ignored `.hypothesis` database. Discovered boundary cases
+are also preserved as fixed regression tests. Compiled programs are reused
+across examples; expansive property search is not run inside each synthesis.
+
+This validates the tested LLVM execution. It does not certify all input lengths,
+all merge trees, or GPU lowering/fast-math behavior. Formal roundoff analysis
+with tools such as FPTaylor/Daisy is a separate extension, not implemented here.

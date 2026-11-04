@@ -14,42 +14,17 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Precision gate: a fused program may not be less accurate than the original.
+"""Empirical precision gate for a fused program relative to its source.
 
-A reducer is derived over the reals, where ``exp(s - max s) / Σ exp(s - max s)``
-and ``exp(s) / Σ exp(s)`` are the same function and so are the two-pass and
-the one-pass variance. In floating point they are not: the first overflows
-where the second does not, the second cancels catastrophically. The gate
-compares every candidate with the program it was derived from, never with
-an absolute standard, so a program is only rejected for trouble the
-original does not already have.
+The original and candidate execute in their working dtype. MPFR evaluates the
+source expressions at increasing precision on the same quantized inputs. A
+precision-stability check is evidence for a reference, not an error certificate.
 
-static
-    Two syntactic properties, each required of a candidate only when the
-    original has it. *Bounded exp*: every ``exp`` argument is bounded above
-    (``c*x - c*max(.., x, ..)``, a max reduction over the axis ``x`` ranges
-    over, the mirror image with a minimum, or a constant), in elementwise
-    ops, reducer inputs and merge functions alike. *Positive domains*: every
-    divisor and ``log`` argument
-    is provably positive (extents, sums of exponentials, counts), where the
-    sign of a reducer state follows its serial fold. A merge dividing by a
-    running sum of data of either sign fails the latter.
-differential
-    Original and candidate are compiled for LLVM in the working dtype and
-    run on the same inputs from a few adversarial families (unit, large
-    offset, wide range, and -- where the original itself is accurate there --
-    magnitudes at which a sum of squares leaves the floating-point range);
-    both are measured against a float64 evaluation of the original's own
-    expressions. The candidate fails if it produces a
-    non-finite value where the original does not, or if it loses more than
-    ``log10(factor)`` digits against the better of two yardsticks: the
-    original's actual error, and the *inherent* error of the problem at the
-    working precision -- how much the exact result moves when every input is
-    perturbed by one rounding (``|dx| = eps |x|``), i.e. its condition number
-    times ``eps``. The second yardstick admits the one-pass algorithms whose
-    error is the backward-stable ``κ eps`` (Welford, online softmax) even when
-    the original happens to be more accurate, while an expanded moment
-    formula, whose error grows like ``κ² eps``, is still orders beyond it.
+The configurable regression policy permits a factor of the source error or
+sampled input sensitivity, plus a relative epsilon floor and an absolute floor,
+per output element. Sensitivity samples are not condition-number bounds or a
+backward-stability proof. Static domain/exp checks remain separate. Hypothesis
+property tests exercise wider input and merge-tree spaces outside this fast gate.
 """
 
 from __future__ import annotations
@@ -65,6 +40,7 @@ from tvm import te
 from tvm_tirx import tirx as tir
 from tvm_tirx.ir import Call, FloatImm, IntImm
 
+from . import numeric
 from .loads import is_load, load_indices, load_tensor
 from .symbolic import ir
 from .symbolic.canonicalize import (
@@ -95,13 +71,22 @@ class AccuracyConfig:
         original runs over (long reductions are where rounding accumulates).
     other_extent
         Value given to the remaining symbolic extents.
+    max_reference_elements
+        Cap each operation's sampled iteration volume. Symbolic dimensions are
+        reduced deterministically when a multidimensional graph exceeds this
+        budget; a fixed shape exceeding it is reported as unsupported.
     families
         ``(name, shift, scale)``: every input is ``shift + scale * N(0, 1)``.
-    factor, floor_ulps
-        A candidate passes a family when ``err <= factor * max(err(original),
-        err(inherent)) + floor_ulps * eps(dtype)``.
+    factor, relative_eps, absolute_tolerance
+        Per element, allow ``factor * max(source_abs_error, sampled_sensitivity)
+        + relative_eps * eps(dtype) * abs(reference) + absolute_tolerance``.
+        This is an empirical regression budget, not a numerical error theorem.
     perturbations
-        Random one-ulp input perturbations used to estimate the inherent error.
+        Adjacent-float input perturbations used to sample sensitivity. Invalid
+        perturbed references do not increase the budget.
+    reference_precision, reference_max_precision
+        MPFR precision starts here and doubles until successive references agree
+        to 80 relative bits, or the maximum precision rejects the reference.
     positive
         Names of inputs that are only meaningful when positive (weights,
         masses), besides those the program itself puts under a ``log``, a
@@ -118,13 +103,17 @@ class AccuracyConfig:
 
     reduce_extent: int = 256
     other_extent: int = 3
+    max_reference_elements: int = 16384
     families: tuple[tuple[str, float, float], ...] = (
         ("unit", 0.0, 1.0),
         ("offset", 1.0e4, 1.0),
         ("wide", 0.0, 10.0),
     )
     factor: float = 100.0
-    floor_ulps: float = 64.0
+    relative_eps: float = 64.0
+    absolute_tolerance: float = 0.0
+    reference_precision: int = 128
+    reference_max_precision: int = 2048
     perturbations: int = 2
     positive: tuple[str, ...] = ()
     magnitudes: bool = True
@@ -135,10 +124,14 @@ class AccuracyConfig:
 @dataclasses.dataclass(frozen=True)
 class FamilyError:
     family: str
-    original: float  # normwise relative error of the original vs the float64 reference
-    inherent: float  # change of the exact result under one-ulp input perturbations
+    original: float  # normwise error against the MPFR reference
+    sensitivity: float  # sampled sensitivity, not a condition-number bound
     candidate: float
     ok: bool
+    original_metrics: tuple[numeric.ErrorMetrics, ...] = ()
+    candidate_metrics: tuple[numeric.ErrorMetrics, ...] = ()
+    reference_precision: int = 0
+    sensitivity_samples: int = 0
 
 
 @dataclasses.dataclass(frozen=True)
@@ -150,22 +143,32 @@ class AccuracyReport:
     static: tuple[tuple[str, str], ...]
     families: tuple[FamilyError, ...]
     note: str = ""  # why no numeric comparison was possible
+    extents: tuple[tuple[str, int], ...] = ()
 
     @property
     def static_ok(self) -> bool:
         return not self.static
 
     def summary(self) -> str:
-        head = "accurate" if self.ok else "REJECTED"
+        head = "passed sampled precision checks" if self.ok else "REJECTED"
         what = {"exp": "unbounded exp", "domain": "divisor/log of unknown sign"}
         parts = [f"{what[kind]} in {op}" for kind, op in self.static]
         if self.note:
             parts.append(self.note)
         for f in self.families:
             mark = "" if f.ok else " (!)"
+            details = ""
+            if f.candidate_metrics:
+                details = (
+                    f", abs {max(e.absolute for e in f.candidate_metrics):.2g}"
+                    f", rel {max(e.relative for e in f.candidate_metrics):.2g}"
+                    f", ULP {max(e.ulps for e in f.candidate_metrics):.2g}"
+                    f", nonfinite {sum(e.nonfinite for e in f.candidate_metrics)}"
+                )
             parts.append(
                 f"{f.family}: {f.candidate:.2g} (original {f.original:.2g}, "
-                f"inherent {f.inherent:.2g}){mark}"
+                f"sampled sensitivity {f.sensitivity:.2g}, MPFR {f.reference_precision} bits"
+                f"{details}){mark}"
             )
         return f"{head}: " + "; ".join(parts)
 
@@ -621,33 +624,43 @@ def _positive_domain(operand, env, signs):
 
 
 # ---------------------------------------------------------------------------
-# differential: float64 reference by interpreting the TE expressions
+# differential: MPFR reference by interpreting the TE expressions
 # ---------------------------------------------------------------------------
 # Intrinsics the reference can evaluate. The ops around a chain are not analysed,
 # only run, so this covers more than the lowering understands.
-ELEMENTWISE = {
-    "prim.if_then_else": np.where,
-    "prim.exp": np.exp,
-    "prim.log": np.log,
-    "prim.sqrt": np.sqrt,
-    "prim.rsqrt": lambda x: 1.0 / np.sqrt(x),
-    "prim.pow": np.power,
-    "prim.tanh": np.tanh,
-    "prim.sigmoid": lambda x: 1.0 / (1.0 + np.exp(-x)),
-    "prim.fabs": np.abs,
-    "prim.sin": np.sin,
-    "prim.cos": np.cos,
-    "prim.floor": np.floor,
-    "prim.ceil": np.ceil,
-}
+def _elementwise(name, *args):
+    mp = numeric.require_mpfr()
+    if name == "prim.if_then_else":
+        return np.where(*args)
+    functions = {
+        "prim.exp": mp.exp,
+        "prim.log": mp.log,
+        "prim.sqrt": mp.sqrt,
+        "prim.rsqrt": lambda x: 1 / mp.sqrt(x),
+        "prim.pow": lambda x, y: x**y,
+        "prim.tanh": mp.tanh,
+        "prim.sigmoid": lambda x: 1 / (1 + mp.exp(-x)),
+        "prim.fabs": abs,
+        "prim.sin": mp.sin,
+        "prim.cos": mp.cos,
+        "prim.floor": mp.floor,
+        "prim.ceil": mp.ceil,
+    }
+    if name not in functions:
+        raise Unsupported(f"intrinsic {name}")
+    return np.frompyfunc(functions[name], len(args), 1)(*args)
 
 
 class _Reference:
-    """Evaluate a TE graph in float64 exactly as written (no rewriting)."""
+    """Evaluate source expressions in the active MPFR context, without float casts.
+
+    This models real arithmetic approximately; it does not emulate intermediate
+    storage rounding. Input floats and literal constants retain their exact values.
+    """
 
     def __init__(self, inputs: list[te.Tensor], arrays: list[np.ndarray], var_values):
         self.values: list[tuple[object, list[np.ndarray]]] = [
-            (t.op, [np.asarray(a, dtype=np.float64)]) for t, a in zip(inputs, arrays)
+            (t.op, [numeric.mp_array(a)]) for t, a in zip(inputs, arrays)
         ]
         self.vars = var_values
 
@@ -685,15 +698,25 @@ class _Reference:
         if isinstance(e, FloatImm | IntImm):
             # as written: a reducer identity is the dtype's lowest finite value, and
             # ``0 * lowest`` is 0 where ``0 * -inf`` would be NaN
-            return float(e.value)
+            return numeric.require_mpfr().mpfr(e.value)
         if isinstance(e, tir.Var):
             if e.name in env:
                 return env[e.name]
-            return float(self.vars[e.name])
+            return numeric.require_mpfr().mpfr(self.vars[e.name])
         if isinstance(e, tir.Cast):
-            return np.asarray(self.ev(e.value, env), dtype=np.float64)
+            value = self.ev(e.value, env)
+            if str(e.ty.dtype).startswith(("int", "uint")):
+                return np.frompyfunc(int, 1, 1)(value)
+            if str(e.ty.dtype) == "bool":
+                return np.not_equal(value, 0)
+            return numeric.mp_array(value)
         binary = {
             tir.EQ: np.equal,
+            tir.NE: np.not_equal,
+            tir.LT: np.less,
+            tir.LE: np.less_equal,
+            tir.GT: np.greater,
+            tir.GE: np.greater_equal,
             tir.Add: np.add,
             tir.Sub: np.subtract,
             tir.Mul: np.multiply,
@@ -709,9 +732,7 @@ class _Reference:
             return arr[tuple(self.index(i, env) for i in load_indices(e))]
         if isinstance(e, Call):
             name = e.op.name
-            if name in ELEMENTWISE:
-                return ELEMENTWISE[name](*(self.ev(a, env) for a in e.args))
-            raise Unsupported(f"intrinsic {name}")
+            return _elementwise(name, *(self.ev(a, env) for a in e.args))
         raise Unsupported(f"expression {type(e).__name__}")
 
     def compute(self, op) -> list[np.ndarray]:
@@ -769,10 +790,44 @@ class _Reference:
         return state
 
 
+def high_precision_references(
+    outputs, inputs, arrays, var_values, *, precision=128, max_precision=2048
+):
+    """Return MPFR arrays and the precision at which two evaluations agree.
+
+    Agreement to 80 relative bits (with a floor 2**-16 times the target's
+    smallest subnormal) is an empirical check, not a rigorous enclosure.
+    Nonfinite results must agree in classification/sign.
+    Failure to stabilize rejects the reference instead of weakening a tolerance.
+    """
+    if precision < 96 or max_precision < 2 * precision:
+        raise ValueError("reference precision must be >= 96, with room for a doubled evaluation")
+
+    def evaluate(bits):
+        with numeric.context(bits):
+            ref = _Reference(list(inputs), list(arrays), var_values)
+            return [ref.tensor(t) for t in _tensors(outputs)]
+
+    previous = evaluate(precision)
+    while precision < max_precision:
+        precision = min(2 * precision, max_precision)
+        current = evaluate(precision)
+        if numeric.references_agree(
+            previous, current, precision, [str(t.dtype) for t in _tensors(outputs)]
+        ):
+            return current, precision
+        previous = current
+    raise Unsupported(f"MPFR reference did not stabilize by {max_precision} bits")
+
+
 def references(outputs, inputs, arrays, var_values) -> list[np.ndarray]:
-    """float64 values of ``outputs`` computed with the program's own expressions."""
-    ref = _Reference(list(inputs), list(arrays), var_values)
-    return [ref.tensor(t) for t in _tensors(outputs)]
+    """MPFR source evaluation, converted to float64 for NumPy-facing callers.
+
+    The precision gate uses high_precision_references directly, so its error
+    calculations do not discard reference bits by rounding to float64 first.
+    """
+    values, _ = high_precision_references(outputs, inputs, arrays, var_values)
+    return [np.asarray(a, dtype=np.float64) for a in values]
 
 
 # ---------------------------------------------------------------------------
@@ -802,7 +857,24 @@ def extent_names(outputs, inputs) -> tuple[set[str], set[str]]:
 
 def _var_values(outputs, inputs, config: AccuracyConfig) -> dict[str, int]:
     names, reduced = extent_names(outputs, inputs)
-    return {n: (config.reduce_extent if n in reduced else config.other_extent) for n in names}
+    values = {n: (config.reduce_extent if n in reduced else config.other_extent) for n in names}
+    if config.max_reference_elements < 1 or any(v < 1 for v in values.values()):
+        raise ValueError("sampled dimensions and reference budget must be positive")
+    shapes = [list(t.shape) for t in inputs]
+    shapes.extend(
+        [iv.dom.extent for iv in (*op.axis, *op.reduce_axis)] for op in compute_ops(outputs)
+    )
+    while True:
+        ref = _Reference([], [], values)
+        work = [int(np.prod([ref.extent(s) for s in shape], dtype=object)) for shape in shapes]
+        largest = shapes[int(np.argmax(work))]
+        if max(work) <= config.max_reference_elements:
+            return values
+        adjustable = [s.name for s in largest if isinstance(s, tir.Var) and values[s.name] > 1]
+        if not adjustable:
+            raise Unsupported("fixed reference shape exceeds max_reference_elements")
+        name = max(adjustable, key=lambda n: (values[n], n))
+        values[name] = max(1, values[name] // 2)
 
 
 def positive_inputs(outputs, inputs, declared=()) -> list[bool]:
@@ -876,18 +948,6 @@ def _run(lib, arrays, out_shapes, dtypes) -> list[np.ndarray]:
     return [o.numpy().astype(np.float64) for o in outs]
 
 
-def _rel_err(got: list[np.ndarray], ref: list[np.ndarray]) -> float:
-    """Largest normwise relative error over the outputs."""
-    worst = 0.0
-    for g, r in zip(got, ref):
-        if not np.all(np.isfinite(g)):
-            return float("inf")
-        scale = float(np.max(np.abs(r))) if r.size else 0.0
-        err = float(np.max(np.abs(g - r))) if r.size else 0.0
-        worst = max(worst, err / scale if scale > 0 else err)
-    return worst
-
-
 class AccuracyGate:
     """Judges candidate programs against ``outputs`` over ``inputs``."""
 
@@ -901,8 +961,16 @@ class AccuracyGate:
         self.var_values = _var_values(outputs, inputs, config)
         ref = _Reference(self.inputs, [], self.var_values)
         self.out_shapes = [tuple(ref.extent(s) for s in o.shape) for o in outputs]
-        eps = max(float(np.finfo(d).eps) for d in self.dtypes)
-        self.floor = config.floor_ulps * eps
+        if (
+            any(
+                not np.isfinite(x) or x < 0
+                for x in (config.factor, config.relative_eps, config.absolute_tolerance)
+            )
+            or config.perturbations < 0
+        ):
+            raise ValueError(
+                "accuracy budgets and perturbation count must be finite and nonnegative"
+            )
         positive = positive_inputs(outputs, self.inputs, config.positive)
         rng = np.random.default_rng(config.seed)
         signs = np.random.default_rng(config.seed + 1)  # perturbations: data stays fixed
@@ -912,27 +980,68 @@ class AccuracyGate:
             info = np.finfo(self.dtypes[0])
             families.append(("huge", 0.0, 8.0 * float(np.sqrt(info.max)), True))
             families.append(("tiny", 0.0, 1.0e-4 * float(np.sqrt(info.tiny)), True))
-        # per family: (name, input arrays, float64 reference, original output, original error)
         self.cases = []
         for name, shift, scale, magnitude in families:
             arrays = sample_inputs(self.inputs, positive, ref.extent, rng, shift, scale)
-            with np.errstate(all="ignore"):
-                want = references(outputs, self.inputs, arrays, self.var_values)
-            if not all(np.all(np.isfinite(w)) for w in want):
+            want, bits = self.reference(outputs, arrays)
+            if not all(np.all(numeric.finite(w)) for w in want):
                 continue
             got = _run(lib, arrays, self.out_shapes, self.dtypes)
-            if magnitude and not _rel_err(got, want) <= config.magnitude_bar:
-                continue  # the original does not hold at this magnitude either
-            inherent = 0.0
+            original_metrics = tuple(
+                numeric.errors(g, w, d, bits) for g, w, d in zip(got, want, self.dtypes)
+            )
+            original_error = max(e.normwise for e in original_metrics)
+            if magnitude and original_error > config.magnitude_bar:
+                continue  # This extra family is only required if the source handles it.
+            sensitivity = [np.zeros(w.shape, dtype=object) for w in want]
+            samples = 0
             for _ in range(config.perturbations):
-                moved = [
-                    a.astype(np.float64)
-                    * (1.0 + float(np.finfo(a.dtype).eps) * signs.choice((-1.0, 1.0), size=a.shape))
-                    for a in arrays
-                ]
-                shifted = references(outputs, self.inputs, moved, self.var_values)
-                inherent = max(inherent, _rel_err(shifted, want))
-            self.cases.append((name, arrays, want, got, _rel_err(got, want), inherent))
+                with np.errstate(all="ignore"):
+                    moved = [
+                        np.nextafter(
+                            a, signs.choice((-np.inf, np.inf), size=a.shape).astype(a.dtype)
+                        )
+                        for a in arrays
+                    ]
+                if not all(np.all(np.isfinite(a)) for a in moved):
+                    continue
+                shifted, shifted_bits = self.reference(outputs, moved)
+                bits = max(bits, shifted_bits)
+                if not all(np.all(numeric.finite(w)) for w in shifted):
+                    continue
+                with numeric.context(bits + 64):
+                    sensitivity = [
+                        np.maximum(s, abs(a - b)) for s, a, b in zip(sensitivity, shifted, want)
+                    ]
+                samples += 1
+            with numeric.context(bits + 64):
+                sensitivity_error = max(
+                    float(max(s.flat) / max(abs(w).flat)) if np.any(w) else float(max(s.flat))
+                    for s, w in zip(sensitivity, want)
+                )
+            self.cases.append(
+                (
+                    name,
+                    arrays,
+                    want,
+                    got,
+                    original_metrics,
+                    sensitivity,
+                    sensitivity_error,
+                    bits,
+                    samples,
+                )
+            )
+
+    def reference(self, outputs, arrays):
+        return high_precision_references(
+            outputs,
+            self.inputs,
+            arrays,
+            self.var_values,
+            precision=self.config.reference_precision,
+            max_precision=self.config.reference_max_precision,
+        )
 
     def check(self, candidates) -> AccuracyReport:
         candidates = _tensors(candidates)
@@ -944,16 +1053,51 @@ class AccuracyGate:
             return AccuracyReport(False, (), (), "no input family with a finite reference")
         lib = _compile(self.inputs, candidates)
         fams = []
-        for name, arrays, want, orig, orig_err, inherent in self.cases:
+        for (
+            name,
+            arrays,
+            want,
+            orig,
+            original_metrics,
+            sensitivity,
+            sampled,
+            bits,
+            samples,
+        ) in self.cases:
             got = _run(lib, arrays, self.out_shapes, self.dtypes)
-            err = _rel_err(got, want)
-            new_nonfinite = any(
-                bool(np.any(~np.isfinite(g) & np.isfinite(o))) for g, o in zip(got, orig)
+            metrics = tuple(
+                numeric.errors(g, w, d, bits) for g, w, d in zip(got, want, self.dtypes)
             )
-            bar = self.config.factor * max(orig_err, inherent) + self.floor
-            ok = not new_nonfinite and err <= bar
-            fams.append(FamilyError(name, orig_err, inherent, err, ok))
-        return AccuracyReport(all(f.ok for f in fams), (), tuple(fams))
+            ok = all(
+                numeric.regression_check(
+                    g,
+                    o,
+                    w,
+                    s,
+                    d,
+                    factor=self.config.factor,
+                    relative_eps=self.config.relative_eps,
+                    absolute_tolerance=self.config.absolute_tolerance,
+                    precision=bits,
+                )
+                for g, o, w, s, d in zip(got, orig, want, sensitivity, self.dtypes)
+            )
+            fams.append(
+                FamilyError(
+                    name,
+                    max(e.normwise for e in original_metrics),
+                    sampled,
+                    max(e.normwise for e in metrics),
+                    ok,
+                    original_metrics,
+                    metrics,
+                    bits,
+                    samples,
+                )
+            )
+        return AccuracyReport(
+            all(f.ok for f in fams), (), tuple(fams), extents=tuple(sorted(self.var_values.items()))
+        )
 
 
 # ---------------------------------------------------------------------------

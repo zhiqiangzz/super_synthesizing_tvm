@@ -217,7 +217,7 @@ def test_gate_variance_one_pass_formulas():
     naive = gate.check(_variance_one_pass(X))
     assert not naive.ok and naive.static_ok
     offset = next(f for f in naive.families if f.family == "offset")
-    assert not offset.ok and offset.candidate > 1e3 * max(offset.original, offset.inherent)
+    assert not offset.ok and offset.candidate > 1e3 * max(offset.original, offset.sensitivity)
 
 
 def test_gate_unshifted_softmax():
