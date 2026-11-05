@@ -41,7 +41,7 @@ Neither body has the single-factor or additive separation required by $\Cls{R}$.
 Appendix~A of the supplementary material gives the full proof.
 \end{proof}
 
-In words, both prior conditions admit a context that enters through one factor or one term, and a repair or a rescaling of the program's own partial result.
+Both prior conditions allow the program's partial result to be corrected for a changed context without retaining additional aggregate information.
 A polynomial consumer such as a central moment, and an extreme of an absolute deviation, fall outside both, because their join needs auxiliary states that the program does not compute.
 Neptune reports this failure for Welford's variance~\citep[\S4.2]{neptune}.
 RedFuser reports speedups for the variance and the moment of inertia~\citep[App.~A.6]{redfuser} but does not show how $\sum_l (x_l-m)^2$ satisfies its condition, which it does not.
@@ -118,6 +118,8 @@ Opera~\citep{opera} derives online algorithms, which update a state one element 
 % src: notes/evidence/opera.txt lines 913, 934 (50 of 51; kurtosis)
 These works develop synthesis and calculational methods for sequential loops and recursive programs.
 \sys restricts itself to reductions over one tensor axis, which lets it establish a sufficient condition by a finite expansion and derive commutative joins over bags.
+Within this setting, expanding the retained source states establishes a reference representation that specifies what auxiliary-state synthesis must recover.
+The search constructs only auxiliary states; verified recovery transfers the reference join to the maintained representation without synthesising another program for the join.
 It uses the source centring and scaling to guide join formulation, with floating-point measurements determining acceptance.
 
 \textbf{Aggregation.}

@@ -1,51 +1,7 @@
-% Both panels and their common caption form one full-width figure.
-% Shared unchanged by the English and Chinese prose editions.
-\par\medskip
-\noindent\begin{minipage}{\linewidth}
-\captionsetup{type=figure}
+% Compact shared diagram; the derivation appears in the surrounding body prose.
+\begin{wrapfigure}{r}{0.48\textwidth}
 \centering
-\begin{minipage}[t]{0.48\linewidth}
-\vspace{0pt}
-\centering
-{\small\sffamily\bfseries (a) State relations}\par\medskip
 \input{figures/recovery-square.tikz}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.48\linewidth}
-\vspace{0pt}
-\small
-\centerline{\sffamily\bfseries (b) Derivation}
-\medskip
-On each part, let $t=\sum_jx_j$, $q=\sum_jx_j^2$ and $n=\sum_j1$.
-Shifting the mean by $\delta$ exposes $n$ as the coefficient of $\delta^2$.
-Expanding the source definition gives
-\[
-G(t,q,n)=(t,q-t^2/n,n).
-\]
-From $(t,ss)$, recovery leaves $q=ss+t^2/n$ dependent on the unknown $n$.
-Adding $n$ gives the complete recovery
-\[
-H(t,ss,n)=(t,ss+t^2/n,n).
-\]
-Since $n>0$, both maps are defined and $H\circ G=\mathrm{id}$.
-The reference join $\oplus$ adds components.
-The upper arrow follows by composition:
-\[
-\Mrg(a,b)=G\bigl(H(a)\oplus H(b)\bigr).
-\]
-With $t_U=t_S+t_T$ and $n_U=n_S+n_T$, rewriting yields the centred form
-\[
-\begin{aligned}
-ss_U={}&ss_S+ss_T\\
-&+\frac{n_Sn_T}{n_U}
-  \left(\frac{t_S}{n_S}-\frac{t_T}{n_T}\right)^2.
-\end{aligned}
-\]
-The emitted join evaluates this correction without materialising $q$.
-\end{minipage}
-\caption{Variance: auxiliary states, recovery and join derivation.
-Here $p\in\{S,T\}$ and $U=S\dunion T$ for disjoint non-empty parts.
-Arrow annotations identify the subsections that develop each step:
-constructing candidate expressions and synthesising states (\S\ref{sec:selection}--\ref{sec:synthesis}), recovery of reference states (\S\ref{sec:recovery}),
-join derivation (\S\ref{sec:correctness}), and numerical formulation (\S\ref{sec:rebase}).}
+\caption{Householder-type norm: recovery transfers the reference join to the maintained states. Here $P\in\{S,T\}$ and $U=S\dunion T$.}
 \label{fig:recovery-square}
-\end{minipage}\par\medskip
+\end{wrapfigure}

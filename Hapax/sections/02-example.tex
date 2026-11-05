@@ -39,7 +39,7 @@ ss_S=\sum_{j\in S}(x_j-\mu_S)^2
 \end{equation}
 % Queue the overview with the reference-state discussion.
 \input{figures/variance-overview}
-\reservewrapspace{12\baselineskip}
+\reservewrapspace{10\baselineskip}
 \begin{wrapfigure}{r}{0.32\textwidth}
 \begin{lstlisting}[style=pseudocode,caption={Single pass with reference states.},label={lst:variance-reference}]
 $(t,q,n)\gets(0,0,0)$
@@ -85,9 +85,9 @@ $(t,ss,n)\gets a$
 return $\;ss/n$
 \end{lstlisting}
 \end{wrapfigure}
-Using the recovery to derive a join and expressing it around the local means gives the operation $\Mrg$ in \cref{fig:variance}(c).
-The join adds totals and counts, and corrects each local centred sum to the combined mean before adding them.
-\sys verifies that the result is the maintained state tuple of the union.
+The context correction above directly gives the operation $\Mrg$ in \cref{fig:variance}(c): add totals and counts, and correct each local centred sum to the combined mean before adding them.
+Recovery provides a second way to specify this join: recover each part's reference tuple, add the reference components, and reconstruct the maintained tuple of the union.
+\sys verifies the centred formula against this construction, connecting the selected states to a correct join while evaluating the correction directly.
 For the two illustrated parts of the shifted input, this corrected join matches the two-pass result.
 
 To turn this join into fusion, choose each part to contain exactly one element.

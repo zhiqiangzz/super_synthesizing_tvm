@@ -4,8 +4,9 @@
 Dependent reductions resist ordinary loop fusion because a later reduction reads a value that exists only after the whole axis has been read.
 \sys fuses them by deriving the single-pass reducer from the program.
 An algebraic analysis establishes a sufficient condition for a single pass.
-Context-correction analysis supplies expressions for synthesising auxiliary states in the maintained state tuple.
-Constructing a recovery map to the reference state tuple lets us derive the join.
+Expanding the source state definitions establishes a reference tuple that specifies the information auxiliary-state synthesis must retain.
+Constructive recovery then determines the maintained representation's join, so synthesis searches only for auxiliary states.
+Context-correction analysis supplies candidate expressions and execution formulas based on source definitions, which are verified against this join.
 The emitted program must also pass a sampled accuracy check.
 The recorded derivations cover \nShowFused of \nShowcase operators, reproducing reducers that were derived by hand for softmax, attention and variance.
 Turning the derived reducers into scheduled GPU kernels through TIRx, and replacing the sampled part of the accuracy check by a rigorous bound, are the next steps.

@@ -39,7 +39,7 @@ ss_S=\sum_{j\in S}(x_j-\mu_S)^2
 \end{equation}
 % Queue the overview with the reference-state discussion.
 \input{figures/variance-overview}
-\reservewrapspace{12\baselineskip}
+\reservewrapspace{10\baselineskip}
 \begin{wrapfigure}{r}{0.32\textwidth}
 \begin{lstlisting}[style=pseudocode,caption={Single pass with reference states.},label={lst:variance-reference}]
 $(t,q,n)\gets(0,0,0)$
@@ -85,9 +85,9 @@ $(t,ss,n)\gets a$
 return $\;ss/n$
 \end{lstlisting}
 \end{wrapfigure}
-利用恢复关系推导合并，再围绕局部均值组织计算，便得到 \cref{fig:variance}(c) 中的操作 $\Mrg$。
-合并操作对总和及计数做加法，并在相加之前，将每个局部中心化平方和修正到组合后的均值。
-\sys 验证所得结果正是并集的维护状态元组。
+上述上下文修正直接给出 \cref{fig:variance}(c) 中的操作 $\Mrg$：相加总和与计数，并在相加之前将每个局部中心化平方和修正到组合后的均值。
+恢复关系提供了规定这一合并操作的另一种方式：恢复各分块的参考元组，相加参考分量，再重构并集的维护元组。
+\sys 以这一构造为依据验证中心化公式，将选定状态与正确的合并操作联系起来，而执行时直接计算修正。
 对于图示的平移输入的两个分块，这一修正合并与两遍程序的结果一致。
 
 为将这一合并转化为融合，令每个分块恰好包含一个元素。

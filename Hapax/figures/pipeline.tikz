@@ -2,9 +2,9 @@
 \begin{tikzpicture}[node distance=3mm,
   process/.style={stage,text width=4.5cm,font=\sffamily\small,minimum height=7mm}]
 \node[process,draw=origblue] (extract) {Extract dependent reduction\\chains (\S\ref{sec:input-chains})};
-\node[process,below=of extract] (judge) {Construct reference states\\State-count upper bound (\S\ref{sec:existence})};
-\node[process,below=of judge,draw=auxpurple] (candidate) {Select maintained states\\Correction analysis; synthesis\\(\S\ref{sec:selection}--\ref{sec:synthesis})};
-\node[process,below=of candidate] (derive) {Derive and verify reducer\\Recovery; join; numerical form\\(\S\ref{sec:recovery}--\ref{sec:rebase})};
+\node[process,below=of extract] (judge) {Establish a single-pass form\\State-count upper bound (\S\ref{sec:existence})};
+\node[process,below=of judge,draw=auxpurple] (candidate) {Reference tuple from source states\\Synthesise auxiliary states\\(\S\ref{sec:selection}--\ref{sec:synthesis})};
+\node[process,below=of candidate] (derive) {Construct join through recovery\\Verify correction formulas\\(\S\ref{sec:recovery}--\ref{sec:rebase})};
 \node[process,below=of derive] (check) {Emit and check fused program\\(\S\ref{sec:accuracy}--\ref{sec:impl})};
 \node[process,below=of check,draw=fixgreen] (output) {Accept single-pass rewrite};
 \foreach \a/\b in {extract/judge,judge/candidate,candidate/derive,derive/check,check/output}

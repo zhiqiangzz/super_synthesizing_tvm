@@ -40,8 +40,11 @@ The context is held fixed during regrouping; the resulting reference states can 
 
 \begin{lemma}[Regrouping]
 \label{lem:regroup}
-Let $f(x,\ctx)=\bigoplus_{k=1}^{r}\varphi_{k,\ctx}(g_k(x))$, where no $g_k$ reads a context and every $\varphi_{k,\ctx}$ preserves $\oplus$.
-Then for every non-empty part $S$, $\bigoplus_{j\in S} f(x_j,\ctx)=\bigoplus_{k=1}^{r}\varphi_{k,\ctx}\bigl(\bigoplus_{j\in S} g_k(x_j)\bigr)$.
+Let $f(x,\ctx)=\bigoplus_{k=1}^{r}\varphi_{k,\ctx}(g_k(x))$, where $\oplus$ is associative and commutative, no $g_k$ reads a context and every $\varphi_{k,\ctx}$ preserves $\oplus$.
+Then for every non-empty part $S$,
+\[
+\bigoplus_{j\in S} f(x_j,\ctx)=\bigoplus_{k=1}^{r}\varphi_{k,\ctx}\bigl(\bigoplus_{j\in S} g_k(x_j)\bigr).
+\]
 \end{lemma}
 
 \begin{proof}
@@ -91,22 +94,24 @@ If a residual reduction still reads a context, the algorithm returns \textsc{Stu
 Otherwise the residual reductions enter $\mathcal Q$ as reference states, with one tuple component per distinct reduction.
 
 The construction gives a fixed-size state tuple whose components join independently and whose values determine the required outputs.
-Its size bounds the number of states in this construction; selection uses that bound as its default state limit.
-State selection applies the same expansion to the retained source results and required outputs to construct the reference tuple used for recovery; that tuple is fixed before auxiliary-state synthesis and can contain components absent from $\mathcal Q$.
-Thus the existence of the initial construction does not establish that every representation preserving the original results fits the same limit.
+All components can be accumulated in one traversal, after which scalar reconstruction reinstates the source contexts.
+The number of collected components bounds the states used by this construction and supplies the default state limit for selection.
 
 \finishwrapspace
 \endgroup
 
-\begin{theorem}[Existence]
-\label{thm:existence}
-Suppose \textsc{Judge} returns \textsc{Fusible}$(\mathcal Q)$, with
+Write the collected set as $\mathcal Q=\{q_1,\dots,q_k\}$, where
 \[
-\mathcal Q=\{q_1,\dots,q_k\},\qquad
 q_i(S)=\bigoplus_{j\in S}^{(i)}g_i(x_j).
 \]
+The tuple $(q_1(S),\dots,q_k(S))$ joins componentwise on disjoint non-empty parts.
+The algebraic rules give an output reconstruction $F$ on the source domain.
+
+\begin{theorem}[Existence]
+\label{thm:existence}
+Suppose \textsc{Judge} returns \textsc{Fusible}$(\mathcal Q)$.
 If the collected bodies are defined on the declared element domain, the chain has a single-pass reducer with at most $|\mathcal Q|$ states.
-Its state tuple is $(q_1(S),\dots,q_k(S))$, its join is componentwise, and its output function reconstructs the required outputs on their source domain.
+Its states are the collected reductions, joined componentwise, with output reconstruction $F$.
 \end{theorem}
 
 \begin{proof}[Proof sketch]
@@ -122,7 +127,5 @@ The construction recognises chains whose contexts can be separated by these rule
 When a residual reduction still depends on a context, the analysis stops without producing a construction.
 Further identities or stronger input relations may establish single-pass computability beyond this recognised class.
 
-The construction is an algebraic reference, not necessarily the numerical form we should execute.
-Separating contexts from reduction bodies changes the intermediate quantities: cancelling terms may become large independent sums, and bounded expressions may become products of unbounded factors.
-Keeping the source reduction results preserves their centring and scaling, while auxiliary states provide the information needed for a join.
-The next step is therefore to derive a maintained representation and prove that it retains the required information of the construction.
+For state selection, we apply these algebraic rules to the source reduction results that the fused program will retain.
+Their expanded definitions supply the reference representation used to discover auxiliary states and derive a join, as developed next.

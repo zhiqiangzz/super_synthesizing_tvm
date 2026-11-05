@@ -1,211 +1,244 @@
 \section{Synthesising States and Deriving the Reducer}
 \label{sec:derivation}
 
-The reference construction supplies a state tuple with a componentwise join, but its expanded components may lose the centring and scaling that make the source program numerically useful.
-Our task is to find a different representation: retain the source reductions, discover the information missing from their partial results, and derive a join for the augmented tuple.
-We combine algebraic analysis of context changes with syntax-guided synthesis of auxiliary states.
-A constructive recovery proof connects the new representation to the reference state tuple and transfers its join to the maintained states.
+The source reduction results provide the starting point for our maintained representation.
+Expanding their definitions into context-independent reductions gives a reference state tuple whose components already have joins.
+We use this tuple to specify the information that auxiliary states must supply: together with the retained source states, they must recover every reference component.
+Synthesis therefore searches only for auxiliary states.
+Once a recovery map is constructed and verified, the join follows by composition.
+This section develops that process through a Householder-type norm, where the implementation uses synthesis to select an auxiliary state.
 
-\subsection{Constructing Candidate Expressions from the Source Reductions}
+\subsection{Source States and Reference Representation}
 \label{sec:selection}
 
-Let $A_0(S)$ be the tuple of source reduction results evaluated on a non-empty part $S$ with its local contexts.
-We start from these results because their definitions can embody numerical choices such as centring and scaling.
-The accuracy of a floating-point computation depends on its evaluation structure, which an algebraically equivalent representation can change~\citep{boldo_fp,chan,blanchard}.
-Retaining the source definitions makes these numerical choices available to both auxiliary-state synthesis and the formulation of the join.
-If such a result is undefined on a legal part, its definition cannot serve as a maintained state on that part; we repair it by moving the offending context outside the reduction and retaining the resulting coefficients.
-Only demonstrated domain failures trigger this domain repair.
-Hereafter, $A_0$ denotes the initial maintained tuple after any such repair.
-We construct a context-independent reference state tuple $B(S)$ by expanding the resulting $A_0$ and the required outputs, obtaining a known map $G_0$ such that $A_0(S)=G_0(B(S))$.
-This construction is independent of the initial reference set $\mathcal Q$ in \cref{sec:existence}: $B$ may contain components needed to retain source results but absent from $\mathcal Q$.
-The components of $B$ join independently and determine the outputs.
-They are fixed before auxiliary states are synthesised: every new state must be a defined function of these components and any fixed program parameters.
+Let $\stsrc(S)$ denote the source-derived initial state tuple on a legal non-empty part $S$.
+These states retain the source definitions whenever they are defined on legal parts.
+A demonstrated domain defect is repaired by extracting the offending context: its coefficients replace that reduction in $\stsrc$, and the source result is reconstructed for the outputs.
+We then expand these definitions using the context-separation rules, substitute the definitions of their contexts, and collect the distinct context-independent reductions.
+Their values form the reference tuple $\stref(S)$, and the expanded expressions give a known map $\Gsrc$:
+\begin{equation}
+\label{eq:source-reference}
+\stsrc(S)=\Gsrc(\stref(S)).
+\end{equation}
+The reference components join independently and remain fixed throughout auxiliary-state search.
+Whereas the existence analysis starts from the required outputs, this construction starts from the source states that the fused program will retain.
 
-An auxiliary state should supply information needed to correct a partial result when its context changes.
-We discover such quantities by symbolically replacing local contexts with shifted or scaled contexts and applying the algebraic rules of the reference construction.
-For a state $r$ defined by a sum reduction, a successful expansion under the rules' side conditions has the form
+For the running example, consider two input sequences $x_j,e_j$.
+A Householder-type norm first computes a squared norm $q_S$ and then uses $k_S=\sqrt{q_S}$ as the context of a second reduction:
+\[
+q_S=\sum_{j\in S}x_j^2,\qquad
+v_S=\sum_{j\in S}(x_j+k_Se_j)^2.
+\]
+Thus $\stsrc(S)=(q_S,v_S)$; the scalar computation $k_S$ adds no reduction state.
+Expanding the second definition exposes two further context-independent quantities,
+\[
+u_S=\sum_{j\in S}e_j^2,\qquad
+p_S=\sum_{j\in S}x_je_j,\qquad
+v_S=q_S+2k_Sp_S+q_Su_S.
+\]
+We obtain $\stref(S)=(q_S,u_S,p_S)$ and
+$\Gsrc(q,u,p)=(q,q+2\sqrt q\,p+qu)$.
+The two source states leave the information in $u$ and $p$ combined; auxiliary-state synthesis determines what additional information to retain.
+
+\subsection{Discovering and Synthesising Auxiliary States}
+\label{sec:synthesis}
+
+Candidate expressions come from how a retained result changes with its context.
+The analyser symbolically shifts or scales the local contexts and separates the resulting terms.
+For a sum state $r$, a successful decomposition under the algebraic rules has the form
 \begin{equation}
 \label{eq:features}
 r(S;\kappa')=\sum_{\ell}\alpha_\ell(\delta,\rho)\,e_\ell(S;\kappa_S),
 \end{equation}
 where $\kappa_S$ is the local context, $\kappa'$ the target context, and $\delta,\rho$ describe their additive or multiplicative changes.
-The factors $\alpha_\ell$ depend on these changes; the coefficients $e_\ell$ are aggregate quantities evaluated using local contexts.
-The analyser tries shift and scale corrections, preferring a decomposition that retains the original state as a coefficient and then one with fewer coefficients.
-When the original state is such a coefficient, the remaining coefficients identify information needed by its correction.
-When a sum instead separates into contributions with different correction factors, the separately adjustable terms provide candidate expressions.
-For extrema, the corresponding monotonicity and context-extraction rules expose admissible correction coefficients.
+The factors $\alpha_\ell$ depend on these changes; the aggregate coefficients $e_\ell$ expose information needed to correct the retained result.
+Terms with different correction factors can also provide separate candidates.
+For extrema, the corresponding monotonicity and context-extraction rules serve this role.
+Each candidate has a definition in $\stref$ for reasoning and a structural reduction expression retaining local contexts for code generation.
+The retained candidates form $\mathcal T_{\mathrm{pre}}$; each is a defined function of the reference tuple and fixed program parameters.
 
-The admissible correction coefficients and separately adjustable terms form a set of candidate expressions $E_{\mathrm{pre}}$.
-Each candidate expression has two forms: its definition in $B$ for reasoning, and its structural reduction expression, with local contexts retained, for code generation.
-We exclude expressions that canonicalise to numerical constants, including zero, as well as duplicates and expressions already present in $A_0$, comparing expressions up to non-zero rational scaling.
-We also discard an expression if it depends on a component outside $B$ or its definedness cannot be proved.
-The tuple $K$ contains only the retained coefficient candidates; candidates obtained by splitting sums and reference components added later for synthesis do not enter $K$.
-Thus every retained candidate expression is a known function of the reference state tuple.
-A count enters through the same mechanism when a correction coefficient is $\sum_{j\in S}1$.
-If reference expansion exposes it instead, it is available with the other components of $B$.
-There is no separate count-selection rule.
-
-\subsection{Synthesising Auxiliary States}
-\label{sec:synthesis}
-
-The candidate expressions describe useful quantities, but selecting them individually need not give a compact sufficient state tuple.
-We therefore synthesise an auxiliary state tuple $C=(c_1,\ldots,c_w)$ and maintain $A=(A_0,C)$.
-For a set $E$ of candidate expressions, each auxiliary state is an expression from the finite grammar
+In the Householder example, writing $v_S(k)=\sum_{j\in S}(x_j+ke_j)^2$ gives
 \[
-\begin{aligned}
-\mathcal E_1&::=e\quad(e\in E),\\
-\mathcal E_\ell&::=\mathcal E_{\ell-1}
- \mid\mathcal E_{\ell-1}+\mathcal E_1
- \mid\mathcal E_{\ell-1}-\mathcal E_1\qquad(2\le\ell\le d).
-\end{aligned}
+v_S(k_S+\delta)
+ =v_S+2\delta(p_S+k_Su_S)+\delta^2u_S.
 \]
-The default depth $d=3$ permits signed combinations of at most three occurrences of candidate expressions.
-A candidate expression can itself be nonlinear in $B$, so this grammar combines quantities discovered by algebraic analysis without asking the solver to rediscover their internal products, divisions or centring.
-The structural form of each selected candidate expression is carried through these combinations.
+Besides the retained $v_S$, this correction exposes $p_S+k_Su_S$ and $u_S$.
+Adding both gives four maintained states, while the existence construction supplies a default limit of three.
+The search must therefore select a smaller augmentation.
 
-The synthesis specification asks whether the augmented tuple distinguishes all reference state tuples that may represent different partial computations.
-Let $\mathcal R$ be a conservative overapproximation of reachable tuples, constrained by domain and finite-sum facts.
-For fixed program parameters, cvc5 receives
+Let $C=(c_1,\ldots,c_w)$ be the auxiliary expressions to be synthesised.
+For a reference value $\xi$, their definitions determine
+\[
+G(\xi)=(\Gsrc(\xi),C(\xi)),\qquad
+\st(S)=G(\stref(S)).
+\]
+We require $\st$ to recover $\stref$, a sufficient condition for constructing a join for the entire maintained tuple.
+The synthesis specification expresses this information requirement before recovery is constructed.
+Let $\mathcal R$ conservatively contain all reachable reference tuples, constrained by finite-sum facts and proved definedness conditions for $\Gsrc$ and the candidates.
+For fixed program parameters, synthesis requires
 \begin{equation}
 \label{eq:synthesis}
-\forall B_1,B_2\in\mathcal R:\quad
-\bigl(G_0(B_1)=G_0(B_2)\ \land\ C(B_1)=C(B_2)\bigr)
-\ \Longrightarrow\ B_1=B_2.
+\forall \xi,\eta\in\mathcal R:\quad
+\bigl(\Gsrc(\xi)=\Gsrc(\eta)\ \land\ C(\xi)=C(\eta)\bigr)
+\ \Longrightarrow\ \xi=\eta.
 \end{equation}
-Equality of the initial state tuples alone can conceal information needed by a join; the auxiliary states must distinguish those cases.
-This makes the recovery target explicit rather than testing only whether the final outputs happen to agree.
+Auxiliary states must distinguish reference tuples that the initial states cannot distinguish.
+The known reference join then supplies the basis for joining the selected representation, so no join expression is included among the synthesis unknowns.
 
-\noindent\begin{minipage}{\linewidth}
-\begin{minipage}[t]{0.50\linewidth}
-\vspace{0pt}
-\Cref{alg:select} stages the search.
-It first checks the initial tuple $A_0$ alone, then $A_0$ augmented with the retained correction coefficients $K$.
-If neither succeeds, native SyGuS first uses $E_{\mathrm{pre}}$ and then $E_{\mathrm{mix}}=E_{\mathrm{pre}}\cup\{B_i\mid1\le i\le|B|\}$.
-The first stage favours source-structured corrections; the second adds the reference information that those corrections may miss.
-The solver searches combinations of candidate expressions, rather than just subsets of the set.
-
-Each proposal must pass an independent constructive check, denoted \textsc{Verify}: build a recovery map, prove its identity and domains, and derive and verify the complete reducer.
-A failed check requests another native solution.
-If quantified synthesis returns unknown, native grammar enumeration can still provide proposals to the same checker.
-Such proposals are accepted only by the constructive proof, not by the unknown synthesis result.
-\end{minipage}\hfill
-\begin{paperdiagram}
+The candidate expressions in a set $\mathcal T$ serve as grammar terminals. Each auxiliary expression is drawn from the finite grammar
+\[
+\begin{aligned}
+\mathcal E_1&::=e\quad(e\in\mathcal T),\\
+\mathcal E_\ell&::=\mathcal E_{\ell-1}
+ \mid\mathcal E_{\ell-1}+\mathcal E_1
+ \mid\mathcal E_{\ell-1}-\mathcal E_1
+ \qquad(2\le\ell\le d).
+\end{aligned}
+\]
+\begingroup
+\setlength{\intextsep}{4pt}
+\reservewrapspace{21\baselineskip}
+\begin{wrapfigure}{r}{0.48\textwidth}
 \begin{minipage}{\linewidth}
 \begin{algorithm}[H]
 \small
 \SetInd{0.5em}{0.7em}
 \caption{\textsc{Select}$(\mathit{chain},b_{\max})$}
 \label{alg:select}
-$A_0\leftarrow$ source states; repair domain defects\;
-$(B,G_0)\leftarrow$ expand $A_0$ and outputs\;
-$E_{\mathrm{pre}}\leftarrow$ defined candidate expressions over $B$\;
-$K\leftarrow$ correction coefficients in $E_{\mathrm{pre}}$\;
-\ForEach{$A\in\{A_0,(A_0,K)\}$ fitting $b_{\max}$}{
-\lIf{\textsc{Verify}$(A,B)$ succeeds}{\Return reducer}
+$\stsrc\leftarrow$ source states after domain repair\;
+$(\stref,\Gsrc)\leftarrow$ expand definitions of $\stsrc$\;
+\lIf{preparation fails}{\Return keep source chain}
+$\mathcal T_{\mathrm{pre}},K\leftarrow$ correction candidates\;
+\ForEach{$M\in[\stsrc,(\stsrc,K)]$ fitting $b_{\max}$}{
+\lIf{\textsc{Verify}$(M,\stref)$ succeeds}{\Return reducer}
 }
-\ForEach{$E\in[E_{\mathrm{pre}},E_{\mathrm{mix}}]$}{
-\ForEach{width $1\le w\le b_{\max}-|A_0|$}{
-Propose $C\in\mathcal E_d^{\,w}$ using \eqref{eq:synthesis}\;
-On unknown: native enumeration\;
+\ForEach{$\mathcal T\in[\mathcal T_{\mathrm{pre}},\mathcal T_{\mathrm{mix}}]$}{
+\ForEach{admissible auxiliary width $w$}{
 \While{proposals and resources remain}{
-\lIf{\textsc{Verify}$((A_0,C),B)$ succeeds}{\Return reducer}
-Request next native proposal\;
+Propose $C\in\mathcal E_d^{\,w}$\;
+\lIf{\textsc{Verify}$((\stsrc,C),\stref)$ succeeds}{\Return reducer}
 }
 }}
-\Return search failure\;
+\Return keep source chain\;
 \end{algorithm}
 \end{minipage}
-\end{paperdiagram}
-\end{minipage}\par\medskip
+\end{wrapfigure}
+With the default $d=3$, expressions combine at most three occurrences of candidate terms.
+A term can already be nonlinear in the reference values, so the grammar combines quantities discovered by analysis while preserving their structural forms.
+The first grammar uses $\mathcal T_{\mathrm{pre}}$; the second also includes the reference components as candidate expressions.
+When the existence analysis returns $\mathcal Q$, its bound $|\mathcal Q|$ supplies the default maintained-state limit $b_{\max}$.
+The supplementary material establishes a general sufficient augmentation; the search here seeks a compact representation within this limit.
 
-The reference construction bounds its own state count by $b_{\mathrm{ref}}=|\mathcal Q|$; we use this as the default limit $b_{\max}$ on the maintained tuple.
-This choice does not bound the size of every representation that retains the defined source results.
-If $A_0$ and $B$ are defined, appending every component of $B$ always supplies recovery by projection, using at most $|A_0|+|B|$ states.
-This establishes a sufficient construction, proved in Appendix~A; it does not ensure that a compact tuple fits $b_{\max}$ or that bounded synthesis finds one.
-The search uses a restricted grammar and independent proof procedures, and makes no minimality claim.
+\Cref{alg:select} first tests $\stsrc$ alone, then its augmentation with the tuple $K$ of admissible correction coefficients.
+It invokes synthesis if these choices do not yield a verified reducer within the state limit.
+Here $\mathcal T_{\mathrm{mix}}$ contains $\mathcal T_{\mathrm{pre}}$ and the reference components; the auxiliary width satisfies $1\le w\le b_{\max}-|\stsrc|$.
+For each proposal, \textsc{Verify} constructs recovery expressions, proves their identities and domains, and derives and verifies the complete reducer.
+Search scheduling and solver limits are described with the implementation.
+
+In the recorded Householder derivation, the initial tuple does not suffice and the complete coefficient augmentation exceeds the three-state limit.
+SyGuS selects $C(q,u,p)=u$, giving $\st=(q,v,u)$.
+The alternative coefficient $p+ku$ loses $u$ when $q=0$: then $p=k=v=0$ while $u$ can vary.
+A later join can make the norm context non-zero, so these parts require different corrections.
+The information requirement distinguishes these choices.
+Selecting $u$ leaves only $p$ to be recovered, including at zero norm.
+\finishwrapspace
+\endgroup
 
 \subsection{Constructing and Verifying Recovery}
 \label{sec:atoms}
 \label{sec:recovery}
 
-For a candidate $A=(A_0,C)$, the definitions of the selected expressions give $G(B)=(G_0(B),C(B))$, hence $A(S)=G(B(S))$.
-Injectivity is an information requirement; generating a reducer additionally requires an executable recovery map $H$ satisfying
+For a proposed maintained tuple, the selected definitions give the known map $G$.
+Recovery constructs an executable map $H$ from the equations defining that tuple, with
 \begin{equation}
 \label{eq:recovery}
-H(G(B(S)))=B(S).
+H(G(\stref(S)))=\stref(S).
 \end{equation}
-The identity holds on tuples arising from legal non-empty parts and also gives $G(H(A(S)))=A(S)$ on their maintained representations.
-Recovery reconstructs the reference state components from the maintained tuple.
-\Cref{fig:recovery-square} traces the running variance example through auxiliary state construction, recovery and join derivation.
+The procedure substitutes known expressions and isolates unresolved reference components using supported algebraic rules.
+Repeated substitution expresses every component in maintained states and fixed parameters.
+Symbolic normalisation and SymPy establish identities, while Z3 proves domains and guarded implications.
+This construction of $H$ is separate from the synthesis of $C$.
+
+For Householder, $q$ and $u$ are retained directly.
+Solving the definition of $v$ gives the remaining component and hence recovery:
+\[
+p=
+\begin{cases}
+0,&q=0,\\[2pt]
+\dfrac{v-q-qu}{2\sqrt q},&q>0,
+\end{cases}
+\qquad H(q,v,u)=(q,u,p).
+\]
+\reservewrapspace{16\baselineskip}
 \input{figures/recovery-overview}
+The zero branch follows from $q=\sum_jx_j^2=0$: each $x_j$ is zero, so $p=\sum_jx_je_j=0$.
+This is an instance of a finite-sum rule used by the verifier: a zero sum of non-negative terms forces each term to vanish.
+Both branches recover the reference value on their domains, and a lazy conditional evaluates only the selected branch.
+The resulting identity $H\circ G=\mathrm{id}$ establishes complete recovery, including legal zero-norm parts.
 
-The recovery procedure eliminates the reference state components from the equations defining $A$.
-It substitutes known expressions and isolates a remaining component using supported algebraic rules.
-An intermediate expression may depend on other unknown components; repeated substitution must remove all such dependencies before acceptance.
-Every component of $B$ must ultimately be expressed in maintained states and fixed parameters.
-This procedure constructs $H$ separately from the SyGuS search for $C$.
-
-Each introduced division requires a domain proof.
-For a divisor that may vanish, a guarded recovery expression can return zero on the zero branch only if the corresponding recovered component is proved zero there.
-Finite-sum laws justify such implications independently of part size: a zero sum of non-negative terms forces all terms to vanish.
-Symbolic normalisation and SymPy establish identities, while Z3 checks domains and guarded implications.
-Lazy conditionals ensure that inactive divisions are not evaluated.
-These checks explain why a synthesized injective map is a proposal rather than an immediately executable reducer.
+\Cref{fig:recovery-square} illustrates the construction: recover each part's $(q,u,p)$, add components, and apply $G$ to obtain the maintained tuple of the union.
+Initialisation evaluates the state definitions on a singleton.
+\finishwrapspace
 
 \subsection{Deriving the Join and Proving Correctness}
 \label{sec:correctness}
 
-The reference state components are context-independent reductions, so they combine componentwise under an operation $\oplus$.
-For disjoint non-empty parts $S,T$, they satisfy $B(S\dunion T)=B(S)\oplus B(T)$.
-Once recovery has been established, the join is obtained by recovering the two reference state tuples, combining them, and expressing the result as a maintained state tuple:
+The reference components combine independently under $\oplus$, giving
+$\stref(S\dunion T)=\stref(S)\oplus\stref(T)$ for disjoint non-empty parts.
+Recovery therefore yields the maintained join by composition:
 \begin{equation}
 \label{eq:merge}
 \Mrg(a,b)=G\bigl(H(a)\oplus H(b)\bigr).
 \end{equation}
-Let $F$ express the required outputs as a function of the reference state tuple.
-The initialisation function $\leaf(x_j)=A(\{j\})$ produces a singleton state tuple for each element.
-The output function is $\epi(a)=F(H(a))$ on the source output's domain; outputs already retained in $A$ can read their own components.
-These equations specify the reducer independently of its eventual evaluation order.
+
+The output function $\epi$ follows the source program's scalar dependencies expressed in selected states; a retained output such as $v$ reads its own component.
+Verification checks this reconstruction's identity and domain.
 
 \begin{theorem}[Correctness over $\R$]
 \label{thm:correct}
-Suppose $A=G\circ B$ and $H\circ G$ is the identity on reachable reference state tuples.
-Assume initialisation is defined for every legal element, recovery and join are defined on legal non-empty parts, and the output function is defined wherever the source output is defined.
-Then the derived reducer computes the source outputs for any partition into non-empty parts and any binary join tree over them.
+Let $\stref$ be defined on legal non-empty parts and join componentwise, and let $\st=G\circ\stref$.
+Suppose $G$ and $H$ are defined on their reachable arguments and $H\circ G$ is the identity on reachable reference tuples.
+If $\epi$ reconstructs the source outputs from $\st(\Ax)$ on their source domain, the derived reducer computes these outputs for any partition into non-empty parts and any binary join tree over them.
 \end{theorem}
 \begin{proof}
-For two disjoint non-empty parts,
+For disjoint non-empty parts,
 \[
 \begin{aligned}
-\Mrg(A(S),A(T))
- &=G\bigl(H(G(B(S)))\oplus H(G(B(T)))\bigr)\\
- &=G\bigl(B(S)\oplus B(T)\bigr)\\
- &=G(B(S\dunion T))=A(S\dunion T).
+\Mrg(\st(S),\st(T))
+ &=G\bigl(H(G(\stref(S)))\oplus H(G(\stref(T)))\bigr)\\
+ &=G\bigl(\stref(S)\oplus\stref(T)\bigr)\\
+ &=G(\stref(S\dunion T))=\st(S\dunion T).
 \end{aligned}
 \]
-The first equality substitutes the state definitions; the second uses recovery; the third uses componentwise aggregation.
-Thus every internal node computes the maintained tuple of its descendant leaves.
-Induction over the tree establishes the root tuple, and applying $F\circ H$ reconstructs the required outputs.
-The domain assumptions ensure that each executed operation denotes a value.
+Recovery gives the second equality and componentwise aggregation the third.
+Initialisation supplies the singleton states, so induction over the tree yields $\st(\Ax)$ at the root.
+Applying the verified output reconstruction completes the proof.
 \end{proof}
 
-Associativity and commutativity on reachable states follow from union of disjoint parts.
-Each part can therefore be processed independently and combined through a reduction tree, which supplies the divide-and-conquer parallel structure.
-Execution initialises each active part from its first element and skips empty parts.
-The proof establishes the result for the entire tuple, including auxiliary states, rather than only for the final output.
+This invariant covers every maintained component, including the auxiliary states.
+The associativity and commutativity established in the reducer contract therefore apply to the derived join.
+Complete reference recovery provides one common condition for selecting states and constructing their join.
 
 \subsection{Numerical Formulation of the Join}
 \label{sec:rebase}
 
-The numerical benefit of the chosen representation depends on how its join is evaluated.
-An equivalent decomposition can introduce intermediate subproblems that amplify error even when the overall computation is well conditioned~\citep{higham_decomposition}.
-In particular, directly evaluating $G(H(a)\oplus H(b))$ can reconstruct expanded reference components and then recover the maintained quantities from them.
-We rewrite this composition into corrections computed directly from maintained states and their local contexts, avoiding those intermediate reconstructions where possible.
-This numerical reformulation chooses how to evaluate the join; it differs from repairing an undefined source state and from constructing candidate expressions.
-The source definitions guide the numerical formulation; recovery of the reference state tuple supplies the information needed to derive and verify it.
-In the variance derivation of \cref{fig:recovery-square}, the composition becomes a correction based on the difference between local means, without materialising the raw square sum.
-Centred-moment joins and the online softmax use this approach to recentre or rescale partial results~\citep{pebay,milakov}.
-The emitted formula is checked against the compositional join, including the domains of its executed branches.
+The compositional join specifies the result to compute.
+Its direct evaluation can reconstruct expanded reference quantities before recomputing maintained values; such intermediate subproblems can amplify error even when the overall computation is well conditioned~\citep{higham_decomposition}.
+For execution, the context-change decompositions used in candidate discovery instead give formulas that correct the retained partial results to the joined context.
+Recovery expresses the required coefficients in maintained states, and the corrected results combine under the source reduction operator.
+
+For Householder, let $U=S\dunion T$, $k_P=\sqrt{q_P}$ and $\delta_P=k_U-k_P$ for $P\in\{S,T\}$.
+The join adds $q$ and $u$ componentwise and updates the retained $v$ by
+\[
+v_U=\sum_{P\in\{S,T\}}
+ \left[v_P+2\delta_P(p_P+k_Pu_P)+\delta_P^2u_P\right],
+\]
+where $p_P$ is recovered by the guarded expression above.
+The formula retains each part's computed $v_P$ and adjusts it for the changed context.
+Centred-moment joins and online softmax similarly correct partial results by recentring or rescaling~\citep{pebay,milakov}.
+
+The verifier proves equality with \eqref{eq:merge} and definedness of the executed branches.
+Components without a supported correction use their compositional expressions.
 \begin{theorem}[Correctness of the emitted join]
 \label{thm:printed}
 An emitted join verified equal to the compositional join on reachable states, with its executed branches defined, satisfies the same join invariant.
@@ -213,5 +246,4 @@ An emitted join verified equal to the compositional join on reachable states, wi
 \begin{proof}
 Substitution of the verified equality preserves the invariant proved above.
 \end{proof}
-Retaining source states and expressing the join through context corrections guide its numerical formulation; the algebraic proof establishes its correctness over the reals.
-The emitted program then undergoes static checks and differential accuracy measurements against the source, which determine whether its floating-point behaviour is acceptable.
+The emitted program then undergoes the static and differential numerical checks that determine floating-point acceptance.

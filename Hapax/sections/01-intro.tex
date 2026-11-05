@@ -39,32 +39,38 @@ A {\bfseries fused loop} processes one input element per part, computing and joi
 \input{figures/divide-conquer-fusion}
 \end{minipage}\par\medskip
 
-To derive such a join, \sys separates reduction bodies from their contexts, producing \emph{reference states} that combine independently and determine the required results.
+Our algebraic analysis separates reduction bodies from their contexts, producing \emph{reference states} that combine independently and determine the required results.
 Their reduction bodies do not read the original reductions' contexts; we call them \emph{context-independent}.
 When this construction succeeds, it provides a single-pass representation whose state count is independent of the reduction length.
 Directly executing this representation can expand the source's centred or scaled expressions.
 Reconstructing centred quantities from expanded sums can subtract large, nearly equal values; removing scaling can expose intermediate values to overflow~\citep{chan,blanchard}.
 More generally, the source program's evaluation structure can encode numerical properties that algebraically equivalent transformations disrupt~\citep{boldo_fp}.
-We therefore start from the source reduction results and use reference states to guide and verify their augmentation with auxiliary states.
+We therefore start from the source reduction results and seek auxiliary states that make them joinable while retaining these numerical choices.
 The resulting \emph{maintained state tuple} is the representation accumulated by the fused program.
+For state selection, the algebraic rules express the retained source states through context-independent reference states.
+This reference tuple remains fixed during auxiliary-state synthesis and specifies the information that the maintained tuple must recover.
 
 To discover the missing information, \sys analyses how partial results change when their local contexts are shifted or scaled.
 Applying its algebraic rules exposes aggregate quantities needed by these corrections.
 Both the retained source results and these candidate quantities are expressed as functions of the reference states.
 \sys first tests simple augmentations with these quantities; syntax-guided synthesis searches their combinations when needed.
 Reference components can also enter this search when the correction quantities alone are insufficient.
-Throughout selection, the reference representation supplies the criterion for sufficient information: \sys must find and verify expressions that recover all reference states from the maintained tuple.
+Each proposal is checked by constructing and verifying expressions that recover every reference state from the maintained tuple.
+This requirement accounts for the entire tuple, including the auxiliary states that must themselves be updated when parts are joined.
 
-Together with the maintained-state definitions, this recovery specifies a join: recover the two reference tuples, combine them componentwise, and evaluate the maintained-state definitions on the combined tuple.
-To carry the source's numerical structure into execution, \sys rewrites this composition into direct corrections on maintained states in their local contexts, reusing source centring and scaling where possible.
+Once recovery is established, a join follows by construction: recover the two reference tuples, combine them componentwise, and evaluate the maintained-state definitions on the combined tuple.
+Thus synthesis searches only for the auxiliary states: the reference join and verified recovery determine how the resulting representation combines, eliminating a separate search for join expressions.
+For execution, context-correction analysis constructs formulas that operate on maintained states in their local contexts, reusing source centring and scaling where possible.
+\sys verifies these formulas against the join obtained through recovery.
+The reference representation thereby connects the synthesis specification, join construction and verification of formulas based on source definitions.
 
 Over the reals, the resulting join computes the maintained state tuple of the combined input.
 Because the join also applies to arbitrary disjoint non-empty parts, the derived reducer admits independent computations on parts followed by a reduction tree.
 Fewer traversals create opportunities for reducing data movement; realised performance also depends on state size, join cost and scheduling.
 
 We implement \sys as a rewrite of TVM tensor expressions (TE)~\citep{tvm}.
-It derives single-pass reducers for \nShowFused of \nShowcase selected operators from machine learning and scientific computing.
-We report coverage, discovered states and derivation cost, and specify a validation protocol using high-precision MPFR evaluation to compare the emitted programs' accuracy with their sources.
+A recorded implementation snapshot derives single-pass reducers for \nShowFused of \nShowcase selected operators from machine learning and scientific computing.
+We report coverage, discovered states and derivation cost, and describe the implemented MPFR validation used to compare the emitted programs' accuracy with their sources.
 GPU scheduling and performance evaluation remain subsequent work.
 
 \noindent This paper makes the following contributions:
@@ -72,7 +78,7 @@ GPU scheduling and performance evaluation remain subsequent work.
 \item \textbf{A sufficient condition for fusion.}
 An algebraic analysis constructs reference states and bounds their number, covering context dependencies beyond the correction forms studied in prior fusion work.
 \item \textbf{State discovery and join derivation.}
-Analysis of source context corrections supplies building blocks for synthesising auxiliary states; verified recovery of reference states establishes their sufficiency and determines the join.
+A reference representation of the source states specifies the information that auxiliary-state synthesis must retain; constructive recovery derives the join without a separate synthesis task, and source context corrections guide candidate discovery and execution formulas.
 \item \textbf{Accuracy-aware formulation.}
 Source reduction definitions guide state selection and direct context corrections, retaining centring and scaling where possible; a numerical validation protocol specifies how to assess the emitted programs against their sources.
 \item \textbf{Implementation and evaluation.}

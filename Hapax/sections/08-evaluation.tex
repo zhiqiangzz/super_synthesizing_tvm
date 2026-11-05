@@ -8,7 +8,7 @@ We evaluate four questions.
 \textbf{RQ4}: How do the maintained states affect numerical accuracy relative to the source program and direct reference-state execution?
 
 The coverage, selected states and derivation timings below are recorded in synthesis snapshot \code{6c46fb1b02}.
-\placeholder{Refresh acceptance-dependent outcomes, MPFR accuracy measurements and complete fusion timings with the updated numerical protocol.}
+\placeholder{Rerun coverage, state selection, derivation timings and numerical acceptance on the current implementation using the updated MPFR protocol.}
 
 
 We selected \nShowcase operators from applications that differ in how their reductions depend on each other (\cref{tab:showcase}).
@@ -55,7 +55,7 @@ The initial tuple alone suffices for \showOriginalOps operators, augmentation wi
 For PAPR, the source retains a total, a centred peak and a squared-deviation sum.
 Synthesis adds a count and the sum of the input maximum and minimum, instead of storing the two extrema separately.
 This proposal comes from native enumeration after an unknown quantified-synthesis result and passes the independent recovery and join checks.
-Householder selects a candidate expression from context-correction analysis through SyGuS with the injectivity specification, and uses guarded recovery.
+The Householder-type norm selects a candidate expression from context-correction analysis through SyGuS with the injectivity specification, and uses guarded recovery.
 Kurtosis and normalised policy loss first repair normalised source states that are undefined on singleton parts.
 Other derived states include coefficients of context corrections; Ledoit--Wolf covariance and scalar OLS HC0 illustrate corrections with several such coefficients.
 Table~\ref{tab:showcase} reports the showcase representations; Appendix~B includes label smoothing and the other registry operators.
@@ -78,7 +78,7 @@ The updated numerical evaluation will compare source, hand-written and synthesis
 Per-output errors and non-finite results will be reported separately from the acceptance decision in \cref{def:gate}.
 This comparison measures how closely the emitted programs match the source's accuracy, including cases where the source is more accurate.
 
-To examine the role of state representation, we will additionally compare the source program, direct execution of the actual reference state tuple $B$, and execution of the maintained tuple for variance and softmax.
+To examine the role of state representation, we will additionally compare the source program, direct execution of the actual reference state tuple $\stref$ constructed from the initial source states, and execution of the maintained tuple for variance and softmax.
 The two generated versions will retain their emitted reconstruction expressions and use the same compilation settings and reduction order.
 Offset and scale sweeps will test the cancellation and range effects that motivate retaining source centring and scaling.
 The existing worked examples illustrate these effects; they are not measurements of this compiled three-way comparison.

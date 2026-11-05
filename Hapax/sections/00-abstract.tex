@@ -3,10 +3,9 @@ Many tensor operators use a value derived from one reduction's completed result 
 This dependency obstructs ordinary loop fusion, leaving experts to derive and implement single-pass algorithms.
 Fusion requires retaining enough information for a join to correct partial results as contexts change without rereading input.
 We present \sys, which adapts state synthesis and join construction from automated divide-and-conquer parallelisation to fuse dependent reductions.
-Algebraic analysis exposes reference states that combine independently and determine the required results.
-Directly executing this representation can expand the source centring and scaling, introducing cancellation or overflow.
-To retain the source's numerical structure, \sys uses the reference states to guide and verify the augmentation of source reduction results with auxiliary states.
-Context-correction analysis supplies candidate quantities for syntax-guided synthesis, while recovery of the reference states verifies that the resulting maintained state tuple retains sufficient information for joining.
-This verified relation yields a correct join over the reals, which \sys formulates as local-context corrections to retain source centring and scaling where possible.
-Our TVM implementation derives single-pass reducers for \nShowFused of \nShowcase selected operators; we report coverage, discovered states and derivation cost.
+Algebraic context separation establishes a sufficient condition for a single pass.
+To retain source centring and scaling, \sys starts from the source reduction results and expresses their definitions using reference states that combine independently.
+Synthesis searches only for auxiliary states that enable recovery of this representation; verified recovery then constructs a correct join over the reals.
+Context-correction analysis supplies synthesis candidates and local-context evaluation formulas that retain the source's numerical structure where possible.
+A recorded snapshot of our TVM implementation derives single-pass reducers for \nShowFused of \nShowcase selected operators; we report coverage, discovered states and derivation cost.
 \end{abstract}

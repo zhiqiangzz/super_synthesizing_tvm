@@ -40,8 +40,11 @@ $\min_j$ & dual to $\max_j$ & dual\\
 
 \begin{lemma}[Regrouping]
 \label{lem:regroup}
-设 $f(x,\ctx)=\bigoplus_{k=1}^{r}\varphi_{k,\ctx}(g_k(x))$，其中所有 $g_k$ 都不读取上下文，且每个 $\varphi_{k,\ctx}$ 都保持 $\oplus$。
-则对任意非空分块 $S$，有 $\bigoplus_{j\in S} f(x_j,\ctx)=\bigoplus_{k=1}^{r}\varphi_{k,\ctx}\bigl(\bigoplus_{j\in S} g_k(x_j)\bigr)$。
+设 $f(x,\ctx)=\bigoplus_{k=1}^{r}\varphi_{k,\ctx}(g_k(x))$，其中 $\oplus$ 满足结合律与交换律，所有 $g_k$ 都不读取上下文，且每个 $\varphi_{k,\ctx}$ 都保持 $\oplus$。
+则对任意非空分块 $S$，有
+\[
+\bigoplus_{j\in S} f(x_j,\ctx)=\bigoplus_{k=1}^{r}\varphi_{k,\ctx}\bigl(\bigoplus_{j\in S} g_k(x_j)\bigr).
+\]
 \end{lemma}
 
 \begin{proof}
@@ -91,22 +94,24 @@ $W\leftarrow \mathit{req}$;\ $\mathcal Q\leftarrow\emptyset$\;
 否则，剩余归约作为参考状态加入 $\mathcal Q$，每个不同的归约对应一个元组分量。
 
 这一构造给出固定大小的状态元组，其分量可以独立合并，其值能够确定所需输出。
-它的大小界定了这一构造的状态数；状态选择将该上界用作默认状态数限制。
-状态选择对保留的源结果和所需输出应用相同的展开，构造用于恢复的参考元组；该元组在辅助状态合成前固定，其中可能包含 $\mathcal Q$ 中没有的分量。
-因此，初始构造的存在性并不意味着每种保留原始结果的表示都能满足同一限制。
+所有分量可以在一次遍历中累积，随后通过标量重构重新引入源程序的上下文。
+收集到的分量数界定了这一构造使用的状态数，并为状态选择提供默认状态数限制。
 
 \finishwrapspace
 \endgroup
 
-\begin{theorem}[Existence]
-\label{thm:existence}
-设 \textsc{Judge} 返回 \textsc{Fusible}$(\mathcal Q)$，其中
+将收集到的集合写为 $\mathcal Q=\{q_1,\dots,q_k\}$，其中
 \[
-\mathcal Q=\{q_1,\dots,q_k\},\qquad
 q_i(S)=\bigoplus_{j\in S}^{(i)}g_i(x_j).
 \]
+元组 $(q_1(S),\dots,q_k(S))$ 可以在不相交的非空分块上逐分量合并。
+代数规则给出在源定义域上重构输出的函数 $F$。
+
+\begin{theorem}[Existence]
+\label{thm:existence}
+设 \textsc{Judge} 返回 \textsc{Fusible}$(\mathcal Q)$。
 如果收集到的归约体在声明的元素域上都有定义，则该链存在至多使用 $|\mathcal Q|$ 个状态的单遍归约器。
-其状态元组为 $(q_1(S),\dots,q_k(S))$，合并逐分量进行，输出函数在源输出的定义域上重构所需输出。
+其状态为收集到的归约，按分量合并，并通过 $F$ 重构输出。
 \end{theorem}
 
 \begin{proof}[Proof sketch]
@@ -122,7 +127,5 @@ q_i(S)=\bigoplus_{j\in S}^{(i)}g_i(x_j).
 当剩余归约仍依赖某个上下文时，分析停止，不产生构造。
 更多恒等式或更强的输入关系可能在这一已识别类别之外进一步建立单遍可计算性。
 
-这一构造是代数参考，不一定是适合实际执行的数值形式。
-将上下文从归约体中分离会改变中间量：原本相消的项可能变成很大的独立求和，有界表达式可能变成无界因子的乘积。
-保留源归约结果能够保留其中心化和缩放，而辅助状态提供合并所需的信息。
-因此，下一步是推导实际维护的表示，并证明它保留了该构造所需的信息。
+在状态选择中，我们将这些代数规则应用于融合程序需要保留的源归约结果。
+它们展开后的定义提供参考表示，用于发现辅助状态并推导合并操作，下一节将展开说明。

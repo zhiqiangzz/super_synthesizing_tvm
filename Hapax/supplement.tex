@@ -107,24 +107,27 @@ For $(c-r)^2$ at $(r,c,r_0,c_0)=(0,2,1,0)$ the left side is $4\cdot1=4$ and the 
 A sum $G(c)+H(r)$ satisfies $g(r,c)+g(r_0,c_0)=g(r_0,c)+g(r,c_0)$; for $|c-r|$ at $(1,1,0,0)$ the sides are $0$ and $2$.
 
 \subsection{Complete Recovery and Correctness (Theorem~\pref{thm:correct})}
-Let $B(S)$ be the reference state tuple and $A(S)=G(B(S))$ its maintained representation.
-For each legal non-empty part $S$, assume $H(G(B(S)))=B(S)$.
-For disjoint non-empty $S,T$, the reference states join componentwise.
-Together with recovery, this gives
+Let $\stref$ be the context-independent reference tuple obtained by expanding the definitions of the initial states $\stsrc$ after domain repair.
+This tuple remains fixed during auxiliary-state search.
+Let $\st=G\circ\stref$ be a selected maintained representation, and assume $\stref$ and $G$ are defined on legal non-empty parts and their reachable reference tuples, respectively.
+Suppose recovery is defined there and satisfies $H(G(\stref(S)))=\stref(S)$ for every legal non-empty part $S$.
+For disjoint non-empty $S,T$, componentwise joining and recovery give
 \[
-G\bigl(H(A(S))\oplus H(A(T))\bigr)
-=G\bigl(B(S)\oplus B(T)\bigr)
-=A(S\dunion T).
+G\bigl(H(\st(S))\oplus H(\st(T))\bigr)
+=G\bigl(\stref(S)\oplus\stref(T)\bigr)
+=\st(S\dunion T).
 \]
-Definedness of the recovery map and join ensures that this identity denotes an executable operation at every internal node.
-Induction over a join tree proves the invariant; the verified output function recovers each required output on the source output's domain.
-Emitted join formulas inherit the invariant only after their equality and branch domains have been checked.
+Initialisation evaluates $\st(\{j\})$ for each legal element, and the displayed identity establishes the join invariant at each internal node.
+Induction over a join tree therefore gives $\st(\Ax)$ at the root.
+The output function $\epi$ is reconstructed from the source program's scalar dependencies and verified to satisfy $\epi(\st(\Ax))=(m(\Ax))_{m\text{ required}}$ wherever the source outputs are defined.
+Applying this identity at the root establishes output correctness.
+Emitted join formulas inherit the invariant after their equality to the constructed join and the domains of their executed branches have been checked.
 
 The SMT injectivity check is independent of constructing $H$.
-Let $\mathcal R$ contain every reachable $B(S)$.
-Unsatisfiability of $B_1,B_2\in\mathcal R\land G(B_1)=G(B_2)\land B_1\ne B_2$ proves injectivity on the reachable subset.
+Let $\mathcal R$ contain every reachable $\stref(S)$, constrained by finite-sum facts and proved definedness conditions for the selected expressions.
+Unsatisfiability of $\xi,\eta\in\mathcal R\land G(\xi)=G(\eta)\land\xi\ne\eta$ proves injectivity on the reachable subset.
 Satisfiability does not prove a collision between real inputs, because $\mathcal R$ can contain unreachable tuples.
-Neither injectivity alone nor cancellation of an unresolved reference state component from an output supplies executable recovery.
+An executable recovery map additionally supplies expressions for every reference component.
 
 For a guarded recovery expression, the non-zero branch must recover the reference state component under its guard, while the zero branch requires a proof that the component itself vanishes there.
 Generic finite-sum implications justify the reachable-state constraints independently of part size: if every summand is non-negative, a zero sum forces each summand to be zero.
@@ -134,31 +137,34 @@ These arguments hold over the reals and do not exclude floating-point underflow.
 \subsection{Sufficient Auxiliary States and Bounded Synthesis}
 \begin{proposition}[Sufficiency of auxiliary states]
 \label{prop:supplement}
-Let $A_0$ have $m$ components and $B$ have $k$ components.
-Suppose $B$ is defined on legal non-empty parts, joins componentwise under $\oplus$, and determines the required outputs on their source domain.
-Suppose also that $A_0=G_0\circ B$, with $G_0$ defined on reachable reference state tuples.
-If every component of $B$ is allowed as an auxiliary state, there is a representation retaining $A_0$ that recovers $B$ and admits a join, using at most $m+k$ states.
+Let $\stsrc$ have $m$ components and $\stref$ have $k$ components.
+Suppose $\stref$ is defined on legal non-empty parts and joins componentwise under $\oplus$.
+Suppose also that $\stsrc=\Gsrc\circ\stref$, with $\Gsrc$ defined on reachable reference state tuples.
+If every component of $\stref$ is allowed as an auxiliary state, there is a representation retaining $\stsrc$ that recovers $\stref$ and admits a join, using at most $m+k$ states.
 \end{proposition}
 \begin{proof}
-Choose $\widehat A(S)=(A_0(S),B(S))$.
-Projection onto the last $k$ components recovers $B(S)$.
-For disjoint non-empty parts $S,T$, form $B_U=B(S)\oplus B(T)$ and return $(G_0(B_U),B_U)$.
-Componentwise joining gives $B_U=B(S\dunion T)$, so this result is $\widehat A(S\dunion T)$.
-The assumptions ensure defined states and join operations; the required outputs are recovered from $B$ on their source domain.
+Choose $\widehat\st(S)=(\stsrc(S),\stref(S))$.
+Projection onto the last $k$ components recovers $\stref(S)$.
+For disjoint non-empty parts $S,T$, form $\xi=\stref(S)\oplus\stref(T)$ and return $(\Gsrc(\xi),\xi)$.
+Componentwise joining gives $\xi=\stref(S\dunion T)$, so this result is $\widehat\st(S\dunion T)$.
+The assumptions ensure defined states and join operations.
 The tuple has $m+k$ components, with sharing able to reduce this count.
 \end{proof}
 
+The proposition establishes a sufficient algebraic construction for retaining the initial states.
+The existence analysis supplies the default state limit from its output-based construction; this need not equal the number of reference components collected from $\stsrc$.
+A compact representation fitting that limit is sought through bounded synthesis.
 
-The proposition gives an algebraic construction, not a completeness result for synthesis of compact tuples retaining the defined source results or a floating-point guarantee.
-The implemented search first checks the initial tuple $A_0$ after any domain repair, then $A_0$ augmented with all admissible correction coefficients collected from it.
+After domain repair, state selection collects $\stref$ from the expanded definitions of $\stsrc$, obtaining the known map $\Gsrc$.
+It checks $\stsrc$ alone, followed by $\stsrc$ augmented with all admissible correction coefficients collected from it.
 It next invokes native cvc5 SyGuS over candidate expressions from context-correction analysis and subsequently over those expressions plus the reference state components.
 Each auxiliary state combines at most three occurrences of candidate expressions by addition and subtraction.
 The synthesis constraint excludes collisions between two copies of the reference state tuple under a conservative reachable-state abstraction.
-Native enumeration on an unknown synthesis result provides proposals without a synthesis certificate; independent constructive verification remains mandatory.
+Native enumeration on an unknown synthesis result provides proposals for the same independent constructive verification.
 The search allows 256 proposals within a 20-second deadline, shared among grammar stages and choices of auxiliary state count, with up to 1500\,ms per synthesis call with the injectivity specification.
-It tries the maximum allowed number of auxiliary states first, followed by smaller numbers in increasing order.
+It tries the maximum allowed number of auxiliary states first, followed by smaller positive numbers in increasing order.
 An in-flight independent check may finish after the search deadline.
-Domain repair is restricted to demonstrated source-domain failures, with 64 rounds and 1500\,ms per Z3 query.
+Domain repair uses witnessed source-domain failures, with 64 rounds and 1500\,ms per Z3 query.
 Numerical rejection does not resume synthesis.
 These bounds, the restricted grammar, conservative abstraction and supported recovery rules can each prevent finding an otherwise valid representation.
 
@@ -330,8 +336,8 @@ Hypothesis supplies generation, shrinking and replay, while fixed regressions co
 The tests exercise LLVM execution; GPU numerical behaviour requires separate measurements.
 
 \paragraph{State-representation comparison.}
-The planned variance and softmax comparison will execute the original program, the actual reference state tuple $B$, and the maintained state tuple on identical quantised inputs.
-The reference tuple will be taken from the state-selection construction, retaining all of its components and the generated output reconstruction.
+The planned variance and softmax comparison will execute the original program, the actual reference state tuple $\stref$, and the maintained state tuple on identical quantised inputs.
+The reference version uses all context-independent reduction components collected from the initial maintained definitions after domain repair, together with the generated output reconstruction.
 It will execute even when a static numerical check would reject it, with that finding reported separately.
 All three versions will use the same LLVM target and serial reduction order, with fast-math, reassociation and contraction disabled.
 Their errors will be measured against the same MPFR evaluation of the source.

@@ -1,217 +1,249 @@
 \section{Synthesising States and Deriving the Reducer}
 \label{sec:derivation}
 
-参考构造已经提供一个能够逐分量合并的状态元组，但展开后的分量可能丢失源程序中有利于数值计算的中心化和缩放结构。
-我们的任务是寻找另一种表示：保留源归约，发现其部分结果中缺少的信息，并为补充后的元组推导合并操作。
-为此，我们将上下文变化的代数分析与辅助状态的语法引导合成结合起来。
-构造性的恢复证明将新表示与参考状态元组联系起来，并把已知的合并操作转移到维护状态上。
+维护表示从源程序的归约结果出发。
+将其定义展开为不依赖上下文的归约后，就得到分量各自已有合并操作的参考状态元组。
+我们用这一元组规定辅助状态需要补充的信息：辅助状态与保留的源状态共同恢复全部参考分量。
+因此，合成只搜索辅助状态。
+一旦构造并验证了恢复映射，就可以通过映射复合得到合并操作。
+本节以 Householder 型范数为贯穿例，说明实现如何通过合成选择辅助状态并完成这一过程。
 
-\subsection{Constructing Candidate Expressions from the Source Reductions}
+\subsection{Source States and Reference Representation}
 \label{sec:selection}
 
-令 $A_0(S)$ 为源归约在非空分块 $S$ 上、使用局部上下文求值得到的结果元组。
-我们从这些结果出发，是因为其定义可能体现了中心化和缩放等数值计算上的选择。
-浮点计算的精度取决于其求值结构，而代数等价的表示可能改变这一结构~\citep{boldo_fp,chan,blanchard}。
-保留源定义，使辅助状态合成和合并形式的构造能够继续利用这些数值设计。
-如果某个结果在合法分块上没有定义，其定义就不能作为该分块上维护的状态；我们将导致问题的上下文移到归约之外，改为保留所得系数，以修复该表示。
-只有已证实的定义域失效才会触发这一定义域修复。
-下文中，$A_0$ 均指完成必要修复后的初始维护元组。
-我们展开所得 $A_0$ 及所需输出，构造不依赖上下文的参考状态元组 $B(S)$，并得到已知映射 $G_0$，使得 $A_0(S)=G_0(B(S))$。
-这一构造独立于 \cref{sec:existence} 中的初始参考集合 $\mathcal Q$：$B$ 可能包含保留源结果所需、但不在 $\mathcal Q$ 中的分量。
-$B$ 的分量能够独立合并，并确定所需输出。
-这些分量在合成辅助状态之前就已固定：每个新状态都必须是这些分量及固定程序参数的有定义函数。
+令 $\stsrc(S)$ 表示合法非空分块 $S$ 上从源程序取得的初始状态元组。
+只要源定义在合法分块上有定义，就沿用该定义。
+对于已证实的定义域缺陷，通过提取导致问题的上下文来修复：所得系数在 $\stsrc$ 中替代该归约，源结果则在计算输出时重构。
+随后，我们用上下文分离规则展开这些定义，代入各上下文的定义，并收集其中不同的、不依赖上下文的归约。
+这些归约的取值组成参考元组 $\stref(S)$，展开后的表达式则给出已知映射 $\Gsrc$：
+\begin{equation}
+\label{eq:source-reference}
+\stsrc(S)=\Gsrc(\stref(S)).
+\end{equation}
+参考分量可以独立合并，并在辅助状态搜索期间保持固定。
+存在性分析从所需输出出发，而这里的构造从融合程序需要保留的源状态出发。
 
-辅助状态应当提供在上下文变化时修正部分结果所需的信息。
-我们通过符号方式将局部上下文替换为平移或缩放后的上下文，再应用参考构造中的代数规则，发现这样的量。
-对于由求和归约定义的状态 $r$，在规则的附加条件成立时，成功的展开具有如下形式
+在贯穿例中，输入为两个序列 $x_j,e_j$。
+Householder 型范数首先计算平方范数 $q_S$，然后将 $k_S=\sqrt{q_S}$ 用作第二个归约的上下文：
+\[
+q_S=\sum_{j\in S}x_j^2,\qquad
+v_S=\sum_{j\in S}(x_j+k_Se_j)^2.
+\]
+因此 $\stsrc(S)=(q_S,v_S)$；标量计算 $k_S$ 不增加归约状态。
+展开第二个定义会得到另外两个不依赖上下文的量：
+\[
+u_S=\sum_{j\in S}e_j^2,\qquad
+p_S=\sum_{j\in S}x_je_j,\qquad
+v_S=q_S+2k_Sp_S+q_Su_S.
+\]
+由此得到 $\stref(S)=(q_S,u_S,p_S)$ 和
+$\Gsrc(q,u,p)=(q,q+2\sqrt q\,p+qu)$。
+两个源状态将 $u$ 与 $p$ 的信息混合在一起；辅助状态合成决定还需要保留什么信息。
+
+\subsection{Discovering and Synthesising Auxiliary States}
+\label{sec:synthesis}
+
+候选表达式来自保留结果随上下文的变化方式。
+分析器以符号形式平移或缩放局部上下文，再分离所得各项。
+对于求和状态 $r$，代数规则下的成功分解具有如下形式：
 \begin{equation}
 \label{eq:features}
 r(S;\kappa')=\sum_{\ell}\alpha_\ell(\delta,\rho)\,e_\ell(S;\kappa_S),
 \end{equation}
-其中 $\kappa_S$ 是局部上下文，$\kappa'$ 是目标上下文，$\delta,\rho$ 描述两者之间的加性或乘性变化。
-因子 $\alpha_\ell$ 依赖这些变化；系数 $e_\ell$ 则是使用局部上下文求值的聚合量。
-分析器尝试平移和缩放修正，优先选择将原状态保留为一个系数的分解，其次选择系数较少的分解。
-当原状态是其中一个系数时，其余系数就指出修正所需的信息。
-如果一个和分解为具有不同修正因子的贡献项，则将其中可以分别调整的组成项作为候选表达式。
-对于极值，对应的单调性和上下文提取规则会暴露可用的修正系数。
+其中 $\kappa_S$ 为局部上下文，$\kappa'$ 为目标上下文，$\delta,\rho$ 描述两者之间的加性或乘性变化。
+因子 $\alpha_\ell$ 依赖这些变化；聚合系数 $e_\ell$ 则给出修正保留结果所需的信息。
+具有不同修正因子的项也可以分别提供候选。
+对于极值，对应的单调性和上下文提取规则发挥相同作用。
+每个候选都有用 $\stref$ 表达的定义，用于推理，以及保留局部上下文的结构化归约表达式，用于代码生成。
+保留的候选组成 $\mathcal T_{\mathrm{pre}}$；每个候选都是参考元组及固定程序参数的有定义函数。
 
-可用的修正系数和可以分别调整的组成项构成候选表达式集合 $E_{\mathrm{pre}}$。
-每个候选表达式都有两种形式：用 $B$ 表达的定义用于推理，保留局部上下文的结构化归约表达式用于生成代码。
-我们排除规范化后成为数值常量（包括零）的表达式，以及重复表达式和 $A_0$ 中已有的表达式；比较时忽略非零有理数缩放。
-如果表达式依赖 $B$ 之外的分量，或无法证明其有定义，我们也将其丢弃。
-元组 $K$ 只包含保留下来的系数候选；通过拆分求和得到的候选，以及之后为合成加入的参考分量，都不进入 $K$。
-因此，每个保留的候选表达式都是参考状态元组的已知函数。
-当某个修正系数为 $\sum_{j\in S}1$ 时，计数就通过相同机制进入。
-如果参考展开暴露了计数，它就可以和 $B$ 的其他分量一起参与搜索。
-算法没有单独的计数选择规则。
-
-\subsection{Synthesising Auxiliary States}
-\label{sec:synthesis}
-
-这些候选表达式描述了有用的量，但逐个选取它们未必能得到紧凑而充分的状态元组。
-因此，我们合成辅助状态元组 $C=(c_1,\ldots,c_w)$，并维护 $A=(A_0,C)$。
-对于候选表达式集合 $E$，每个辅助状态都是以下有限语法中的表达式
+在 Householder 例子中，记 $v_S(k)=\sum_{j\in S}(x_j+ke_j)^2$，则有
 \[
-\begin{aligned}
-\mathcal E_1&::=e\quad(e\in E),\\
-\mathcal E_\ell&::=\mathcal E_{\ell-1}
- \mid\mathcal E_{\ell-1}+\mathcal E_1
- \mid\mathcal E_{\ell-1}-\mathcal E_1\qquad(2\le\ell\le d).
-\end{aligned}
+v_S(k_S+\delta)
+ =v_S+2\delta(p_S+k_Su_S)+\delta^2u_S.
 \]
-默认深度 $d=3$ 允许候选表达式的带符号组合，其中候选表达式总共出现至多三次。
-候选表达式本身可以是 $B$ 的非线性函数，因此该语法组合的是代数分析已经发现的量，而不要求求解器重新发现其内部的乘法、除法或中心化结构。
-每个选中候选表达式的结构形式也随组合一起保留。
+除已保留的 $v_S$ 外，这一修正还给出 $p_S+k_Su_S$ 和 $u_S$。
+将两者全部加入会得到四个维护状态，而存在性构造给出的默认限制为三个。
+因此，搜索需要选择更紧凑的补充方式。
 
-合成规约要求补充后的元组能够区分所有可能代表不同部分计算的参考状态元组。
-令 $\mathcal R$ 为可达元组的保守过近似，由定义域和有限求和事实约束。
-在固定程序参数下，提交给 cvc5 的条件为
+令 $C=(c_1,\ldots,c_w)$ 为待合成的辅助表达式。
+对于参考取值 $\xi$，这些表达式的定义确定了
+\[
+G(\xi)=(\Gsrc(\xi),C(\xi)),\qquad
+\st(S)=G(\stref(S)).
+\]
+我们要求 $\st$ 能够恢复 $\stref$，以此作为构造整个维护元组合并操作的充分条件。
+合成规约在构造恢复映射之前表达这一信息要求。
+令 $\mathcal R$ 保守地包含所有可达参考元组，并由有限求和事实以及 $\Gsrc$ 和候选表达式已证明的有定义条件约束。
+在固定程序参数下，合成要求
 \begin{equation}
 \label{eq:synthesis}
-\forall B_1,B_2\in\mathcal R:\quad
-\bigl(G_0(B_1)=G_0(B_2)\ \land\ C(B_1)=C(B_2)\bigr)
-\ \Longrightarrow\ B_1=B_2.
+\forall \xi,\eta\in\mathcal R:\quad
+\bigl(\Gsrc(\xi)=\Gsrc(\eta)\ \land\ C(\xi)=C(\eta)\bigr)
+\ \Longrightarrow\ \xi=\eta.
 \end{equation}
-仅有初始状态元组相等，仍可能掩盖合并所需的信息；辅助状态必须能够区分这些情况。
-这样就明确了恢复的目标，而不是只检查最终输出是否恰好相等。
+辅助状态必须能够区分初始状态无法区分的参考元组。
+已知的参考合并操作为选定表示的合并提供了基础，因此合并表达式不属于合成的未知量。
 
-\noindent\begin{minipage}{\linewidth}
-\begin{minipage}[t]{0.50\linewidth}
-\vspace{0pt}
-\Cref{alg:select} 分阶段组织搜索。
-它首先检查初始元组 $A_0$ 本身，再检查向 $A_0$ 加入保留下来的修正系数 $K$ 后的元组。
-如果两者都未成功，原生 SyGuS 先使用 $E_{\mathrm{pre}}$，再使用 $E_{\mathrm{mix}}=E_{\mathrm{pre}}\cup\{B_i\mid1\le i\le|B|\}$。
-第一阶段优先考虑保留源结构的修正量；第二阶段加入这些修正量可能遗漏的参考信息。
-求解器搜索候选表达式的组合，而不只是候选表达式集合的子集。
-
-每个提案都必须通过独立的构造性检查，记为 \textsc{Verify}：构造恢复映射，证明其恒等关系和定义域，再推导并验证完整归约器。
-检查失败后，继续请求原生求解器的下一个解。
-如果带量词的合成返回未知，原生语法枚举仍可向同一个检查器提供提案。
-这类提案只能凭借构造性证明被接受，而不能凭借未知的合成结果。
-\end{minipage}\hfill
-\begin{paperdiagram}
+候选集合 $\mathcal T$ 中的表达式作为文法终结项。每个辅助表达式取自以下有限语法：
+\[
+\begin{aligned}
+\mathcal E_1&::=e\quad(e\in\mathcal T),\\
+\mathcal E_\ell&::=\mathcal E_{\ell-1}
+ \mid\mathcal E_{\ell-1}+\mathcal E_1
+ \mid\mathcal E_{\ell-1}-\mathcal E_1
+ \qquad(2\le\ell\le d).
+\end{aligned}
+\]
+\begingroup
+\setlength{\intextsep}{4pt}
+\reservewrapspace{21\baselineskip}
+\begin{wrapfigure}{r}{0.48\textwidth}
 \begin{minipage}{\linewidth}
 \begin{algorithm}[H]
 \small
 \SetInd{0.5em}{0.7em}
 \caption{\textsc{Select}$(\mathit{chain},b_{\max})$}
 \label{alg:select}
-$A_0\leftarrow$ source states; repair domain defects\;
-$(B,G_0)\leftarrow$ expand $A_0$ and outputs\;
-$E_{\mathrm{pre}}\leftarrow$ defined candidate expressions over $B$\;
-$K\leftarrow$ correction coefficients in $E_{\mathrm{pre}}$\;
-\ForEach{$A\in\{A_0,(A_0,K)\}$ fitting $b_{\max}$}{
-\lIf{\textsc{Verify}$(A,B)$ succeeds}{\Return reducer}
+$\stsrc\leftarrow$ source states after domain repair\;
+$(\stref,\Gsrc)\leftarrow$ expand definitions of $\stsrc$\;
+\lIf{preparation fails}{\Return keep source chain}
+$\mathcal T_{\mathrm{pre}},K\leftarrow$ correction candidates\;
+\ForEach{$M\in[\stsrc,(\stsrc,K)]$ fitting $b_{\max}$}{
+\lIf{\textsc{Verify}$(M,\stref)$ succeeds}{\Return reducer}
 }
-\ForEach{$E\in[E_{\mathrm{pre}},E_{\mathrm{mix}}]$}{
-\ForEach{width $1\le w\le b_{\max}-|A_0|$}{
-Propose $C\in\mathcal E_d^{\,w}$ using \eqref{eq:synthesis}\;
-On unknown: native enumeration\;
+\ForEach{$\mathcal T\in[\mathcal T_{\mathrm{pre}},\mathcal T_{\mathrm{mix}}]$}{
+\ForEach{admissible auxiliary width $w$}{
 \While{proposals and resources remain}{
-\lIf{\textsc{Verify}$((A_0,C),B)$ succeeds}{\Return reducer}
-Request next native proposal\;
+Propose $C\in\mathcal E_d^{\,w}$\;
+\lIf{\textsc{Verify}$((\stsrc,C),\stref)$ succeeds}{\Return reducer}
 }
 }}
-\Return search failure\;
+\Return keep source chain\;
 \end{algorithm}
 \end{minipage}
-\end{paperdiagram}
-\end{minipage}\par\medskip
+\end{wrapfigure}
+默认 $d=3$ 时，表达式组合的候选项至多出现三次。
+候选项本身可以是参考取值的非线性函数，因此该语法在保留结构形式的同时，组合分析已经发现的量。
+第一阶段的语法使用 $\mathcal T_{\mathrm{pre}}$；第二阶段还将参考分量纳入候选表达式。
+当存在性分析返回 $\mathcal Q$ 时，其上界 $|\mathcal Q|$ 提供维护状态数的默认限制 $b_{\max}$。
+补充材料给出一般的充分补充构造；这里的搜索则在此限制内寻找紧凑表示。
 
-参考构造的状态数上界为 $b_{\mathrm{ref}}=|\mathcal Q|$；我们将其作为维护元组的默认限制 $b_{\max}$。
-这一选择并不约束所有保留有定义源结果的表示的大小。
-如果 $A_0$ 和 $B$ 均有定义，加入 $B$ 的全部分量总能通过投影实现恢复，状态数至多为 $|A_0|+|B|$。
-这确立了一种充分构造，证明见附录 A；它并不保证紧凑元组能够满足 $b_{\max}$，也不保证有界合成能找到这样的元组。
-搜索采用受限语法和独立证明过程，不声称所得表示最小。
+\Cref{alg:select} 首先测试 $\stsrc$ 本身，再测试向其加入可用修正系数元组 $K$ 后的表示。
+如果这些选择未能在状态数限制内得到经过验证的归约器，算法就调用合成。
+这里 $\mathcal T_{\mathrm{mix}}$ 包含 $\mathcal T_{\mathrm{pre}}$ 和参考分量；辅助状态宽度满足 $1\le w\le b_{\max}-|\stsrc|$。
+对每个提案，\textsc{Verify} 构造恢复表达式，证明其恒等关系和定义域，再推导并验证完整归约器。
+搜索调度和求解器限制在实现部分说明。
+
+在已记录的 Householder 推导中，初始元组不足以恢复参考状态，而完整系数补充又超过三状态限制。
+SyGuS 选择 $C(q,u,p)=u$，得到 $\st=(q,v,u)$。
+另一个系数 $p+ku$ 在 $q=0$ 时丢失了 $u$ 的信息：此时 $p=k=v=0$，而 $u$ 仍可变化。
+后续合并可能使范数上下文变为非零，因此这些分块需要不同的修正。
+信息要求能够区分这两种选择。
+选择 $u$ 后，只需恢复 $p$，包括零范数情形。
+\finishwrapspace
+\endgroup
 
 \subsection{Constructing and Verifying Recovery}
 \label{sec:atoms}
 \label{sec:recovery}
 
-对于候选 $A=(A_0,C)$，选中表达式的定义给出 $G(B)=(G_0(B),C(B))$，因此 $A(S)=G(B(S))$。
-单射性是信息层面的要求；生成归约器还需要可执行的恢复映射 $H$，满足
+对于提出的维护元组，所选表达式的定义给出已知映射 $G$。
+恢复过程从该元组的定义方程构造可执行映射 $H$，使其满足
 \begin{equation}
 \label{eq:recovery}
-H(G(B(S)))=B(S).
+H(G(\stref(S)))=\stref(S).
 \end{equation}
-该恒等式在合法非空分块产生的元组上成立，也给出相应维护表示上的 $G(H(A(S)))=A(S)$。
-恢复从维护元组重构参考状态分量。
-\Cref{fig:recovery-square} 用贯穿全文的方差示例展示辅助状态构造、恢复及合并推导。
+这一过程代入已知表达式，并使用支持的代数规则解出尚未恢复的参考分量。
+通过反复代入，最终用维护状态和固定参数表达每个分量。
+符号规范化与 SymPy 确立恒等关系，Z3 则证明定义域及带条件的蕴含。
+$H$ 的构造与 $C$ 的合成分别进行。
+
+对于 Householder，$q$ 和 $u$ 已直接保留。
+解出 $v$ 定义中的剩余分量，即得到恢复：
+\[
+p=
+\begin{cases}
+0,&q=0,\\[2pt]
+\dfrac{v-q-qu}{2\sqrt q},&q>0,
+\end{cases}
+\qquad H(q,v,u)=(q,u,p).
+\]
+\reservewrapspace{16\baselineskip}
 \input{figures/recovery-overview}
+零分支由 $q=\sum_jx_j^2=0$ 得出：每个 $x_j$ 都为零，因此 $p=\sum_jx_je_j=0$。
+这是验证器使用的有限求和规则的一个实例：非负项之和为零时，每一项都必须为零。
+两个分支分别在其定义域上恢复参考值，惰性条件表达式只对选中的分支求值。
+所得恒等关系 $H\circ G=\mathrm{id}$ 确立完整恢复，也覆盖合法的零范数分块。
 
-恢复过程从定义 $A$ 的方程中消去参考状态分量。
-它代入已知表达式，并利用支持的代数规则解出一个剩余分量。
-中间表达式可以依赖其他未知分量；接受之前，必须通过反复代入消除所有这类依赖。
-$B$ 的每个分量最终都必须用维护状态和固定参数表示。
-这一过程单独构造 $H$，与搜索 $C$ 的 SyGuS 合成相区分。
-
-每次引入除法都需要定义域证明。
-对于可能为零的除数，只有证明相应的待恢复分量在零分支上也为零，才能在该分支返回零。
-有限求和规律能够独立于分块长度证明此类蕴含：非负项之和为零意味着每一项都为零。
-符号规范化和 SymPy 证明恒等关系，Z3 检查定义域及带条件的蕴含关系。
-惰性条件表达式确保不执行未选中分支中的除法。
-这些检查说明，合成出的单射映射仍只是提案，而非可以立即执行的归约器。
+\Cref{fig:recovery-square} 展示了这一构造：恢复每个分块的 $(q,u,p)$，逐分量相加，再应用 $G$ 得到并集上的维护元组。
+初始化在单元素输入上计算状态定义。
+\finishwrapspace
 
 \subsection{Deriving the Join and Proving Correctness}
 \label{sec:correctness}
 
-参考状态分量是不依赖上下文的归约，因此可以通过操作 $\oplus$ 逐分量组合。
-对于不相交的非空分块 $S,T$，它们满足 $B(S\dunion T)=B(S)\oplus B(T)$。
-建立恢复关系后，合并先恢复两个参考状态元组，组合它们，再将结果表达为维护状态元组：
+参考分量通过 $\oplus$ 独立组合，因此对于互不相交的非空分块，有
+$\stref(S\dunion T)=\stref(S)\oplus\stref(T)$。
+通过恢复与映射复合即可得到维护状态的合并：
 \begin{equation}
 \label{eq:merge}
 \Mrg(a,b)=G\bigl(H(a)\oplus H(b)\bigr).
 \end{equation}
-令 $F$ 将所需输出表示为参考状态元组的函数。
-初始化函数 $\leaf(x_j)=A(\{j\})$ 为每个元素生成单元素状态元组。
-在源输出的定义域上，输出函数为 $\epi(a)=F(H(a))$；已经保留在 $A$ 中的输出可以直接读取自己的分量。
-这些等式规定归约器，而不依赖最终采用的求值顺序。
+
+输出函数 $\epi$ 沿用源程序的标量依赖关系，将其表达在选定状态上；已保留的输出（如 $v$）直接读取自身分量。
+验证过程检查这一重构的恒等关系和定义域。
 
 \begin{theorem}[Correctness over $\R$]
 \label{thm:correct}
-设 $A=G\circ B$，且 $H\circ G$ 在可达参考状态元组上为恒等映射。
-假设初始化对每个合法元素有定义，恢复和合并操作在合法非空分块上有定义，输出函数在源输出有定义的地方也有定义。
-则对于任意由非空分块组成的划分及其上的任意二叉合并树，推导出的归约器均计算出源程序的输出。
+设 $\stref$ 在合法非空分块上有定义且逐分量合并，并令 $\st=G\circ\stref$。
+假设 $G$ 和 $H$ 在其可达参数上有定义，且 $H\circ G$ 在可达参考元组上为恒等映射。
+若 $\epi$ 在源输出定义域上从 $\st(\Ax)$ 重构源输出，则推导出的归约器对任意非空分块划分及其上的任意二叉合并树均计算这些输出。
 \end{theorem}
 \begin{proof}
-对于两个不相交的非空分块，
+对于互不相交的非空分块，
 \[
 \begin{aligned}
-\Mrg(A(S),A(T))
- &=G\bigl(H(G(B(S)))\oplus H(G(B(T)))\bigr)\\
- &=G\bigl(B(S)\oplus B(T)\bigr)\\
- &=G(B(S\dunion T))=A(S\dunion T).
+\Mrg(\st(S),\st(T))
+ &=G\bigl(H(G(\stref(S)))\oplus H(G(\stref(T)))\bigr)\\
+ &=G\bigl(\stref(S)\oplus\stref(T)\bigr)\\
+ &=G(\stref(S\dunion T))=\st(S\dunion T).
 \end{aligned}
 \]
-第一个等号代入状态定义；第二个等号使用恢复关系；第三个等号使用逐分量聚合。
-因此，每个内部节点计算的都是其后代叶子对应的维护元组。
-对树归纳可得根节点的元组，应用 $F\circ H$ 则重构所需输出。
-定义域假设确保每个执行的操作都有对应的值。
+第二个等号来自恢复，第三个等号来自逐分量聚合。
+初始化给出单元素状态，因此对树归纳可知，根节点得到 $\st(\Ax)$。
+应用已经验证的输出重构即可完成证明。
 \end{proof}
 
-不相交分块的并集运算蕴含可达状态上的结合律和交换律。
-因此，每个分块可以独立处理，再通过归约树组合，从而得到分治并行结构。
-执行时，每个活动分块从自己的第一个元素初始化，并跳过空分块。
-证明确立的是包含辅助状态在内的整个元组的结果，而不仅是最终输出。
+这一不变量覆盖每个维护分量，包括辅助状态。
+因此，归约器约定中确立的结合律与交换律也适用于推导出的合并操作。
+完整参考恢复为状态选择和合并构造提供了统一条件。
 
 \subsection{Numerical Formulation of the Join}
 \label{sec:rebase}
 
-所选表示的数值优势取决于合并操作的实际求值方式。
-即使整体计算的条件良好，等价的计算分解也可能引入会放大误差的中间子问题~\citep{higham_decomposition}。
-具体而言，直接执行 $G(H(a)\oplus H(b))$ 可能先重构展开后的参考分量，再从这些分量恢复维护的量。
-我们将这一组合重写为直接从维护状态及其局部上下文计算的修正，尽可能避免这些中间重构。
-这种数值重写选择合并的求值方式，与修复无定义的源状态及构造候选表达式是不同的操作。
-源定义指导数值形式的选择；参考状态元组的恢复则提供推导和验证所需的信息。
-在 \cref{fig:recovery-square} 的方差推导中，这一组合变成基于局部均值之差的修正，无需实际构造原始平方和。
-中心矩合并和在线 softmax 也通过这种方式，对部分结果重新中心化或缩放~\citep{pebay,milakov}。
-生成公式需要与组合形式的合并进行等价性验证，并检查其执行分支的定义域。
+通过映射复合得到的合并规定了需要计算的结果。
+直接求值时，可能先重构展开后的参考量，再重新计算维护量；即使整体计算条件良好，这类中间子问题也可能放大误差~\citep{higham_decomposition}。
+在执行时，候选发现阶段使用的上下文变化分解给出另一种求值公式：将保留的部分结果修正到合并后的上下文。
+恢复映射用维护状态表达所需系数，修正后的结果再按源归约操作组合。
+
+对于 Householder，令 $U=S\dunion T$、$k_P=\sqrt{q_P}$、$\delta_P=k_U-k_P$，其中 $P\in\{S,T\}$。
+合并逐分量相加 $q$ 和 $u$，并按以下公式更新保留的 $v$：
+\[
+v_U=\sum_{P\in\{S,T\}}
+ \left[v_P+2\delta_P(p_P+k_Pu_P)+\delta_P^2u_P\right],
+\]
+其中 $p_P$ 由前述带条件的表达式恢复。
+该公式保留各分块已经算出的 $v_P$，并针对上下文变化作出调整。
+中心矩合并和在线 softmax 同样通过重新中心化或缩放来修正部分结果~\citep{pebay,milakov}。
+
+验证器证明其与 \eqref{eq:merge} 相等，并证明实际执行分支有定义。
+没有受支持修正公式的分量使用映射复合得到的表达式。
 \begin{theorem}[Correctness of the emitted join]
 \label{thm:printed}
-如果生成的合并在可达状态上经验证与组合形式的合并相等，且执行的分支均有定义，那么它满足相同的合并不变量。
+如果生成的合并在可达状态上被验证为等于映射复合得到的合并，且实际执行的分支均有定义，则它满足相同的合并不变量。
 \end{theorem}
 \begin{proof}
-代入已经验证的等式，即保留上述证明中的不变量。
+代入已经验证的相等关系，即保留上述不变量。
 \end{proof}
-保留源状态并用上下文修正表达合并，指导其数值形式的选择；代数证明确立其在实数上的正确性。
-随后对生成程序进行静态检查，并与源程序比较精度，以判断其浮点行为是否可接受。
+生成的程序随后接受静态检查与差分数值检验，以决定其浮点实现是否被接受。
