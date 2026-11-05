@@ -1,0 +1,614 @@
+[
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 3,
+   "n": 50,
+   "d": 7
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 5.81457076221834e-08,
+  "err_compile": 3.539218380734095e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 3,
+   "n": 50,
+   "d": 7
+  },
+  "seed": 0,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 4.4893663208767615e-08,
+  "err_compile": 6.462039553729345e-07,
+  "bound": 1.292407910745869e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 3,
+   "n": 50,
+   "d": 7
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 6.081688159574605e-08,
+  "err_compile": 1.7222906270515703e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 3,
+   "n": 50,
+   "d": 7
+  },
+  "seed": 1,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 5.431659617913563e-08,
+  "err_compile": 5.61161754921197e-07,
+  "bound": 1.122323509842394e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 3,
+   "n": 50,
+   "d": 7
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 6.556343645582318e-08,
+  "err_compile": 1.6291782837710583e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 3,
+   "n": 50,
+   "d": 7
+  },
+  "seed": 2,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 3.682903444646448e-08,
+  "err_compile": 5.499522672501613e-07,
+  "bound": 1.0999045345003226e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 2,
+   "n": 1001,
+   "d": 33
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 7.949903425791104e-08,
+  "err_compile": 5.205555050585581e-07,
+  "bound": 1.0411110101171163e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 2,
+   "n": 1001,
+   "d": 33
+  },
+  "seed": 0,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 3.791599559693882e-08,
+  "err_compile": 1.1275270408091651e-06,
+  "bound": 2.2550540816183302e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 2,
+   "n": 1001,
+   "d": 33
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 6.77177991812499e-08,
+  "err_compile": 7.168308594120562e-07,
+  "bound": 1.4336617188241124e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 2,
+   "n": 1001,
+   "d": 33
+  },
+  "seed": 1,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 4.169865659290927e-08,
+  "err_compile": 5.529897435508753e-07,
+  "bound": 1.1059794871017506e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 2,
+   "n": 1001,
+   "d": 33
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 6.816591431324165e-08,
+  "err_compile": 7.808579962786386e-07,
+  "bound": 1.5617159925572772e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 2,
+   "n": 1001,
+   "d": 33
+  },
+  "seed": 2,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 1.9205681962828083e-08,
+  "err_compile": 2.458510838230135e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 1,
+   "n": 4099,
+   "d": 64
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 5.647300498161603e-08,
+  "err_compile": 2.6165042299781997e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 1,
+   "n": 4099,
+   "d": 64
+  },
+  "seed": 0,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 2.75346518126481e-08,
+  "err_compile": 6.407474260061116e-07,
+  "bound": 1.2814948520122232e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 1,
+   "n": 4099,
+   "d": 64
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 8.32783536049203e-08,
+  "err_compile": 2.639455320441443e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 1,
+   "n": 4099,
+   "d": 64
+  },
+  "seed": 1,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 1.8973036190766605e-08,
+  "err_compile": 4.3134912790575294e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 1,
+   "n": 4099,
+   "d": 64
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 7.185801714873344e-08,
+  "err_compile": 2.547439540491875e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "small",
+  "cfg": {
+   "b": 1,
+   "n": 4099,
+   "d": 64
+  },
+  "seed": 2,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 1.5778544297740282e-08,
+  "err_compile": 1.44430062649761e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 256,
+   "n": 1024,
+   "d": 32
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.0447160436042803e-07,
+  "err_compile": 1.1715567643527994e-06,
+  "bound": 2.3431135287055988e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 256,
+   "n": 1024,
+   "d": 32
+  },
+  "seed": 0,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 6.892666286024156e-08,
+  "err_compile": 2.0730200841004436e-06,
+  "bound": 4.146040168200887e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 256,
+   "n": 1024,
+   "d": 32
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.0380133039817047e-07,
+  "err_compile": 1.1680362693590639e-06,
+  "bound": 2.3360725387181277e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 256,
+   "n": 1024,
+   "d": 32
+  },
+  "seed": 1,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 5.810156298192926e-08,
+  "err_compile": 1.8562534777639537e-06,
+  "bound": 3.7125069555279073e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 256,
+   "n": 1024,
+   "d": 32
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.0672075459817766e-07,
+  "err_compile": 1.0315190329794092e-06,
+  "bound": 2.0630380659588183e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 256,
+   "n": 1024,
+   "d": 32
+  },
+  "seed": 2,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 6.460922299310876e-08,
+  "err_compile": 1.8650125072518473e-06,
+  "bound": 3.7300250145036947e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 64,
+   "n": 4096,
+   "d": 64
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.0181882028949318e-07,
+  "err_compile": 2.3745983241337304e-06,
+  "bound": 4.749196648267461e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 64,
+   "n": 4096,
+   "d": 64
+  },
+  "seed": 0,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 6.751327961671494e-08,
+  "err_compile": 2.134758768008646e-06,
+  "bound": 4.269517536017292e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 64,
+   "n": 4096,
+   "d": 64
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.0597518664722736e-07,
+  "err_compile": 2.1969530865976404e-06,
+  "bound": 4.393906173195281e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 64,
+   "n": 4096,
+   "d": 64
+  },
+  "seed": 1,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 4.0867098391710005e-08,
+  "err_compile": 3.084690933337696e-06,
+  "bound": 6.169381866675392e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 64,
+   "n": 4096,
+   "d": 64
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 9.599232615991672e-08,
+  "err_compile": 2.7740491981118448e-06,
+  "bound": 5.5480983962236895e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 64,
+   "n": 4096,
+   "d": 64
+  },
+  "seed": 2,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 3.8772605268974746e-08,
+  "err_compile": 1.873999007963593e-06,
+  "bound": 3.747998015927186e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 8,
+   "n": 65536,
+   "d": 128
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 9.443697254704161e-08,
+  "err_compile": 1.4878053684612008e-05,
+  "bound": 2.9756107369224017e-05,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 8,
+   "n": 65536,
+   "d": 128
+  },
+  "seed": 0,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 1.2224512167515893e-07,
+  "err_compile": 1.236354816620433e-05,
+  "bound": 2.472709633240866e-05,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 8,
+   "n": 65536,
+   "d": 128
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 8.094130243396275e-08,
+  "err_compile": 1.5034827053208519e-05,
+  "bound": 3.0069654106417037e-05,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 8,
+   "n": 65536,
+   "d": 128
+  },
+  "seed": 1,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 9.503450635745272e-08,
+  "err_compile": 1.4096625941949108e-05,
+  "bound": 2.8193251883898216e-05,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 8,
+   "n": 65536,
+   "d": 128
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 8.55455635758591e-08,
+  "err_compile": 1.619452382286342e-05,
+  "bound": 3.238904764572684e-05,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ledoit_wolf",
+  "sizes": "bench",
+  "cfg": {
+   "b": 8,
+   "n": 65536,
+   "d": 128
+  },
+  "seed": 2,
+  "output": 1,
+  "dtype": "float32",
+  "err_tirx": 1.2568457386763625e-07,
+  "err_compile": 1.1745082776661958e-05,
+  "bound": 2.3490165553323915e-05,
+  "passed": true,
+  "error": ""
+ }
+]

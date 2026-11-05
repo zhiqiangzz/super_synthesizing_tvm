@@ -1,0 +1,582 @@
+{
+ "meta": {
+  "date": "2026-11-04 16:06:14",
+  "host": "cuda_related",
+  "device": "NVIDIA H800",
+  "torch": "2.13.0+cu130",
+  "cuda": "13.0",
+  "triton": "3.7.1",
+  "tvm_tirx": "0.1.0a4",
+  "roofline": {
+   "device": "NVIDIA H800",
+   "sms": 132,
+   "measured_at": "2026-10-29 04:54:07",
+   "hbm_bytes_per_s": 3040048914902.965,
+   "hbm_by_method": {
+    "tirx copy": 2915752573983.253,
+    "torch add(x, 0)": 3040048914902.965,
+    "cudaMemcpy": 3016852952067.398,
+    "torch sum (read only)": 3033156897978.073
+   },
+   "bf16_flops_per_s": 746152043716318.0,
+   "bf16_by_method": {
+    "cuBLAS bf16 8192\u00b3": 746152043716318.0
+   },
+   "sm_clock_hz": 1980000000.0,
+   "ex2_per_s": 4181760000000.0,
+   "fp32_flops_per_s": 66908160000000.0
+  },
+  "showcase": [
+   "ledoit_wolf",
+   "ols_hc0",
+   "normalized_policy_loss",
+   "softmax",
+   "cross_entropy",
+   "softmax_entropy",
+   "attention",
+   "layernorm",
+   "layernorm_backward",
+   "papr",
+   "householder",
+   "sinkhorn_iteration",
+   "kurtosis",
+   "pearson",
+   "ess",
+   "contrastive",
+   "heat_capacity"
+  ]
+ },
+ "rows": [
+  {
+   "op": "softmax",
+   "regime": "short",
+   "cfg": {
+    "n": 32768,
+    "m": 4096
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 0.0027264963127273663,
+   "us": {
+    "proton": 178.29755865704792,
+    "event": 182.21685399248543
+   },
+   "bound": "hbm",
+   "of_floor": 0.9904758845483785,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "short",
+   "cfg": {
+    "n": 32768,
+    "m": 4096
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 0.0027264963127273663,
+   "us": {
+    "proton": 354.56833586209893,
+    "event": 361.118181038448
+   },
+   "bound": "hbm",
+   "of_floor": 0.4980688185093328,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "short",
+   "cfg": {
+    "n": 32768,
+    "m": 4096
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.0027264963127273663,
+   "us": {
+    "proton": 315.65816355063384,
+    "event": 311.6274598585473
+   },
+   "bound": "hbm",
+   "of_floor": 0.5594641688882793,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "short",
+   "cfg": {
+    "n": 32768,
+    "m": 4096
+   },
+   "impl": "torch",
+   "status": "ok",
+   "rel_err": 0.0027264963127273663,
+   "us": {
+    "proton": 422.85519895564175,
+    "event": 417.15199956480336
+   },
+   "bound": "hbm",
+   "of_floor": 0.4176357120825692,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "short",
+   "cfg": {
+    "n": 32768,
+    "m": 4096
+   },
+   "impl": "quack",
+   "status": "ok",
+   "rel_err": 0.0027264963127273663,
+   "us": {
+    "proton": 178.41399888388847,
+    "event": 182.46433540086852
+   },
+   "bound": "hbm",
+   "of_floor": 0.9898294597308283,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "short",
+   "cfg": {
+    "n": 32768,
+    "m": 4096
+   },
+   "impl": "liger",
+   "status": "ok",
+   "rel_err": 0.0027264963127273663,
+   "us": {
+    "proton": 178.19965375957324,
+    "event": 182.45225384993176
+   },
+   "bound": "hbm",
+   "of_floor": 0.9910200631586169,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 8192
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 0.002805270949419006,
+   "us": {
+    "proton": 177.94721687111326,
+    "event": 181.88696249864648
+   },
+   "bound": "hbm",
+   "of_floor": 0.9924259296034199,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 8192
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 0.002805270949419006,
+   "us": {
+    "proton": 354.31281608505526,
+    "event": 360.84616787031354
+   },
+   "bound": "hbm",
+   "of_floor": 0.49842801080405175,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 8192
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.002805270949419006,
+   "us": {
+    "proton": 309.6237602215412,
+    "event": 309.4351477632073
+   },
+   "bound": "hbm",
+   "of_floor": 0.5703678296436163,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 8192
+   },
+   "impl": "torch",
+   "status": "ok",
+   "rel_err": 0.002805270949419006,
+   "us": {
+    "proton": 531.2696481481481,
+    "event": 523.1362652386167
+   },
+   "bound": "hbm",
+   "of_floor": 0.3324101663613389,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 8192
+   },
+   "impl": "quack",
+   "status": "ok",
+   "rel_err": 0.002805270949419006,
+   "us": {
+    "proton": 178.4000424407896,
+    "event": 182.2130699765315
+   },
+   "bound": "hbm",
+   "of_floor": 0.9899068952422962,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 8192
+   },
+   "impl": "liger",
+   "status": "ok",
+   "rel_err": 0.002805270949419006,
+   "us": {
+    "proton": 178.5325071857951,
+    "event": 182.53467848286994
+   },
+   "bound": "hbm",
+   "of_floor": 0.9891724196752164,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 32768
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 0.00211504164277873,
+   "us": {
+    "proton": 179.85457916682833,
+    "event": 183.76979074138893
+   },
+   "bound": "hbm",
+   "of_floor": 0.9819012278794803,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 32768
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 0.00211504164277873,
+   "us": {
+    "proton": 356.9635103121034,
+    "event": 365.91301638019814
+   },
+   "bound": "hbm",
+   "of_floor": 0.4947268474843549,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 32768
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.00211504164277873,
+   "us": {
+    "proton": 277.5956865600867,
+    "event": 281.147555886262
+   },
+   "bound": "hbm",
+   "of_floor": 0.6361749864057425,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 32768
+   },
+   "impl": "torch",
+   "status": "ok",
+   "rel_err": 0.00211504164277873,
+   "us": {
+    "proton": 259.0537799150258,
+    "event": 260.3046010273057
+   },
+   "bound": "hbm",
+   "of_floor": 0.6817095360723308,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 32768
+   },
+   "impl": "quack",
+   "status": "ok",
+   "rel_err": 0.00211504164277873,
+   "us": {
+    "proton": 180.1798786017812,
+    "event": 183.9912029503093
+   },
+   "bound": "hbm",
+   "of_floor": 0.9801284887862617,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 32768
+   },
+   "impl": "liger",
+   "status": "ok",
+   "rel_err": 0.00211504164277873,
+   "us": {
+    "proton": 192.37687318634255,
+    "event": 194.6187803086307
+   },
+   "bound": "hbm",
+   "of_floor": 0.9179868099456837,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "long",
+   "cfg": {
+    "n": 2048,
+    "m": 131072
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 0.0033897459162358385,
+   "us": {
+    "proton": 358.9043270190831,
+    "event": 362.6849946758034
+   },
+   "bound": "hbm",
+   "of_floor": 0.9841031095413126,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "long",
+   "cfg": {
+    "n": 2048,
+    "m": 131072
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 0.0033897459162358385,
+   "us": {
+    "proton": 712.5961866955697,
+    "event": 720.2487412046214
+   },
+   "bound": "hbm",
+   "of_floor": 0.4956507919094478,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "long",
+   "cfg": {
+    "n": 2048,
+    "m": 131072
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.0033897459162358385,
+   "us": {
+    "proton": 595.4405574101903,
+    "event": 599.305920235358
+   },
+   "bound": "hbm",
+   "of_floor": 0.5931723324046237,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "long",
+   "cfg": {
+    "n": 2048,
+    "m": 131072
+   },
+   "impl": "torch",
+   "status": "ok",
+   "rel_err": 0.0033897459162358385,
+   "us": {
+    "proton": 720.8564344262295,
+    "event": 724.7648529016255
+   },
+   "bound": "hbm",
+   "of_floor": 0.48997116121803486,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "long",
+   "cfg": {
+    "n": 2048,
+    "m": 131072
+   },
+   "impl": "quack",
+   "status": "ok",
+   "rel_err": 0.0033897459162358385,
+   "us": {
+    "proton": 356.62703822629965,
+    "event": 360.5266261570203
+   },
+   "bound": "hbm",
+   "of_floor": 0.9903872292015828,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "long",
+   "cfg": {
+    "n": 2048,
+    "m": 131072
+   },
+   "impl": "liger",
+   "status": "RuntimeError: Cannot launch Triton kernel since n = 131072 exceeds the recommended Triton blocksize = 65536.",
+   "rel_err": null,
+   "us": {},
+   "bound": "",
+   "of_floor": null,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "split",
+   "cfg": {
+    "n": 8,
+    "m": 8388608
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 0.0021012274210863054,
+   "us": {
+    "proton": 124.60673848270712,
+    "event": 128.55286542710544
+   },
+   "bound": "hbm",
+   "of_floor": 0.7086271347522843,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "split",
+   "cfg": {
+    "n": 8,
+    "m": 8388608
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 0.0021012274210863054,
+   "us": {
+    "proton": 187.65258873652465,
+    "event": 194.70625039255313
+   },
+   "bound": "hbm",
+   "of_floor": 0.47054888321208294,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "split",
+   "cfg": {
+    "n": 8,
+    "m": 8388608
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.0021012274210863054,
+   "us": {
+    "proton": 185.721824718953,
+    "event": 191.9320814274873
+   },
+   "bound": "hbm",
+   "of_floor": 0.47544070921901155,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "split",
+   "cfg": {
+    "n": 8,
+    "m": 8388608
+   },
+   "impl": "torch",
+   "status": "ok",
+   "rel_err": 0.0021012274210863054,
+   "us": {
+    "proton": 2145.0905303030304,
+    "event": 2149.3784207286258
+   },
+   "bound": "hbm",
+   "of_floor": 0.04116363147123405,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "split",
+   "cfg": {
+    "n": 8,
+    "m": 8388608
+   },
+   "impl": "quack",
+   "status": "RuntimeError: CUDA Error Code: 1",
+   "rel_err": null,
+   "us": {},
+   "bound": "",
+   "of_floor": null,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "split",
+   "cfg": {
+    "n": 8,
+    "m": 8388608
+   },
+   "impl": "liger",
+   "status": "RuntimeError: Cannot launch Triton kernel since n = 8388608 exceeds the recommended Triton blocksize = 65536.",
+   "rel_err": null,
+   "us": {},
+   "bound": "",
+   "of_floor": null,
+   "note": ""
+  }
+ ]
+}

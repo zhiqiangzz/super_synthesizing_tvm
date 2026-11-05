@@ -1,0 +1,225 @@
+{
+ "meta": {
+  "date": "2026-11-04 12:45:14",
+  "host": "cuda_related",
+  "device": "NVIDIA H800",
+  "torch": "2.13.0+cu130",
+  "cuda": "13.0",
+  "triton": "3.7.1",
+  "tvm_tirx": "0.1.0a4",
+  "roofline": {
+   "device": "NVIDIA H800",
+   "sms": 132,
+   "measured_at": "2026-10-29 04:54:07",
+   "hbm_bytes_per_s": 3040048914902.965,
+   "hbm_by_method": {
+    "tirx copy": 2915752573983.253,
+    "torch add(x, 0)": 3040048914902.965,
+    "cudaMemcpy": 3016852952067.398,
+    "torch sum (read only)": 3033156897978.073
+   },
+   "bf16_flops_per_s": 746152043716318.0,
+   "bf16_by_method": {
+    "cuBLAS bf16 8192\u00b3": 746152043716318.0
+   },
+   "sm_clock_hz": 1980000000.0,
+   "ex2_per_s": 4181760000000.0,
+   "fp32_flops_per_s": 66908160000000.0
+  },
+  "showcase": [
+   "ledoit_wolf",
+   "ols_hc0",
+   "normalized_policy_loss",
+   "softmax",
+   "cross_entropy",
+   "softmax_entropy",
+   "attention",
+   "layernorm",
+   "layernorm_backward",
+   "papr",
+   "householder",
+   "sinkhorn_iteration",
+   "kurtosis",
+   "pearson",
+   "ess",
+   "contrastive",
+   "heat_capacity"
+  ]
+ },
+ "rows": [
+  {
+   "op": "softmax",
+   "regime": "split",
+   "cfg": {
+    "n": 8,
+    "m": 8388608
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 0.0021012274210863054,
+   "us": {
+    "proton": 124.14745373318169,
+    "event": 127.90893189113544
+   },
+   "bound": "hbm",
+   "of_floor": 0.7112487079404958,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "split",
+   "cfg": {
+    "n": 8,
+    "m": 8388608
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 0.0021012274210863054,
+   "us": {
+    "proton": 187.9743781957109,
+    "event": 194.94344773349914
+   },
+   "bound": "hbm",
+   "of_floor": 0.4697433602886775,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "split",
+   "cfg": {
+    "n": 8,
+    "m": 8388608
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.0021012274210863054,
+   "us": {
+    "proton": 185.56969209521142,
+    "event": 192.08308948722748
+   },
+   "bound": "hbm",
+   "of_floor": 0.47583048214857987,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "split",
+   "cfg": {
+    "n": 8,
+    "m": 8388608
+   },
+   "impl": "torch",
+   "status": "ok",
+   "rel_err": 0.0021012274210863054,
+   "us": {
+    "proton": 2145.2661515151517,
+    "event": 2148.7920049465065
+   },
+   "bound": "hbm",
+   "of_floor": 0.041160261629758124,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "split",
+   "cfg": {
+    "n": 8,
+    "m": 8388608
+   },
+   "impl": "liger",
+   "status": "RuntimeError: Cannot launch Triton kernel since n = 8388608 exceeds the recommended Triton blocksize = 65536.",
+   "rel_err": null,
+   "us": {},
+   "bound": "",
+   "of_floor": null,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "split",
+   "cfg": {
+    "n": 1,
+    "m": 67108864
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 0.0014385850206614747,
+   "us": {
+    "proton": 137.95777348253344,
+    "event": 141.85965129709044
+   },
+   "bound": "hbm",
+   "of_floor": 0.6400488630168231,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "split",
+   "cfg": {
+    "n": 1,
+    "m": 67108864
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 0.0014385850206614747,
+   "us": {
+    "proton": 188.22198020189467,
+    "event": 194.95292065629653
+   },
+   "bound": "hbm",
+   "of_floor": 0.469125422902862,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "split",
+   "cfg": {
+    "n": 1,
+    "m": 67108864
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.0014385850206614747,
+   "us": {
+    "proton": 185.7468865882575,
+    "event": 191.47924824916157
+   },
+   "bound": "hbm",
+   "of_floor": 0.47537656045649207,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "split",
+   "cfg": {
+    "n": 1,
+    "m": 67108864
+   },
+   "impl": "torch",
+   "status": "ok",
+   "rel_err": 0.0014385850206614747,
+   "us": {
+    "proton": 16925.5204,
+    "event": 16927.17221577962
+   },
+   "bound": "hbm",
+   "of_floor": 0.005216957232335849,
+   "note": ""
+  },
+  {
+   "op": "softmax",
+   "regime": "split",
+   "cfg": {
+    "n": 1,
+    "m": 67108864
+   },
+   "impl": "liger",
+   "status": "RuntimeError: Cannot launch Triton kernel since n = 67108864 exceeds the recommended Triton blocksize = 65536.",
+   "rel_err": null,
+   "us": {},
+   "bound": "",
+   "of_floor": null,
+   "note": ""
+  }
+ ]
+}

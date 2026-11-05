@@ -1,0 +1,222 @@
+{
+ "meta": {
+  "date": "2026-11-05 07:38:49",
+  "host": "cuda_related",
+  "device": "NVIDIA H800",
+  "torch": "2.13.0+cu130",
+  "cuda": "13.0",
+  "triton": "3.7.1",
+  "tvm_tirx": "0.1.0a4",
+  "roofline": {
+   "device": "NVIDIA H800",
+   "sms": 132,
+   "measured_at": "2026-10-29 04:54:07",
+   "hbm_bytes_per_s": 3040048914902.965,
+   "hbm_by_method": {
+    "tirx copy": 2915752573983.253,
+    "torch add(x, 0)": 3040048914902.965,
+    "cudaMemcpy": 3016852952067.398,
+    "torch sum (read only)": 3033156897978.073
+   },
+   "bf16_flops_per_s": 746152043716318.0,
+   "bf16_by_method": {
+    "cuBLAS bf16 8192\u00b3": 746152043716318.0
+   },
+   "sm_clock_hz": 1980000000.0,
+   "ex2_per_s": 4181760000000.0,
+   "fp32_flops_per_s": 66908160000000.0
+  },
+  "showcase": [
+   "ledoit_wolf",
+   "ols_hc0",
+   "normalized_policy_loss",
+   "softmax",
+   "cross_entropy",
+   "softmax_entropy",
+   "attention",
+   "layernorm",
+   "layernorm_backward",
+   "papr",
+   "householder",
+   "sinkhorn_iteration",
+   "kurtosis",
+   "pearson",
+   "ess",
+   "contrastive",
+   "heat_capacity"
+  ]
+ },
+ "rows": [
+  {
+   "op": "ledoit_wolf",
+   "regime": "batch",
+   "cfg": {
+    "b": 256,
+    "n": 1024,
+    "d": 32
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 1.7675824487685972e-07,
+   "us": {
+    "proton": 39.13395161924177,
+    "event": 43.132767134305865
+   },
+   "bound": "fp32",
+   "of_floor": 0.4100785747036576,
+   "note": ""
+  },
+  {
+   "op": "ledoit_wolf",
+   "regime": "batch",
+   "cfg": {
+    "b": 256,
+    "n": 1024,
+    "d": 32
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 1.0447160436042803e-07,
+   "us": {
+    "proton": 101.39354228461725,
+    "event": 109.75654178007913
+   },
+   "bound": "fp32",
+   "of_floor": 0.15827433129314047,
+   "note": ""
+  },
+  {
+   "op": "ledoit_wolf",
+   "regime": "batch",
+   "cfg": {
+    "b": 256,
+    "n": 1024,
+    "d": 32
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 2.0730200841004436e-06,
+   "us": {
+    "proton": 143.0022178420395,
+    "event": 158.01663002749498
+   },
+   "bound": "fp32",
+   "of_floor": 0.11222200148159381,
+   "note": ""
+  },
+  {
+   "op": "ledoit_wolf",
+   "regime": "batch",
+   "cfg": {
+    "b": 64,
+    "n": 4096,
+    "d": 64
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 1.738945760917919e-07,
+   "us": {
+    "proton": 114.56421340543343,
+    "event": 118.5008690933395
+   },
+   "bound": "fp32",
+   "of_floor": 0.5603144167104961,
+   "note": ""
+  },
+  {
+   "op": "ledoit_wolf",
+   "regime": "batch",
+   "cfg": {
+    "b": 64,
+    "n": 4096,
+    "d": 64
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 1.0181882028949318e-07,
+   "us": {
+    "proton": 148.96027599730982,
+    "event": 157.74057123436424
+   },
+   "bound": "fp32",
+   "of_floor": 0.4309335490981604,
+   "note": ""
+  },
+  {
+   "op": "ledoit_wolf",
+   "regime": "batch",
+   "cfg": {
+    "b": 64,
+    "n": 4096,
+    "d": 64
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 2.3745983241337304e-06,
+   "us": {
+    "proton": 386.73624863668135,
+    "event": 402.08133170601945
+   },
+   "bound": "fp32",
+   "of_floor": 0.1659838730826271,
+   "note": ""
+  },
+  {
+   "op": "ledoit_wolf",
+   "regime": "batch",
+   "cfg": {
+    "b": 8,
+    "n": 65536,
+    "d": 128
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 1.7294324614751355e-07,
+   "us": {
+    "proton": 692.6471021505376,
+    "event": 697.2412898014951
+   },
+   "bound": "fp32",
+   "of_floor": 0.7414105129247877,
+   "note": ""
+  },
+  {
+   "op": "ledoit_wolf",
+   "regime": "batch",
+   "cfg": {
+    "b": 8,
+    "n": 65536,
+    "d": 128
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 1.2224512167515893e-07,
+   "us": {
+    "proton": 670.1695506889764,
+    "event": 678.4028284657463
+   },
+   "bound": "fp32",
+   "of_floor": 0.7662774931408787,
+   "note": ""
+  },
+  {
+   "op": "ledoit_wolf",
+   "regime": "batch",
+   "cfg": {
+    "b": 8,
+    "n": 65536,
+    "d": 128
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 1.4878053684612008e-05,
+   "us": {
+    "proton": 4410.947696248197,
+    "event": 4430.64385471922
+   },
+   "bound": "fp32",
+   "of_floor": 0.1164230180553023,
+   "note": ""
+  }
+ ]
+}

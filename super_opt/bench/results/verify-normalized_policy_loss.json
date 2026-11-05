@@ -1,0 +1,213 @@
+{
+ "meta": {
+  "date": "2026-11-05 00:25:18",
+  "host": "cuda_related",
+  "device": "NVIDIA H800",
+  "torch": "2.13.0+cu130",
+  "cuda": "13.0",
+  "triton": "3.7.1",
+  "tvm_tirx": "0.1.0a4",
+  "roofline": {
+   "device": "NVIDIA H800",
+   "sms": 132,
+   "measured_at": "2026-10-29 04:54:07",
+   "hbm_bytes_per_s": 3040048914902.965,
+   "hbm_by_method": {
+    "tirx copy": 2915752573983.253,
+    "torch add(x, 0)": 3040048914902.965,
+    "cudaMemcpy": 3016852952067.398,
+    "torch sum (read only)": 3033156897978.073
+   },
+   "bf16_flops_per_s": 746152043716318.0,
+   "bf16_by_method": {
+    "cuBLAS bf16 8192\u00b3": 746152043716318.0
+   },
+   "sm_clock_hz": 1980000000.0,
+   "ex2_per_s": 4181760000000.0,
+   "fp32_flops_per_s": 66908160000000.0
+  },
+  "showcase": [
+   "ledoit_wolf",
+   "ols_hc0",
+   "normalized_policy_loss",
+   "softmax",
+   "cross_entropy",
+   "softmax_entropy",
+   "attention",
+   "layernorm",
+   "layernorm_backward",
+   "papr",
+   "householder",
+   "sinkhorn_iteration",
+   "kurtosis",
+   "pearson",
+   "ess",
+   "contrastive",
+   "heat_capacity"
+  ]
+ },
+ "rows": [
+  {
+   "op": "normalized_policy_loss",
+   "regime": "short",
+   "cfg": {
+    "n": 65536,
+    "m": 256
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 1.559331734148626e-07,
+   "us": {
+    "proton": 48.29800060319985,
+    "event": 52.29802317735574
+   },
+   "bound": "hbm",
+   "of_floor": 0.915898953785053,
+   "note": ""
+  },
+  {
+   "op": "normalized_policy_loss",
+   "regime": "short",
+   "cfg": {
+    "n": 65536,
+    "m": 256
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 1.559331734148626e-07,
+   "us": {
+    "proton": 97.84405814669653,
+    "event": 104.25072897888685
+   },
+   "bound": "hbm",
+   "of_floor": 0.45210806931227165,
+   "note": ""
+  },
+  {
+   "op": "normalized_policy_loss",
+   "regime": "short",
+   "cfg": {
+    "n": 65536,
+    "m": 256
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 2.394894999805947e-07,
+   "us": {
+    "proton": 49.51482146269592,
+    "event": 53.428526473619776
+   },
+   "bound": "hbm",
+   "of_floor": 0.8933908457229869,
+   "note": ""
+  },
+  {
+   "op": "normalized_policy_loss",
+   "regime": "long",
+   "cfg": {
+    "n": 256,
+    "m": 262144
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 1.454652773935697e-07,
+   "us": {
+    "proton": 181.89888437683638,
+    "event": 185.9178040980124
+   },
+   "bound": "hbm",
+   "of_floor": 0.9708677959480116,
+   "note": ""
+  },
+  {
+   "op": "normalized_policy_loss",
+   "regime": "long",
+   "cfg": {
+    "n": 256,
+    "m": 262144
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 2.0687221637894347e-07,
+   "us": {
+    "proton": 351.78296177127044,
+    "event": 358.6194968537714
+   },
+   "bound": "hbm",
+   "of_floor": 0.5020134234788968,
+   "note": ""
+  },
+  {
+   "op": "normalized_policy_loss",
+   "regime": "long",
+   "cfg": {
+    "n": 256,
+    "m": 262144
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 2.146102940619869e-07,
+   "us": {
+    "proton": 426.67134090909093,
+    "event": 437.1707677675454
+   },
+   "bound": "hbm",
+   "of_floor": 0.4139011741076106,
+   "note": ""
+  },
+  {
+   "op": "normalized_policy_loss",
+   "regime": "split",
+   "cfg": {
+    "n": 1,
+    "m": 33554432
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 9.54261598104982e-08,
+   "us": {
+    "proton": 99.97201180222362,
+    "event": 103.8107011605123
+   },
+   "bound": "hbm",
+   "of_floor": 0.8832443779593148,
+   "note": ""
+  },
+  {
+   "op": "normalized_policy_loss",
+   "regime": "split",
+   "cfg": {
+    "n": 1,
+    "m": 33554432
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 2.379804306116666e-08,
+   "us": {
+    "proton": 187.86474873815504,
+    "event": 196.04628350515296
+   },
+   "bound": "hbm",
+   "of_floor": 0.47001748848938113,
+   "note": ""
+  },
+  {
+   "op": "normalized_policy_loss",
+   "regime": "split",
+   "cfg": {
+    "n": 1,
+    "m": 33554432
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 3.5814058374665765e-08,
+   "us": {
+    "proton": 194.76628473377644,
+    "event": 205.3383241132954
+   },
+   "bound": "hbm",
+   "of_floor": 0.4533624364108605,
+   "note": ""
+  }
+ ]
+}

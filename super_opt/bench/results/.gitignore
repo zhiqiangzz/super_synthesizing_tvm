@@ -1,0 +1,6 @@
+# The repository's .gitignore leaves out *.json; the results recorded here are kept
+# (../README.md says how each one was produced). local/ holds earlier or partial runs
+# and logs/ the logs of reproduce.sh: neither is recorded.
+!*.json
+local/
+logs/

@@ -1,0 +1,19 @@
+{
+  "device": "NVIDIA H800",
+  "sms": 132,
+  "measured_at": "2026-10-29 04:54:07",
+  "hbm_bytes_per_s": 3040048914902.965,
+  "hbm_by_method": {
+    "tirx copy": 2915752573983.253,
+    "torch add(x, 0)": 3040048914902.965,
+    "cudaMemcpy": 3016852952067.398,
+    "torch sum (read only)": 3033156897978.073
+  },
+  "bf16_flops_per_s": 746152043716318.0,
+  "bf16_by_method": {
+    "cuBLAS bf16 8192\u00b3": 746152043716318.0
+  },
+  "sm_clock_hz": 1980000000.0,
+  "ex2_per_s": 4181760000000.0,
+  "fp32_flops_per_s": 66908160000000.0
+}

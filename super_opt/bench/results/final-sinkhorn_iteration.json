@@ -1,0 +1,507 @@
+{
+ "meta": {
+  "date": "2026-11-04 04:21:58",
+  "host": "cuda_related",
+  "device": "NVIDIA H800",
+  "torch": "2.13.0+cu130",
+  "cuda": "13.0",
+  "triton": "3.7.1",
+  "tvm_tirx": "0.1.0a4",
+  "roofline": {
+   "device": "NVIDIA H800",
+   "sms": 132,
+   "measured_at": "2026-10-29 04:54:07",
+   "hbm_bytes_per_s": 3040048914902.965,
+   "hbm_by_method": {
+    "tirx copy": 2915752573983.253,
+    "torch add(x, 0)": 3040048914902.965,
+    "cudaMemcpy": 3016852952067.398,
+    "torch sum (read only)": 3033156897978.073
+   },
+   "bf16_flops_per_s": 746152043716318.0,
+   "bf16_by_method": {
+    "cuBLAS bf16 8192\u00b3": 746152043716318.0
+   },
+   "sm_clock_hz": 1980000000.0,
+   "ex2_per_s": 4181760000000.0,
+   "fp32_flops_per_s": 66908160000000.0
+  },
+  "showcase": [
+   "ledoit_wolf",
+   "ols_hc0",
+   "normalized_policy_loss",
+   "softmax",
+   "cross_entropy",
+   "softmax_entropy",
+   "attention",
+   "layernorm",
+   "layernorm_backward",
+   "papr",
+   "householder",
+   "sinkhorn_iteration",
+   "kurtosis",
+   "pearson",
+   "ess",
+   "contrastive",
+   "heat_capacity"
+  ]
+ },
+ "rows": [
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 8192,
+    "m": 8192,
+    "d": 3
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 4.043566425783898e-07,
+   "us": {
+    "proton": 58.89290548195832,
+    "event": 63.5555875080907
+   },
+   "bound": "ex2",
+   "of_floor": 0.5449890770784545,
+   "note": ""
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 8192,
+    "m": 8192,
+    "d": 3
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 4.0940215202803687e-07,
+   "us": {
+    "proton": 86.17950439778238,
+    "event": 94.283831524535
+   },
+   "bound": "ex2",
+   "of_floor": 0.3724318262139719,
+   "note": ""
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 8192,
+    "m": 8192,
+    "d": 3
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 4.878950538380827e-07,
+   "us": {
+    "proton": 3361.119261904762,
+    "event": 3371.4506796428136
+   },
+   "bound": "ex2",
+   "of_floor": 0.009549197069220378,
+   "note": ""
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 8192,
+    "m": 8192,
+    "d": 3
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 6.042919169303105e-07,
+   "us": {
+    "proton": 590.3349259259259,
+    "event": 596.5248001946343
+   },
+   "bound": "ex2",
+   "of_floor": 0.054369119622626666,
+   "note": ""
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 8192,
+    "m": 8192,
+    "d": 3
+   },
+   "impl": "FlashSinkhorn",
+   "status": "ok",
+   "rel_err": 5.981637701845461e-07,
+   "us": {
+    "proton": 408.8713129997768,
+    "event": 423.37940660416837
+   },
+   "bound": "ex2",
+   "of_floor": 0.07849900246021572,
+   "note": "its kernel per half-iteration, TF32 off; squared norms and log-weights once per solve"
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 8192,
+    "m": 8192,
+    "d": 3
+   },
+   "impl": "KeOps",
+   "status": "ok",
+   "rel_err": 9.610624380857959e-08,
+   "us": {
+    "proton": 792.4083967409742,
+    "event": 1328.8261332102545
+   },
+   "bound": "ex2",
+   "of_floor": 0.04050435398853148,
+   "note": "online log-sum-exp reductions, as GeomLoss runs them"
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 32768,
+    "m": 32768,
+    "d": 3
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 5.301313543152726e-07,
+   "us": {
+    "proton": 706.5078704786222,
+    "event": 711.2298135196143
+   },
+   "bound": "ex2",
+   "of_floor": 0.726865000008286,
+   "note": ""
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 32768,
+    "m": 32768,
+    "d": 3
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 5.081775628364729e-07,
+   "us": {
+    "proton": 1069.0303607843139,
+    "event": 1072.8131785112269
+   },
+   "bound": "ex2",
+   "of_floor": 0.4803753589416608,
+   "note": ""
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 32768,
+    "m": 32768,
+    "d": 3
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 6.050232474672447e-07,
+   "us": {
+    "proton": 51907.007,
+    "event": 51341.82484944662
+   },
+   "bound": "ex2",
+   "of_floor": 0.009893381895074356,
+   "note": ""
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 32768,
+    "m": 32768,
+    "d": 3
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 5.823106259696412e-07,
+   "us": {
+    "proton": 9368.313,
+    "event": 9425.889110565186
+   },
+   "bound": "ex2",
+   "of_floor": 0.054816255955719866,
+   "note": ""
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 32768,
+    "m": 32768,
+    "d": 3
+   },
+   "impl": "FlashSinkhorn",
+   "status": "ok",
+   "rel_err": 9.12376328170441e-07,
+   "us": {
+    "proton": 4006.6189027777777,
+    "event": 4014.892876148224
+   },
+   "bound": "ex2",
+   "of_floor": 0.12817187153119675,
+   "note": "its kernel per half-iteration, TF32 off; squared norms and log-weights once per solve"
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 32768,
+    "m": 32768,
+    "d": 3
+   },
+   "impl": "KeOps",
+   "status": "ok",
+   "rel_err": 1.0642346308101352e-07,
+   "us": {
+    "proton": 3408.0009166666664,
+    "event": 4017.1888768672943
+   },
+   "bound": "ex2",
+   "of_floor": 0.15068535949326634,
+   "note": "online log-sum-exp reductions, as GeomLoss runs them"
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 8192,
+    "m": 8192,
+    "d": 64
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 8.413390186916478e-07,
+   "us": {
+    "proton": 528.0805455280803,
+    "event": 534.2181135405514
+   },
+   "bound": "fp32",
+   "of_floor": 0.48622870850862554,
+   "note": ""
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 8192,
+    "m": 8192,
+    "d": 64
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 8.413390186916478e-07,
+   "us": {
+    "proton": 974.0404395604396,
+    "event": 985.3090674449236
+   },
+   "bound": "fp32",
+   "of_floor": 0.2636111512541737,
+   "note": ""
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 8192,
+    "m": 8192,
+    "d": 64
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 9.078771000378857e-07,
+   "us": {
+    "proton": 3531.646049382716,
+    "event": 3536.586269920255
+   },
+   "bound": "fp32",
+   "of_floor": 0.07270488549823063,
+   "note": ""
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 8192,
+    "m": 8192,
+    "d": 64
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 8.776898010859108e-07,
+   "us": {
+    "proton": 778.2905769691524,
+    "event": 789.5769202661542
+   },
+   "bound": "fp32",
+   "of_floor": 0.32991266917372164,
+   "note": ""
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 8192,
+    "m": 8192,
+    "d": 64
+   },
+   "impl": "FlashSinkhorn",
+   "status": "ok",
+   "rel_err": 7.821183845075331e-07,
+   "us": {
+    "proton": 1169.049750797448,
+    "event": 1183.2125087788231
+   },
+   "bound": "fp32",
+   "of_floor": 0.21963814753435337,
+   "note": "its kernel per half-iteration, TF32 off; squared norms and log-weights once per solve"
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 8192,
+    "m": 8192,
+    "d": 64
+   },
+   "impl": "KeOps",
+   "status": "ok",
+   "rel_err": 1.1015555062006665e-06,
+   "us": {
+    "proton": 5077.770647058824,
+    "event": 5644.156240949444
+   },
+   "bound": "fp32",
+   "of_floor": 0.050567057767639735,
+   "note": "online log-sum-exp reductions, as GeomLoss runs them"
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 32768,
+    "m": 32768,
+    "d": 64
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 9.355824008348635e-07,
+   "us": {
+    "proton": 7707.909611111111,
+    "event": 7722.53065639072
+   },
+   "bound": "fp32",
+   "of_floor": 0.5329962277098064,
+   "note": ""
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 32768,
+    "m": 32768,
+    "d": 64
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 9.355824008348635e-07,
+   "us": {
+    "proton": 14744.539888888889,
+    "event": 14764.367951287164
+   },
+   "bound": "fp32",
+   "of_floor": 0.2786310578159366,
+   "note": ""
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 32768,
+    "m": 32768,
+    "d": 64
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 1.1672885479182213e-06,
+   "us": {
+    "proton": 54610.894,
+    "event": 54025.74920654297
+   },
+   "bound": "fp32",
+   "of_floor": 0.07522833715650915,
+   "note": ""
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 32768,
+    "m": 32768,
+    "d": 64
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 1.0747394250949113e-06,
+   "us": {
+    "proton": 14026.18161904762,
+    "event": 13993.775186084566
+   },
+   "bound": "fp32",
+   "of_floor": 0.2929012940108597,
+   "note": ""
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 32768,
+    "m": 32768,
+    "d": 64
+   },
+   "impl": "FlashSinkhorn",
+   "status": "ok",
+   "rel_err": 1.0238233994146086e-06,
+   "us": {
+    "proton": 13574.258476190476,
+    "event": 13586.034275236583
+   },
+   "bound": "fp32",
+   "of_floor": 0.3026527565727734,
+   "note": "its kernel per half-iteration, TF32 off; squared norms and log-weights once per solve"
+  },
+  {
+   "op": "sinkhorn_iteration",
+   "regime": "points",
+   "cfg": {
+    "n": 32768,
+    "m": 32768,
+    "d": 64
+   },
+   "impl": "KeOps",
+   "status": "ok",
+   "rel_err": 1.0557712783412697e-06,
+   "us": {
+    "proton": 27207.63211111111,
+    "event": 27800.846523708766
+   },
+   "bound": "fp32",
+   "of_floor": 0.1509975851434948,
+   "note": "online log-sum-exp reductions, as GeomLoss runs them"
+  }
+ ]
+}

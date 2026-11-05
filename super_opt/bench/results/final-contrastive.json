@@ -1,0 +1,306 @@
+{
+ "meta": {
+  "date": "2026-11-04 04:09:25",
+  "host": "cuda_related",
+  "device": "NVIDIA H800",
+  "torch": "2.13.0+cu130",
+  "cuda": "13.0",
+  "triton": "3.7.1",
+  "tvm_tirx": "0.1.0a4",
+  "roofline": {
+   "device": "NVIDIA H800",
+   "sms": 132,
+   "measured_at": "2026-10-29 04:54:07",
+   "hbm_bytes_per_s": 3040048914902.965,
+   "hbm_by_method": {
+    "tirx copy": 2915752573983.253,
+    "torch add(x, 0)": 3040048914902.965,
+    "cudaMemcpy": 3016852952067.398,
+    "torch sum (read only)": 3033156897978.073
+   },
+   "bf16_flops_per_s": 746152043716318.0,
+   "bf16_by_method": {
+    "cuBLAS bf16 8192\u00b3": 746152043716318.0
+   },
+   "sm_clock_hz": 1980000000.0,
+   "ex2_per_s": 4181760000000.0,
+   "fp32_flops_per_s": 66908160000000.0
+  },
+  "showcase": [
+   "ledoit_wolf",
+   "ols_hc0",
+   "normalized_policy_loss",
+   "softmax",
+   "cross_entropy",
+   "softmax_entropy",
+   "attention",
+   "layernorm",
+   "layernorm_backward",
+   "papr",
+   "householder",
+   "sinkhorn_iteration",
+   "kurtosis",
+   "pearson",
+   "ess",
+   "contrastive",
+   "heat_capacity"
+  ]
+ },
+ "rows": [
+  {
+   "op": "contrastive",
+   "regime": "square",
+   "cfg": {
+    "n": 8192
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 6.946670429300596e-08,
+   "us": {
+    "proton": 59.93893845652342,
+    "event": 65.36955872952441
+   },
+   "bound": "hbm",
+   "of_floor": 0.7369402381195036,
+   "note": ""
+  },
+  {
+   "op": "contrastive",
+   "regime": "square",
+   "cfg": {
+    "n": 8192
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 7.82721005973313e-08,
+   "us": {
+    "proton": 190.92710870323705,
+    "event": 203.06966927450256
+   },
+   "bound": "hbm",
+   "of_floor": 0.23135224682754407,
+   "note": ""
+  },
+  {
+   "op": "contrastive",
+   "regime": "square",
+   "cfg": {
+    "n": 8192
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 5.030326110354601e-08,
+   "us": {
+    "proton": 1417.8723644338118,
+    "event": 1425.359191316547
+   },
+   "bound": "hbm",
+   "of_floor": 0.03115330877925622,
+   "note": ""
+  },
+  {
+   "op": "contrastive",
+   "regime": "square",
+   "cfg": {
+    "n": 8192
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 5.0389702459251617e-08,
+   "us": {
+    "proton": 172.62430986184708,
+    "event": 181.417275449423
+   },
+   "bound": "hbm",
+   "of_floor": 0.2558817794210529,
+   "note": ""
+  },
+  {
+   "op": "contrastive",
+   "regime": "square",
+   "cfg": {
+    "n": 8192
+   },
+   "impl": "open_clip ClipLoss",
+   "status": "ok",
+   "rel_err": 0.0021070263033743496,
+   "us": {
+    "proton": 986.6926164874552,
+    "event": 978.1712960171443
+   },
+   "bound": "hbm",
+   "of_floor": 0.04476714920197463,
+   "note": "reimplemented: the two cross_entropy calls of ClipLoss"
+  },
+  {
+   "op": "contrastive",
+   "regime": "square",
+   "cfg": {
+    "n": 16384
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 6.847266757391577e-08,
+   "us": {
+    "proton": 196.0990929338128,
+    "event": 201.5292293721368
+   },
+   "bound": "hbm",
+   "of_floor": 0.9007820718426753,
+   "note": ""
+  },
+  {
+   "op": "contrastive",
+   "regime": "square",
+   "cfg": {
+    "n": 16384
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 7.506687924099354e-08,
+   "us": {
+    "proton": 704.8690956284153,
+    "event": 717.1210254362504
+   },
+   "bound": "hbm",
+   "of_floor": 0.2506033365839458,
+   "note": ""
+  },
+  {
+   "op": "contrastive",
+   "regime": "square",
+   "cfg": {
+    "n": 16384
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 4.792901326526564e-08,
+   "us": {
+    "proton": 5412.773055555555,
+    "event": 5372.2524378034805
+   },
+   "bound": "hbm",
+   "of_floor": 0.03263439006334971,
+   "note": ""
+  },
+  {
+   "op": "contrastive",
+   "regime": "square",
+   "cfg": {
+    "n": 16384
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 4.792901326526564e-08,
+   "us": {
+    "proton": 726.6741506996501,
+    "event": 730.5656089179818
+   },
+   "bound": "hbm",
+   "of_floor": 0.24308357060632443,
+   "note": ""
+  },
+  {
+   "op": "contrastive",
+   "regime": "square",
+   "cfg": {
+    "n": 16384
+   },
+   "impl": "open_clip ClipLoss",
+   "status": "ok",
+   "rel_err": 0.001956747876608411,
+   "us": {
+    "proton": 2860.9590412953057,
+    "event": 2843.1425772461234
+   },
+   "bound": "hbm",
+   "of_floor": 0.06174242436529743,
+   "note": "reimplemented: the two cross_entropy calls of ClipLoss"
+  },
+  {
+   "op": "contrastive",
+   "regime": "square",
+   "cfg": {
+    "n": 32768
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 6.989147730285661e-08,
+   "us": {
+    "proton": 744.4724632768362,
+    "event": 749.929040603894
+   },
+   "bound": "hbm",
+   "of_floor": 0.9489725860060192,
+   "note": ""
+  },
+  {
+   "op": "contrastive",
+   "regime": "square",
+   "cfg": {
+    "n": 32768
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 9.571973153227351e-08,
+   "us": {
+    "proton": 2753.878061904762,
+    "event": 2765.458976120508
+   },
+   "bound": "hbm",
+   "of_floor": 0.25654148179583514,
+   "note": ""
+  },
+  {
+   "op": "contrastive",
+   "regime": "square",
+   "cfg": {
+    "n": 32768
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 7.094732640053987e-08,
+   "us": {
+    "proton": 21477.429583333334,
+    "event": 21251.357396443684
+   },
+   "bound": "hbm",
+   "of_floor": 0.03289425095982286,
+   "note": ""
+  },
+  {
+   "op": "contrastive",
+   "regime": "square",
+   "cfg": {
+    "n": 32768
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 7.094732640053987e-08,
+   "us": {
+    "proton": 2919.69017739899,
+    "event": 2922.308993836244
+   },
+   "bound": "hbm",
+   "of_floor": 0.24197223532651077,
+   "note": ""
+  },
+  {
+   "op": "contrastive",
+   "regime": "square",
+   "cfg": {
+    "n": 32768
+   },
+   "impl": "open_clip ClipLoss",
+   "status": "ok",
+   "rel_err": 0.003730373875134893,
+   "us": {
+    "proton": 11493.062166666667,
+    "event": 11492.757320404053
+   },
+   "bound": "hbm",
+   "of_floor": 0.06147047222411326,
+   "note": "reimplemented: the two cross_entropy calls of ClipLoss"
+  }
+ ]
+}

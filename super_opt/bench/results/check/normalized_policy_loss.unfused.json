@@ -1,0 +1,338 @@
+[
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "small",
+  "cfg": {
+   "n": 7,
+   "m": 1000
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 9.091440122689488e-08,
+  "err_compile": 1.6109094570032944e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "small",
+  "cfg": {
+   "n": 7,
+   "m": 1000
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.2895054978588586e-07,
+  "err_compile": 1.348038281123845e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "small",
+  "cfg": {
+   "n": 7,
+   "m": 1000
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 8.003308240173144e-08,
+  "err_compile": 1.824231770526328e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "small",
+  "cfg": {
+   "n": 5,
+   "m": 1001
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 6.003451652805402e-08,
+  "err_compile": 1.3835599155896447e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "small",
+  "cfg": {
+   "n": 5,
+   "m": 1001
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 7.626469654488331e-08,
+  "err_compile": 7.647184334006501e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "small",
+  "cfg": {
+   "n": 5,
+   "m": 1001
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 7.43499181967089e-08,
+  "err_compile": 1.3032690150630715e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "small",
+  "cfg": {
+   "n": 3,
+   "m": 4099
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.0590307541780694e-07,
+  "err_compile": 1.5127130315482337e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "small",
+  "cfg": {
+   "n": 3,
+   "m": 4099
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.0056829671031628e-07,
+  "err_compile": 1.3975208589023953e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "small",
+  "cfg": {
+   "n": 3,
+   "m": 4099
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 4.7256590972984264e-08,
+  "err_compile": 4.7256590972984264e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "small",
+  "cfg": {
+   "n": 1,
+   "m": 77777
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.0396349140693015e-07,
+  "err_compile": 1.7403341526631952e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "small",
+  "cfg": {
+   "n": 1,
+   "m": 77777
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 9.377028712700688e-09,
+  "err_compile": 6.911850401509881e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "small",
+  "cfg": {
+   "n": 1,
+   "m": 77777
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 4.678900080388825e-08,
+  "err_compile": 1.071867485724329e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "bench",
+  "cfg": {
+   "n": 65536,
+   "m": 256
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.559331734148626e-07,
+  "err_compile": 2.394894999805947e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "bench",
+  "cfg": {
+   "n": 65536,
+   "m": 256
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.6358136175913494e-07,
+  "err_compile": 2.2408340242610314e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "bench",
+  "cfg": {
+   "n": 65536,
+   "m": 256
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.6649445558172e-07,
+  "err_compile": 2.3744115201119535e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "bench",
+  "cfg": {
+   "n": 256,
+   "m": 262144
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 2.0687221637894347e-07,
+  "err_compile": 2.146102940619869e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "bench",
+  "cfg": {
+   "n": 256,
+   "m": 262144
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.505462601325911e-07,
+  "err_compile": 1.8947374921770884e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "bench",
+  "cfg": {
+   "n": 256,
+   "m": 262144
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.7876957446550347e-07,
+  "err_compile": 2.0989391450449888e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "bench",
+  "cfg": {
+   "n": 1,
+   "m": 33554432
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 2.379804306116666e-08,
+  "err_compile": 3.5814058374665765e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "bench",
+  "cfg": {
+   "n": 1,
+   "m": 33554432
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 2.648958616307385e-08,
+  "err_compile": 2.648958616307385e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "normalized_policy_loss",
+  "sizes": "bench",
+  "cfg": {
+   "n": 1,
+   "m": 33554432
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 2.4499213333234992e-08,
+  "err_compile": 8.41166953674042e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ }
+]

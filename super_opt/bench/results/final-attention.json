@@ -1,0 +1,771 @@
+{
+ "meta": {
+  "date": "2026-11-04 04:11:57",
+  "host": "cuda_related",
+  "device": "NVIDIA H800",
+  "torch": "2.13.0+cu130",
+  "cuda": "13.0",
+  "triton": "3.7.1",
+  "tvm_tirx": "0.1.0a4",
+  "roofline": {
+   "device": "NVIDIA H800",
+   "sms": 132,
+   "measured_at": "2026-10-29 04:54:07",
+   "hbm_bytes_per_s": 3040048914902.965,
+   "hbm_by_method": {
+    "tirx copy": 2915752573983.253,
+    "torch add(x, 0)": 3040048914902.965,
+    "cudaMemcpy": 3016852952067.398,
+    "torch sum (read only)": 3033156897978.073
+   },
+   "bf16_flops_per_s": 746152043716318.0,
+   "bf16_by_method": {
+    "cuBLAS bf16 8192\u00b3": 746152043716318.0
+   },
+   "sm_clock_hz": 1980000000.0,
+   "ex2_per_s": 4181760000000.0,
+   "fp32_flops_per_s": 66908160000000.0
+  },
+  "showcase": [
+   "ledoit_wolf",
+   "ols_hc0",
+   "normalized_policy_loss",
+   "softmax",
+   "cross_entropy",
+   "softmax_entropy",
+   "attention",
+   "layernorm",
+   "layernorm_backward",
+   "papr",
+   "householder",
+   "sinkhorn_iteration",
+   "kurtosis",
+   "pearson",
+   "ess",
+   "contrastive",
+   "heat_capacity"
+  ]
+ },
+ "rows": [
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 8,
+    "h": 16,
+    "s": 1024,
+    "d": 128
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 0.0023647698958574894,
+   "us": {
+    "proton": 114.11259376019419,
+    "event": 118.17717074387494
+   },
+   "bound": "tensor",
+   "of_floor": 0.8070843649445465,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 8,
+    "h": 16,
+    "s": 1024,
+    "d": 128
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 0.0024093996315751186,
+   "us": {
+    "proton": 232.38261753930507,
+    "event": 240.17783036645903
+   },
+   "bound": "tensor",
+   "of_floor": 0.3963226305063194,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 8,
+    "h": 16,
+    "s": 1024,
+    "d": 128
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 0.0024093996315751186,
+   "us": {
+    "proton": 2614.5953423423425,
+    "event": 2606.882585061563
+   },
+   "bound": "tensor",
+   "of_floor": 0.03522475878986799,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 8,
+    "h": 16,
+    "s": 1024,
+    "d": 128
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.0024093996315751186,
+   "us": {
+    "proton": 617.2846530908369,
+    "event": 627.5476509179825
+   },
+   "bound": "tensor",
+   "of_floor": 0.14919938444276945,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 8,
+    "h": 16,
+    "s": 1024,
+    "d": 128
+   },
+   "impl": "FlashAttention-2",
+   "status": "ok",
+   "rel_err": 0.0023647698958574894,
+   "us": {
+    "proton": 197.85081227783212,
+    "event": 201.29631665835774
+   },
+   "bound": "tensor",
+   "of_floor": 0.46549462803211533,
+   "note": "q, k, v given in its (b, s, h, d) layout"
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 8,
+    "h": 16,
+    "s": 1024,
+    "d": 128
+   },
+   "impl": "FlashAttention-3",
+   "status": "ok",
+   "rel_err": 0.0023647698958574894,
+   "us": {
+    "proton": 112.7056265308146,
+    "event": 117.08793053221099
+   },
+   "bound": "tensor",
+   "of_floor": 0.8171596494514042,
+   "note": "q, k, v given in its (b, s, h, d) layout"
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 8,
+    "h": 16,
+    "s": 1024,
+    "d": 128
+   },
+   "impl": "cuDNN SDPA",
+   "status": "ok",
+   "rel_err": 0.0023647698958574894,
+   "us": {
+    "proton": 116.37921295108548,
+    "event": 122.46292309878903
+   },
+   "bound": "tensor",
+   "of_floor": 0.7913654675240895,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 8,
+    "h": 16,
+    "s": 1024,
+    "d": 128
+   },
+   "impl": "torch SDPA flash",
+   "status": "ok",
+   "rel_err": 0.0023647698958574894,
+   "us": {
+    "proton": 211.21328018367115,
+    "event": 216.3169042980386
+   },
+   "bound": "tensor",
+   "of_floor": 0.4360449787391799,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 8,
+    "h": 16,
+    "s": 1024,
+    "d": 128
+   },
+   "impl": "FlexAttention",
+   "status": "ok",
+   "rel_err": 0.0023647698958574894,
+   "us": {
+    "proton": 180.5521927625772,
+    "event": 186.3857757362519
+   },
+   "bound": "tensor",
+   "of_floor": 0.5100934464320195,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 128
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 0.0027511431077933066,
+   "us": {
+    "proton": 410.4999079067964,
+    "event": 422.0443723972275
+   },
+   "bound": "tensor",
+   "of_floor": 0.8974276338988335,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 128
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 0.0031935032373142367,
+   "us": {
+    "proton": 798.0489888532558,
+    "event": 822.3100018997987
+   },
+   "bound": "tensor",
+   "of_floor": 0.4616182292240522,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 128
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 0.0031935032373142367,
+   "us": {
+    "proton": 10111.375777777777,
+    "event": 10036.246617635092
+   },
+   "bound": "tensor",
+   "of_floor": 0.03643361389833036,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 128
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.0031935032373142367,
+   "us": {
+    "proton": 2513.189848506401,
+    "event": 2499.0725960421755
+   },
+   "bound": "tensor",
+   "of_floor": 0.14658421499172591,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 128
+   },
+   "impl": "FlashAttention-2",
+   "status": "ok",
+   "rel_err": 0.0027511431077933066,
+   "us": {
+    "proton": 713.8269150326797,
+    "event": 729.9534668561663
+   },
+   "bound": "tensor",
+   "of_floor": 0.5160830354114904,
+   "note": "q, k, v given in its (b, s, h, d) layout"
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 128
+   },
+   "impl": "FlashAttention-3",
+   "status": "ok",
+   "rel_err": 0.0027511431077933066,
+   "us": {
+    "proton": 387.5236823857672,
+    "event": 401.8818863423975
+   },
+   "bound": "tensor",
+   "of_floor": 0.9506359941681221,
+   "note": "q, k, v given in its (b, s, h, d) layout"
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 128
+   },
+   "impl": "cuDNN SDPA",
+   "status": "ok",
+   "rel_err": 0.0027511431077933066,
+   "us": {
+    "proton": 417.861931237226,
+    "event": 435.5304890888916
+   },
+   "bound": "tensor",
+   "of_floor": 0.8816164707268895,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 128
+   },
+   "impl": "torch SDPA flash",
+   "status": "ok",
+   "rel_err": 0.0027511431077933066,
+   "us": {
+    "proton": 772.6407102648103,
+    "event": 785.3695343889724
+   },
+   "bound": "tensor",
+   "of_floor": 0.47679853801933914,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 128
+   },
+   "impl": "FlexAttention",
+   "status": "ok",
+   "rel_err": 0.0027511431077933066,
+   "us": {
+    "proton": 590.4826016283046,
+    "event": 599.8811519066618
+   },
+   "bound": "tensor",
+   "of_floor": 0.6238862246789466,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 1,
+    "h": 16,
+    "s": 8192,
+    "d": 128
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 0.002328060998442616,
+   "us": {
+    "proton": 817.9332404586404,
+    "event": 844.5142740894789
+   },
+   "bound": "tensor",
+   "of_floor": 0.9007922476947274,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 1,
+    "h": 16,
+    "s": 8192,
+    "d": 128
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 0.0034005853476968173,
+   "us": {
+    "proton": 1565.9204754098362,
+    "event": 1628.4777721609785
+   },
+   "bound": "tensor",
+   "of_floor": 0.47051426538383884,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 1,
+    "h": 16,
+    "s": 8192,
+    "d": 128
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 0.0034005853476968173,
+   "us": {
+    "proton": 20196.304333333333,
+    "event": 19997.74916966756
+   },
+   "bound": "tensor",
+   "of_floor": 0.036481324007428755,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 1,
+    "h": 16,
+    "s": 8192,
+    "d": 128
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.0034005853476968173,
+   "us": {
+    "proton": 4665.934111111112,
+    "event": 4502.6732550727
+   },
+   "bound": "tensor",
+   "of_floor": 0.15790791395498668,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 1,
+    "h": 16,
+    "s": 8192,
+    "d": 128
+   },
+   "impl": "FlashAttention-2",
+   "status": "ok",
+   "rel_err": 0.0022749600444637013,
+   "us": {
+    "proton": 1409.3665102588384,
+    "event": 1421.5658839155212
+   },
+   "bound": "tensor",
+   "of_floor": 0.5227795018356548,
+   "note": "q, k, v given in its (b, s, h, d) layout"
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 1,
+    "h": 16,
+    "s": 8192,
+    "d": 128
+   },
+   "impl": "FlashAttention-3",
+   "status": "ok",
+   "rel_err": 0.0022749600444637013,
+   "us": {
+    "proton": 759.6342666412646,
+    "event": 774.2155061393859
+   },
+   "bound": "tensor",
+   "of_floor": 0.9699245472359885,
+   "note": "q, k, v given in its (b, s, h, d) layout"
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 1,
+    "h": 16,
+    "s": 8192,
+    "d": 128
+   },
+   "impl": "cuDNN SDPA",
+   "status": "ok",
+   "rel_err": 0.002328060998442616,
+   "us": {
+    "proton": 833.5805103176572,
+    "event": 853.7735271902967
+   },
+   "bound": "tensor",
+   "of_floor": 0.8838833358234333,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 1,
+    "h": 16,
+    "s": 8192,
+    "d": 128
+   },
+   "impl": "torch SDPA flash",
+   "status": "ok",
+   "rel_err": 0.0022749600444637013,
+   "us": {
+    "proton": 1531.1939944444446,
+    "event": 1541.9824354201285
+   },
+   "bound": "tensor",
+   "of_floor": 0.48118522199683506,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 1,
+    "h": 16,
+    "s": 8192,
+    "d": 128
+   },
+   "impl": "FlexAttention",
+   "status": "ok",
+   "rel_err": 0.002255258914619107,
+   "us": {
+    "proton": 1142.8118692463092,
+    "event": 1165.0895881475867
+   },
+   "bound": "tensor",
+   "of_floor": 0.6447149718727426,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 64
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 0.0028636326657796125,
+   "us": {
+    "proton": 287.27307406644115,
+    "event": 290.9945484344742
+   },
+   "bound": "tensor",
+   "of_floor": 0.6411912468052652,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 64
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 0.003842051733978301,
+   "us": {
+    "proton": 631.6682809704563,
+    "event": 640.7157812842089
+   },
+   "bound": "tensor",
+   "of_floor": 0.29160397329315596,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 64
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 0.003842051733978301,
+   "us": {
+    "proton": 10047.54274074074,
+    "event": 9971.350493254486
+   },
+   "bound": "tensor",
+   "of_floor": 0.018332540133157275,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 64
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.003842051733978301,
+   "us": {
+    "proton": 2452.815060728745,
+    "event": 2437.3514586829197
+   },
+   "bound": "tensor",
+   "of_floor": 0.07509615522318129,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 64
+   },
+   "impl": "FlashAttention-2",
+   "status": "ok",
+   "rel_err": 0.0034209132482130753,
+   "us": {
+    "proton": 431.5471796940738,
+    "event": 435.0852134991228
+   },
+   "bound": "tensor",
+   "of_floor": 0.4268292997878492,
+   "note": "q, k, v given in its (b, s, h, d) layout"
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 64
+   },
+   "impl": "FlashAttention-3",
+   "status": "ok",
+   "rel_err": 0.0030319413703564983,
+   "us": {
+    "proton": 287.4102490882532,
+    "event": 294.28063126228045
+   },
+   "bound": "tensor",
+   "of_floor": 0.6408852193634977,
+   "note": "q, k, v given in its (b, s, h, d) layout"
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 64
+   },
+   "impl": "cuDNN SDPA",
+   "status": "ok",
+   "rel_err": 0.0028636326657796125,
+   "us": {
+    "proton": 289.5301298253676,
+    "event": 296.53650478233953
+   },
+   "bound": "tensor",
+   "of_floor": 0.6361927881058269,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 64
+   },
+   "impl": "torch SDPA flash",
+   "status": "ok",
+   "rel_err": 0.0034209132482130753,
+   "us": {
+    "proton": 457.1604653447796,
+    "event": 462.0460601596669
+   },
+   "bound": "tensor",
+   "of_floor": 0.40291537544771217,
+   "note": ""
+  },
+  {
+   "op": "attention",
+   "regime": "gemm",
+   "cfg": {
+    "b": 2,
+    "h": 16,
+    "s": 4096,
+    "d": 64
+   },
+   "impl": "FlexAttention",
+   "status": "ok",
+   "rel_err": 0.0028636326657796125,
+   "us": {
+    "proton": 349.84568337697544,
+    "event": 357.7261846504227
+   },
+   "bound": "tensor",
+   "of_floor": 0.5265092276006779,
+   "note": ""
+  }
+ ]
+}

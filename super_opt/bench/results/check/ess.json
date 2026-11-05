@@ -1,0 +1,386 @@
+[
+ {
+  "op": "ess",
+  "sizes": "small",
+  "cfg": {
+   "n": 7,
+   "m": 1000
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 4.6357679137433e-08,
+  "err_compile": 1.0348738512020684e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "small",
+  "cfg": {
+   "n": 7,
+   "m": 1000
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.2154639909565092e-07,
+  "err_compile": 1.431769628003978e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "small",
+  "cfg": {
+   "n": 7,
+   "m": 1000
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.1209369839501992e-07,
+  "err_compile": 5.7104618628723815e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "small",
+  "cfg": {
+   "n": 5,
+   "m": 1001
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 9.896801587236821e-08,
+  "err_compile": 3.8641645426521887e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "small",
+  "cfg": {
+   "n": 5,
+   "m": 1001
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.3667948876272178e-07,
+  "err_compile": 2.118931180658752e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "small",
+  "cfg": {
+   "n": 5,
+   "m": 1001
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 8.374096921448023e-08,
+  "err_compile": 3.236935999627406e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "small",
+  "cfg": {
+   "n": 3,
+   "m": 4099
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.4762718015967889e-07,
+  "err_compile": 1.8142228003959183e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "small",
+  "cfg": {
+   "n": 3,
+   "m": 4099
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.3601236694449197e-07,
+  "err_compile": 7.992135521087952e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "small",
+  "cfg": {
+   "n": 3,
+   "m": 4099
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.5702578905301788e-07,
+  "err_compile": 1.5702578905301788e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "small",
+  "cfg": {
+   "n": 1,
+   "m": 77777
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.1504671432023582e-07,
+  "err_compile": 3.4269838757196977e-09,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "small",
+  "cfg": {
+   "n": 1,
+   "m": 77777
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 2.482930993297624e-07,
+  "err_compile": 1.528445299848096e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "small",
+  "cfg": {
+   "n": 1,
+   "m": 77777
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.1671638024071031e-07,
+  "err_compile": 1.1671638024071031e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "bench",
+  "cfg": {
+   "n": 16384,
+   "m": 4096
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 2.3185474750166452e-07,
+  "err_compile": 2.206823377886098e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "bench",
+  "cfg": {
+   "n": 16384,
+   "m": 4096
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 2.4536714792015614e-07,
+  "err_compile": 2.0670178731601467e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "bench",
+  "cfg": {
+   "n": 16384,
+   "m": 4096
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 3.1813085492430636e-07,
+  "err_compile": 2.4967732776190337e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "bench",
+  "cfg": {
+   "n": 1024,
+   "m": 262144
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 3.365380749808399e-07,
+  "err_compile": 2.4553516028883334e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "bench",
+  "cfg": {
+   "n": 1024,
+   "m": 262144
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 2.697344535148432e-07,
+  "err_compile": 2.6054399084538303e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "bench",
+  "cfg": {
+   "n": 1024,
+   "m": 262144
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 2.3592659958943715e-07,
+  "err_compile": 2.245532652387892e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "bench",
+  "cfg": {
+   "n": 4,
+   "m": 16777216
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.5400390433581379e-07,
+  "err_compile": 1.9574162499133432e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "bench",
+  "cfg": {
+   "n": 4,
+   "m": 16777216
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.551083908146544e-07,
+  "err_compile": 1.246091839196755e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "bench",
+  "cfg": {
+   "n": 4,
+   "m": 16777216
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.0110562634740394e-07,
+  "err_compile": 8.31741717134264e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "bench",
+  "cfg": {
+   "n": 1,
+   "m": 67108864
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 5.8538452891109176e-08,
+  "err_compile": 1.8657858098993014e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "bench",
+  "cfg": {
+   "n": 1,
+   "m": 67108864
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 2.4246629349244894e-07,
+  "err_compile": 4.347511699793897e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "ess",
+  "sizes": "bench",
+  "cfg": {
+   "n": 1,
+   "m": 67108864
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 7.956794269453114e-08,
+  "err_compile": 1.3689019020789934e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ }
+]

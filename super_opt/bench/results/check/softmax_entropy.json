@@ -1,0 +1,290 @@
+[
+ {
+  "op": "softmax_entropy",
+  "sizes": "small",
+  "cfg": {
+   "n": 7,
+   "m": 1000
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.009754929015394e-07,
+  "err_compile": 1.2667529306248905e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "small",
+  "cfg": {
+   "n": 7,
+   "m": 1000
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 6.552698942836182e-08,
+  "err_compile": 7.754501095650904e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "small",
+  "cfg": {
+   "n": 7,
+   "m": 1000
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 6.507328001114063e-08,
+  "err_compile": 6.009256550892693e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "small",
+  "cfg": {
+   "n": 5,
+   "m": 1001
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 5.625567880527612e-08,
+  "err_compile": 1.1882883752520006e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "small",
+  "cfg": {
+   "n": 5,
+   "m": 1001
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.148841827799366e-07,
+  "err_compile": 1.8348344745446956e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "small",
+  "cfg": {
+   "n": 5,
+   "m": 1001
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 4.324724928518025e-08,
+  "err_compile": 1.163120908587219e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "small",
+  "cfg": {
+   "n": 3,
+   "m": 4099
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.0337531849481852e-07,
+  "err_compile": 1.3894012338275182e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "small",
+  "cfg": {
+   "n": 3,
+   "m": 4099
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 2.7880142932231453e-08,
+  "err_compile": 9.839812161818322e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "small",
+  "cfg": {
+   "n": 3,
+   "m": 4099
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 8.284268384749754e-08,
+  "err_compile": 8.284268384749754e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "small",
+  "cfg": {
+   "n": 1,
+   "m": 77777
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 9.076286377894501e-08,
+  "err_compile": 1.1449081167065781e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "small",
+  "cfg": {
+   "n": 1,
+   "m": 77777
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 3.4141371606227744e-08,
+  "err_compile": 3.4141371606227744e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "small",
+  "cfg": {
+   "n": 1,
+   "m": 77777
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 2.9778952225847273e-08,
+  "err_compile": 2.9778952225847273e-08,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "bench",
+  "cfg": {
+   "n": 16384,
+   "m": 32000
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.6954290662761227e-07,
+  "err_compile": 2.8143388642687254e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "bench",
+  "cfg": {
+   "n": 16384,
+   "m": 32000
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.737790153662289e-07,
+  "err_compile": 2.422236879237133e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "bench",
+  "cfg": {
+   "n": 16384,
+   "m": 32000
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 2.1689962462339497e-07,
+  "err_compile": 2.8277257437072134e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "bench",
+  "cfg": {
+   "n": 4096,
+   "m": 151936
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.8252024787856006e-07,
+  "err_compile": 2.726291241403257e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "bench",
+  "cfg": {
+   "n": 4096,
+   "m": 151936
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.6904725539046429e-07,
+  "err_compile": 2.4812494089132266e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax_entropy",
+  "sizes": "bench",
+  "cfg": {
+   "n": 4096,
+   "m": 151936
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "float32",
+  "err_tirx": 1.896993899252381e-07,
+  "err_compile": 2.501120875657254e-07,
+  "bound": 1e-06,
+  "passed": true,
+  "error": ""
+ }
+]

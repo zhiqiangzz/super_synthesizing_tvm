@@ -1,0 +1,482 @@
+[
+ {
+  "op": "softmax",
+  "sizes": "small",
+  "cfg": {
+   "n": 7,
+   "m": 1000
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0013358452995702653,
+  "err_compile": 0.0013358452995702653,
+  "bound": 0.004,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "small",
+  "cfg": {
+   "n": 7,
+   "m": 1000
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0024063069637536415,
+  "err_compile": 0.0024063069637536415,
+  "bound": 0.004812613927507283,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "small",
+  "cfg": {
+   "n": 7,
+   "m": 1000
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0014915764428134629,
+  "err_compile": 0.0014915764428134629,
+  "bound": 0.004,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "small",
+  "cfg": {
+   "n": 5,
+   "m": 1001
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.00210560002431369,
+  "err_compile": 0.00210560002431369,
+  "bound": 0.00421120004862738,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "small",
+  "cfg": {
+   "n": 5,
+   "m": 1001
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0014032170127402952,
+  "err_compile": 0.0014032170127402952,
+  "bound": 0.004,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "small",
+  "cfg": {
+   "n": 5,
+   "m": 1001
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0024196192678500763,
+  "err_compile": 0.0024196192678500763,
+  "bound": 0.004839238535700153,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "small",
+  "cfg": {
+   "n": 3,
+   "m": 4099
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0016188328695764813,
+  "err_compile": 0.0016188328695764813,
+  "bound": 0.004,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "small",
+  "cfg": {
+   "n": 3,
+   "m": 4099
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.002294086994472166,
+  "err_compile": 0.002294086994472166,
+  "bound": 0.004588173988944332,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "small",
+  "cfg": {
+   "n": 3,
+   "m": 4099
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0007455358136014754,
+  "err_compile": 0.0007455358136014754,
+  "bound": 0.004,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "small",
+  "cfg": {
+   "n": 1,
+   "m": 77777
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0016767588348224267,
+  "err_compile": 0.0016767588348224267,
+  "bound": 0.004,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "small",
+  "cfg": {
+   "n": 1,
+   "m": 77777
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0016612157059123808,
+  "err_compile": 0.0016612157059123808,
+  "bound": 0.004,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "small",
+  "cfg": {
+   "n": 1,
+   "m": 77777
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0030100010592977716,
+  "err_compile": 0.0030100010592977716,
+  "bound": 0.006020002118595543,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 32768,
+   "m": 4096
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0027264963127273663,
+  "err_compile": 0.0027264963127273663,
+  "bound": 0.0054529926254547325,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 32768,
+   "m": 4096
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0024709953566881505,
+  "err_compile": 0.0024709953566881505,
+  "bound": 0.004941990713376301,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 32768,
+   "m": 4096
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.002024618186234717,
+  "err_compile": 0.002024618186234717,
+  "bound": 0.004049236372469434,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 16384,
+   "m": 8192
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.002805270949419006,
+  "err_compile": 0.002805270949419006,
+  "bound": 0.005610541898838012,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 16384,
+   "m": 8192
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.002998492755930526,
+  "err_compile": 0.002998492755930526,
+  "bound": 0.005996985511861052,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 16384,
+   "m": 8192
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0023395090988660777,
+  "err_compile": 0.0023395090988660777,
+  "bound": 0.004679018197732155,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 4096,
+   "m": 32768
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.00211504164277873,
+  "err_compile": 0.00211504164277873,
+  "bound": 0.00423008328555746,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 4096,
+   "m": 32768
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0016887189972404737,
+  "err_compile": 0.0016887189972404737,
+  "bound": 0.004,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 4096,
+   "m": 32768
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0016715609879965664,
+  "err_compile": 0.0016715609879965664,
+  "bound": 0.004,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 2048,
+   "m": 131072
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0033897459162358385,
+  "err_compile": 0.0033897459162358385,
+  "bound": 0.006779491832471677,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 2048,
+   "m": 131072
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0023716425439222013,
+  "err_compile": 0.0023716425439222013,
+  "bound": 0.004743285087844403,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 2048,
+   "m": 131072
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0019423755801561333,
+  "err_compile": 0.0019423755801561333,
+  "bound": 0.004,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 8,
+   "m": 8388608
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0021012274210863054,
+  "err_compile": 0.0021012274210863054,
+  "bound": 0.004202454842172611,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 8,
+   "m": 8388608
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0011460255269523352,
+  "err_compile": 0.0011460255269523352,
+  "bound": 0.004,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 8,
+   "m": 8388608
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0015716461575861294,
+  "err_compile": 0.0015716461575861294,
+  "bound": 0.004,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 1,
+   "m": 67108864
+  },
+  "seed": 0,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0014385850206614747,
+  "err_compile": 0.0014385850206614747,
+  "bound": 0.004,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 1,
+   "m": 67108864
+  },
+  "seed": 1,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.0022345235607277966,
+  "err_compile": 0.0022345235607277966,
+  "bound": 0.004469047121455593,
+  "passed": true,
+  "error": ""
+ },
+ {
+  "op": "softmax",
+  "sizes": "bench",
+  "cfg": {
+   "n": 1,
+   "m": 67108864
+  },
+  "seed": 2,
+  "output": 0,
+  "dtype": "bfloat16",
+  "err_tirx": 0.00175519923448835,
+  "err_compile": 0.00175519923448835,
+  "bound": 0.004,
+  "passed": true,
+  "error": ""
+ }
+]

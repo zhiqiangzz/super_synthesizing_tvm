@@ -1,0 +1,450 @@
+{
+ "meta": {
+  "date": "2026-11-04 16:06:25",
+  "host": "cuda_related",
+  "device": "NVIDIA H800",
+  "torch": "2.13.0+cu130",
+  "cuda": "13.0",
+  "triton": "3.7.1",
+  "tvm_tirx": "0.1.0a4",
+  "roofline": {
+   "device": "NVIDIA H800",
+   "sms": 132,
+   "measured_at": "2026-10-29 04:54:07",
+   "hbm_bytes_per_s": 3040048914902.965,
+   "hbm_by_method": {
+    "tirx copy": 2915752573983.253,
+    "torch add(x, 0)": 3040048914902.965,
+    "cudaMemcpy": 3016852952067.398,
+    "torch sum (read only)": 3033156897978.073
+   },
+   "bf16_flops_per_s": 746152043716318.0,
+   "bf16_by_method": {
+    "cuBLAS bf16 8192\u00b3": 746152043716318.0
+   },
+   "sm_clock_hz": 1980000000.0,
+   "ex2_per_s": 4181760000000.0,
+   "fp32_flops_per_s": 66908160000000.0
+  },
+  "showcase": [
+   "ledoit_wolf",
+   "ols_hc0",
+   "normalized_policy_loss",
+   "softmax",
+   "cross_entropy",
+   "softmax_entropy",
+   "attention",
+   "layernorm",
+   "layernorm_backward",
+   "papr",
+   "householder",
+   "sinkhorn_iteration",
+   "kurtosis",
+   "pearson",
+   "ess",
+   "contrastive",
+   "heat_capacity"
+  ]
+ },
+ "rows": [
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 32000
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 1.7721698322227273e-06,
+   "us": {
+    "proton": 2844.1828476190476,
+    "event": 2971.791828246344
+   },
+   "bound": "tensor",
+   "of_floor": 1.011917297531299,
+   "note": ""
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 32000
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 1.7721698322227273e-06,
+   "us": {
+    "proton": 5789.353314814815,
+    "event": 6146.816589214183
+   },
+   "bound": "tensor",
+   "of_floor": 0.49713286861981804,
+   "note": ""
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 32000
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.0009600258329317652,
+   "us": {
+    "proton": 3188.3639139784946,
+    "event": 3323.209616445726
+   },
+   "bound": "tensor",
+   "of_floor": 0.9026817196836943,
+   "note": ""
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 32000
+   },
+   "impl": "torch",
+   "status": "ok",
+   "rel_err": 0.0009599958442173666,
+   "us": {
+    "proton": 4797.2678,
+    "event": 4820.609609285991
+   },
+   "bound": "tensor",
+   "of_floor": 0.5999410374479286,
+   "note": ""
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 32000
+   },
+   "impl": "liger FLCE",
+   "status": "ok",
+   "rel_err": 0.0009600258329317652,
+   "us": {
+    "proton": 3268.805577777778,
+    "event": 3463.279289669461
+   },
+   "bound": "tensor",
+   "of_floor": 0.8804677281553516,
+   "note": "inputs do not require grad, so no gradient is formed"
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 32000
+   },
+   "impl": "CCE",
+   "status": "ok",
+   "rel_err": 0.0004975791784420334,
+   "us": {
+    "proton": 3905.8824027777778,
+    "event": 4156.531575653288
+   },
+   "bound": "tensor",
+   "of_floor": 0.7368572640079272,
+   "note": ""
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 32000
+   },
+   "impl": "cuBLAS + QuACK CE",
+   "status": "ok",
+   "rel_err": 0.0009599658555029681,
+   "us": {
+    "proton": 3054.1219595959597,
+    "event": 3080.0203578640717
+   },
+   "bound": "tensor",
+   "of_floor": 0.9423585105384241,
+   "note": "the logits are stored in bf16 between the two"
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 128256
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 1.7992631484531038e-06,
+   "us": {
+    "proton": 11381.765833333333,
+    "event": 11828.04830869039
+   },
+   "bound": "tensor",
+   "of_floor": 1.0134926403224584,
+   "note": ""
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 128256
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 1.7992631484531038e-06,
+   "us": {
+    "proton": 22453.703999999998,
+    "event": 23841.943899790447
+   },
+   "bound": "tensor",
+   "of_floor": 0.5137386644963765,
+   "note": ""
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 128256
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.0008042445667390237,
+   "us": {
+    "proton": 12541.068791666667,
+    "event": 13043.16348688943
+   },
+   "bound": "tensor",
+   "of_floor": 0.9198048505739788,
+   "note": ""
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 128256
+   },
+   "impl": "torch",
+   "status": "ok",
+   "rel_err": 0.0008042445667390237,
+   "us": {
+    "proton": 19402.84893333333,
+    "event": 19620.315806070965
+   },
+   "bound": "tensor",
+   "of_floor": 0.5945176373630211,
+   "note": ""
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 128256
+   },
+   "impl": "liger FLCE",
+   "status": "ok",
+   "rel_err": 0.0008042445667390237,
+   "us": {
+    "proton": 14390.262888888888,
+    "event": 15504.318131340875
+   },
+   "bound": "tensor",
+   "of_floor": 0.8016070307418561,
+   "note": "inputs do not require grad, so no gradient is formed"
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 128256
+   },
+   "impl": "CCE",
+   "status": "ok",
+   "rel_err": 0.0004655173618272561,
+   "us": {
+    "proton": 14914.629055555555,
+    "event": 15955.130683051215
+   },
+   "bound": "tensor",
+   "of_floor": 0.7734242576861237,
+   "note": ""
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 128256
+   },
+   "impl": "cuBLAS + QuACK CE",
+   "status": "ok",
+   "rel_err": 0.0008042445667390237,
+   "us": {
+    "proton": 12025.087208333334,
+    "event": 12326.505343119303
+   },
+   "bound": "tensor",
+   "of_floor": 0.9592725363324607,
+   "note": "the logits are stored in bf16 between the two"
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 256000
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 1.5837644124521962e-06,
+   "us": {
+    "proton": 22355.713999999996,
+    "event": 24448.637167612713
+   },
+   "bound": "tensor",
+   "of_floor": 1.0299211452955759,
+   "note": ""
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 256000
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 1.5837644124521962e-06,
+   "us": {
+    "proton": 45304.9775,
+    "event": 46627.3390452067
+   },
+   "bound": "tensor",
+   "of_floor": 0.5082139720029732,
+   "note": ""
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 256000
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.0008449206526190976,
+   "us": {
+    "proton": 25164.403944444446,
+    "event": 26315.53077697754
+   },
+   "bound": "tensor",
+   "of_floor": 0.9149679292071405,
+   "note": ""
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 256000
+   },
+   "impl": "torch",
+   "status": "ok",
+   "rel_err": 0.0008449206526190976,
+   "us": {
+    "proton": 38754.78200000001,
+    "event": 39789.53552246094
+   },
+   "bound": "tensor",
+   "of_floor": 0.5941104911074028,
+   "note": ""
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 256000
+   },
+   "impl": "liger FLCE",
+   "status": "ok",
+   "rel_err": 0.0008449206526190976,
+   "us": {
+    "proton": 29985.33388888889,
+    "event": 31270.446353488496
+   },
+   "bound": "tensor",
+   "of_floor": 0.767862804266193,
+   "note": "inputs do not require grad, so no gradient is formed"
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 256000
+   },
+   "impl": "CCE",
+   "status": "ok",
+   "rel_err": 0.0004648782947343525,
+   "us": {
+    "proton": 30039.738666666668,
+    "event": 30985.784742567273
+   },
+   "bound": "tensor",
+   "of_floor": 0.7664721328727604,
+   "note": ""
+  },
+  {
+   "op": "cross_entropy",
+   "regime": "gemm",
+   "cfg": {
+    "n": 8192,
+    "d": 4096,
+    "v": 256000
+   },
+   "impl": "cuBLAS + QuACK CE",
+   "status": "ok",
+   "rel_err": 0.0008450280085621788,
+   "us": {
+    "proton": 24264.495166666668,
+    "event": 25111.17940478855
+   },
+   "bound": "tensor",
+   "of_floor": 0.9489017763868581,
+   "note": "the logits are stored in bf16 between the two"
+  }
+ ]
+}

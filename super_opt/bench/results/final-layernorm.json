@@ -1,0 +1,609 @@
+{
+ "meta": {
+  "date": "2026-11-04 04:10:35",
+  "host": "cuda_related",
+  "device": "NVIDIA H800",
+  "torch": "2.13.0+cu130",
+  "cuda": "13.0",
+  "triton": "3.7.1",
+  "tvm_tirx": "0.1.0a4",
+  "roofline": {
+   "device": "NVIDIA H800",
+   "sms": 132,
+   "measured_at": "2026-10-29 04:54:07",
+   "hbm_bytes_per_s": 3040048914902.965,
+   "hbm_by_method": {
+    "tirx copy": 2915752573983.253,
+    "torch add(x, 0)": 3040048914902.965,
+    "cudaMemcpy": 3016852952067.398,
+    "torch sum (read only)": 3033156897978.073
+   },
+   "bf16_flops_per_s": 746152043716318.0,
+   "bf16_by_method": {
+    "cuBLAS bf16 8192\u00b3": 746152043716318.0
+   },
+   "sm_clock_hz": 1980000000.0,
+   "ex2_per_s": 4181760000000.0,
+   "fp32_flops_per_s": 66908160000000.0
+  },
+  "showcase": [
+   "ledoit_wolf",
+   "ols_hc0",
+   "normalized_policy_loss",
+   "softmax",
+   "cross_entropy",
+   "softmax_entropy",
+   "attention",
+   "layernorm",
+   "layernorm_backward",
+   "papr",
+   "householder",
+   "sinkhorn_iteration",
+   "kurtosis",
+   "pearson",
+   "ess",
+   "contrastive",
+   "heat_capacity"
+  ]
+ },
+ "rows": [
+  {
+   "op": "layernorm",
+   "regime": "short",
+   "cfg": {
+    "n": 32768,
+    "m": 4096
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 0.002694818513367234,
+   "us": {
+    "proton": 178.31226838410765,
+    "event": 182.24283163337938
+   },
+   "bound": "hbm",
+   "of_floor": 0.9903941760375002,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "short",
+   "cfg": {
+    "n": 32768,
+    "m": 4096
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 0.002694818513367234,
+   "us": {
+    "proton": 352.07966652638373,
+    "event": 358.2478539510207
+   },
+   "bound": "hbm",
+   "of_floor": 0.5015894097662187,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "short",
+   "cfg": {
+    "n": 32768,
+    "m": 4096
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 0.002694818513367234,
+   "us": {
+    "proton": 3395.241620689655,
+    "event": 3359.8830480685183
+   },
+   "bound": "hbm",
+   "of_floor": 0.052013803980108006,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "short",
+   "cfg": {
+    "n": 32768,
+    "m": 4096
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.002694818513367234,
+   "us": {
+    "proton": 190.8662387883091,
+    "event": 191.9620051299024
+   },
+   "bound": "hbm",
+   "of_floor": 0.9252523298241521,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "short",
+   "cfg": {
+    "n": 32768,
+    "m": 4096
+   },
+   "impl": "torch",
+   "status": "ok",
+   "rel_err": 0.002694818513367234,
+   "us": {
+    "proton": 241.30227720766842,
+    "event": 246.94159664518207
+   },
+   "bound": "hbm",
+   "of_floor": 0.7318597825401861,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "short",
+   "cfg": {
+    "n": 32768,
+    "m": 4096
+   },
+   "impl": "apex",
+   "status": "not installed (apex)",
+   "rel_err": null,
+   "us": {},
+   "bound": "",
+   "of_floor": null,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "short",
+   "cfg": {
+    "n": 32768,
+    "m": 4096
+   },
+   "impl": "liger",
+   "status": "ok",
+   "rel_err": 0.002694818513367234,
+   "us": {
+    "proton": 179.81302166177866,
+    "event": 183.78846714623248
+   },
+   "bound": "hbm",
+   "of_floor": 0.982128160083048,
+   "note": "takes weight and bias: given ones and zeros, two extra row reads"
+  },
+  {
+   "op": "layernorm",
+   "regime": "short",
+   "cfg": {
+    "n": 32768,
+    "m": 4096
+   },
+   "impl": "quack",
+   "status": "ok",
+   "rel_err": 0.002694818513367234,
+   "us": {
+    "proton": 178.3878450258388,
+    "event": 182.37266540580706
+   },
+   "bound": "hbm",
+   "of_floor": 0.989974580936701,
+   "note": "quack.rmsnorm._rmsnorm_fwd(is_layernorm=True), no affine"
+  },
+  {
+   "op": "layernorm",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 8192
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 0.002682799597402259,
+   "us": {
+    "proton": 178.4431571115776,
+    "event": 182.31668981772643
+   },
+   "bound": "hbm",
+   "of_floor": 0.9896677181811527,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 8192
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 0.002682799597402259,
+   "us": {
+    "proton": 351.98487379760917,
+    "event": 358.8672304442532
+   },
+   "bound": "hbm",
+   "of_floor": 0.5017244923575902,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 8192
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 0.002682799597402259,
+   "us": {
+    "proton": 3378.6589310344825,
+    "event": 3341.476780244674
+   },
+   "bound": "hbm",
+   "of_floor": 0.052269091295813176,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 8192
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.002682799597402259,
+   "us": {
+    "proton": 176.81413777972807,
+    "event": 180.72716335379926
+   },
+   "bound": "hbm",
+   "of_floor": 0.9987856985941947,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 8192
+   },
+   "impl": "torch",
+   "status": "ok",
+   "rel_err": 0.002682799597402259,
+   "us": {
+    "proton": 276.9767225010884,
+    "event": 281.0355895604626
+   },
+   "bound": "hbm",
+   "of_floor": 0.6375966562423381,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 8192
+   },
+   "impl": "apex",
+   "status": "not installed (apex)",
+   "rel_err": null,
+   "us": {},
+   "bound": "",
+   "of_floor": null,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 8192
+   },
+   "impl": "liger",
+   "status": "ok",
+   "rel_err": 0.002682799597402259,
+   "us": {
+    "proton": 203.8900500834653,
+    "event": 203.19438766923636
+   },
+   "bound": "hbm",
+   "of_floor": 0.8661503199953231,
+   "note": "takes weight and bias: given ones and zeros, two extra row reads"
+  },
+  {
+   "op": "layernorm",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 8192
+   },
+   "impl": "quack",
+   "status": "ok",
+   "rel_err": 0.002682799597402259,
+   "us": {
+    "proton": 178.37818961731816,
+    "event": 182.3277235615105
+   },
+   "bound": "hbm",
+   "of_floor": 0.9900281671347924,
+   "note": "quack.rmsnorm._rmsnorm_fwd(is_layernorm=True), no affine"
+  },
+  {
+   "op": "layernorm",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 65536
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 0.002678764914624349,
+   "us": {
+    "proton": 357.76581126331814,
+    "event": 360.86430835224525
+   },
+   "bound": "hbm",
+   "of_floor": 0.9872348143052578,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 65536
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 0.002678764914624349,
+   "us": {
+    "proton": 702.1300889937932,
+    "event": 709.8859401537286
+   },
+   "bound": "hbm",
+   "of_floor": 0.5030390660988097,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 65536
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 0.002678640713230385,
+   "us": {
+    "proton": 6655.771733333333,
+    "event": 6554.4327312045625
+   },
+   "bound": "hbm",
+   "of_floor": 0.053066553120869026,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 65536
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.002678640713230385,
+   "us": {
+    "proton": 588.5175348571148,
+    "event": 592.782957409291
+   },
+   "bound": "hbm",
+   "of_floor": 0.600150111641218,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 65536
+   },
+   "impl": "torch",
+   "status": "ok",
+   "rel_err": 0.002678640713230385,
+   "us": {
+    "proton": 573.478558711773,
+    "event": 577.5700203064845
+   },
+   "bound": "hbm",
+   "of_floor": 0.6158885260518129,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 65536
+   },
+   "impl": "apex",
+   "status": "not installed (apex)",
+   "rel_err": null,
+   "us": {},
+   "bound": "",
+   "of_floor": null,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 65536
+   },
+   "impl": "liger",
+   "status": "ok",
+   "rel_err": 0.002678640713230385,
+   "us": {
+    "proton": 2730.320362464986,
+    "event": 2735.7964129675
+   },
+   "bound": "hbm",
+   "of_floor": 0.12936169289981675,
+   "note": "takes weight and bias: given ones and zeros, two extra row reads"
+  },
+  {
+   "op": "layernorm",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 65536
+   },
+   "impl": "quack",
+   "status": "ok",
+   "rel_err": 0.002678764914624349,
+   "us": {
+    "proton": 364.2710598644975,
+    "event": 365.54375037994623
+   },
+   "bound": "hbm",
+   "of_floor": 0.9696045147772532,
+   "note": "quack.rmsnorm._rmsnorm_fwd(is_layernorm=True), no affine"
+  },
+  {
+   "op": "layernorm",
+   "regime": "split",
+   "cfg": {
+    "n": 4,
+    "m": 16777216
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 0.00032870408783703574,
+   "us": {
+    "proton": 111.42765135134266,
+    "event": 115.0059940658547
+   },
+   "bound": "hbm",
+   "of_floor": 0.7924398925308945,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "split",
+   "cfg": {
+    "n": 4,
+    "m": 16777216
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 0.00032870408783703574,
+   "us": {
+    "proton": 188.2070041486794,
+    "event": 194.58504736876066
+   },
+   "bound": "hbm",
+   "of_floor": 0.46916275226437976,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "split",
+   "cfg": {
+    "n": 4,
+    "m": 16777216
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 0.00032870408783703574,
+   "us": {
+    "proton": 1695.729,
+    "event": 1688.306858851796
+   },
+   "bound": "hbm",
+   "of_floor": 0.052071832269087785,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "split",
+   "cfg": {
+    "n": 4,
+    "m": 16777216
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 0.00032870408783703574,
+   "us": {
+    "proton": 187.50296877856908,
+    "event": 196.6821726445143
+   },
+   "bound": "hbm",
+   "of_floor": 0.4709243626222536,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "split",
+   "cfg": {
+    "n": 4,
+    "m": 16777216
+   },
+   "impl": "torch",
+   "status": "ok",
+   "rel_err": 0.00032870408783703574,
+   "us": {
+    "proton": 31269.651222222223,
+    "event": 31266.12260606554
+   },
+   "bound": "hbm",
+   "of_floor": 0.0028238151885453876,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "split",
+   "cfg": {
+    "n": 4,
+    "m": 16777216
+   },
+   "impl": "apex",
+   "status": "not installed (apex)",
+   "rel_err": null,
+   "us": {},
+   "bound": "",
+   "of_floor": null,
+   "note": ""
+  },
+  {
+   "op": "layernorm",
+   "regime": "split",
+   "cfg": {
+    "n": 4,
+    "m": 16777216
+   },
+   "impl": "liger",
+   "status": "ValueError: Liger LayerNorm takes rows of at most 65536 elements",
+   "rel_err": null,
+   "us": {},
+   "bound": "",
+   "of_floor": null,
+   "note": "takes weight and bias: given ones and zeros, two extra row reads"
+  },
+  {
+   "op": "layernorm",
+   "regime": "split",
+   "cfg": {
+    "n": 4,
+    "m": 16777216
+   },
+   "impl": "quack",
+   "status": "RuntimeError: CUDA Error Code: 1",
+   "rel_err": null,
+   "us": {},
+   "bound": "",
+   "of_floor": null,
+   "note": "quack.rmsnorm._rmsnorm_fwd(is_layernorm=True), no affine"
+  }
+ ]
+}

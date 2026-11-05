@@ -1,0 +1,339 @@
+{
+ "meta": {
+  "date": "2026-11-04 04:12:51",
+  "host": "cuda_related",
+  "device": "NVIDIA H800",
+  "torch": "2.13.0+cu130",
+  "cuda": "13.0",
+  "triton": "3.7.1",
+  "tvm_tirx": "0.1.0a4",
+  "roofline": {
+   "device": "NVIDIA H800",
+   "sms": 132,
+   "measured_at": "2026-10-29 04:54:07",
+   "hbm_bytes_per_s": 3040048914902.965,
+   "hbm_by_method": {
+    "tirx copy": 2915752573983.253,
+    "torch add(x, 0)": 3040048914902.965,
+    "cudaMemcpy": 3016852952067.398,
+    "torch sum (read only)": 3033156897978.073
+   },
+   "bf16_flops_per_s": 746152043716318.0,
+   "bf16_by_method": {
+    "cuBLAS bf16 8192\u00b3": 746152043716318.0
+   },
+   "sm_clock_hz": 1980000000.0,
+   "ex2_per_s": 4181760000000.0,
+   "fp32_flops_per_s": 66908160000000.0
+  },
+  "showcase": [
+   "ledoit_wolf",
+   "ols_hc0",
+   "normalized_policy_loss",
+   "softmax",
+   "cross_entropy",
+   "softmax_entropy",
+   "attention",
+   "layernorm",
+   "layernorm_backward",
+   "papr",
+   "householder",
+   "sinkhorn_iteration",
+   "kurtosis",
+   "pearson",
+   "ess",
+   "contrastive",
+   "heat_capacity"
+  ]
+ },
+ "rows": [
+  {
+   "op": "kurtosis",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 4096
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 3.8363094525978965e-07,
+   "us": {
+    "proton": 96.39181705511237,
+    "event": 100.20984517082951
+   },
+   "bound": "hbm",
+   "of_floor": 0.9162735625078695,
+   "note": ""
+  },
+  {
+   "op": "kurtosis",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 4096
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 5.672118100981979e-07,
+   "us": {
+    "proton": 268.8189033457249,
+    "event": 277.0370409566717
+   },
+   "bound": "hbm",
+   "of_floor": 0.32855306122615063,
+   "note": ""
+  },
+  {
+   "op": "kurtosis",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 4096
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 4.888616077377314e-07,
+   "us": {
+    "proton": 1686.4981488095239,
+    "event": 1681.1622821149372
+   },
+   "bound": "hbm",
+   "of_floor": 0.05236962381016511,
+   "note": ""
+  },
+  {
+   "op": "kurtosis",
+   "regime": "short",
+   "cfg": {
+    "n": 16384,
+    "m": 4096
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 5.693075219277795e-07,
+   "us": {
+    "proton": 97.06064544637552,
+    "event": 100.01483827579315
+   },
+   "bound": "hbm",
+   "of_floor": 0.9099596773080469,
+   "note": ""
+  },
+  {
+   "op": "kurtosis",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 65536
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 3.7044079918784397e-07,
+   "us": {
+    "proton": 346.8890081037091,
+    "event": 350.7621592943735
+   },
+   "bound": "hbm",
+   "of_floor": 1.0182053780403484,
+   "note": ""
+  },
+  {
+   "op": "kurtosis",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 65536
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 5.181493110911356e-07,
+   "us": {
+    "proton": 1018.5173333333333,
+    "event": 1025.4661352213525
+   },
+   "bound": "hbm",
+   "of_floor": 0.34678276164268707,
+   "note": ""
+  },
+  {
+   "op": "kurtosis",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 65536
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 5.039419569879216e-07,
+   "us": {
+    "proton": 6480.444044444444,
+    "event": 6384.213341606988
+   },
+   "bound": "hbm",
+   "of_floor": 0.05450309441944392,
+   "note": ""
+  },
+  {
+   "op": "kurtosis",
+   "regime": "long",
+   "cfg": {
+    "n": 4096,
+    "m": 65536
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 5.492478764318048e-07,
+   "us": {
+    "proton": 938.9644739105829,
+    "event": 942.6148896997663
+   },
+   "bound": "hbm",
+   "of_floor": 0.376163596651596,
+   "note": ""
+  },
+  {
+   "op": "kurtosis",
+   "regime": "split",
+   "cfg": {
+    "n": 16,
+    "m": 4194304
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 2.124607964270715e-07,
+   "us": {
+    "proton": 98.74465536685261,
+    "event": 102.68310964301976
+   },
+   "bound": "hbm",
+   "of_floor": 0.8942229509645132,
+   "note": ""
+  },
+  {
+   "op": "kurtosis",
+   "regime": "split",
+   "cfg": {
+    "n": 16,
+    "m": 4194304
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 2.2757332583372183e-07,
+   "us": {
+    "proton": 271.6756401162081,
+    "event": 278.26982167495896
+   },
+   "bound": "hbm",
+   "of_floor": 0.32501897143354835,
+   "note": ""
+  },
+  {
+   "op": "kurtosis",
+   "regime": "split",
+   "cfg": {
+    "n": 16,
+    "m": 4194304
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 2.2757332583372183e-07,
+   "us": {
+    "proton": 1660.7754633458646,
+    "event": 1656.8007524947673
+   },
+   "bound": "hbm",
+   "of_floor": 0.053167775574085516,
+   "note": ""
+  },
+  {
+   "op": "kurtosis",
+   "regime": "split",
+   "cfg": {
+    "n": 16,
+    "m": 4194304
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 2.9803722709864566e-07,
+   "us": {
+    "proton": 279.8929828042328,
+    "event": 290.0340386408301
+   },
+   "bound": "hbm",
+   "of_floor": 0.315476780551804,
+   "note": ""
+  },
+  {
+   "op": "kurtosis",
+   "regime": "split",
+   "cfg": {
+    "n": 1,
+    "m": 67108864
+   },
+   "impl": "TIRx-fused",
+   "status": "ok",
+   "rel_err": 5.570490728057484e-08,
+   "us": {
+    "proton": 98.75906736866885,
+    "event": 102.65280861322655
+   },
+   "bound": "hbm",
+   "of_floor": 0.8940922563390793,
+   "note": ""
+  },
+  {
+   "op": "kurtosis",
+   "regime": "split",
+   "cfg": {
+    "n": 1,
+    "m": 67108864
+   },
+   "impl": "TIRx-unfused",
+   "status": "ok",
+   "rel_err": 2.3785929747948713e-08,
+   "us": {
+    "proton": 272.03568312916985,
+    "event": 278.43254722663295
+   },
+   "bound": "hbm",
+   "of_floor": 0.3245887317498315,
+   "note": ""
+  },
+  {
+   "op": "kurtosis",
+   "regime": "split",
+   "cfg": {
+    "n": 1,
+    "m": 67108864
+   },
+   "impl": "torch-unfused",
+   "status": "ok",
+   "rel_err": 5.570490728057484e-08,
+   "us": {
+    "proton": 1636.4792164750959,
+    "event": 1635.701513153383
+   },
+   "bound": "hbm",
+   "of_floor": 0.05395712728194005,
+   "note": ""
+  },
+  {
+   "op": "kurtosis",
+   "regime": "split",
+   "cfg": {
+    "n": 1,
+    "m": 67108864
+   },
+   "impl": "torch.compile",
+   "status": "ok",
+   "rel_err": 2.3785929747948713e-08,
+   "us": {
+    "proton": 280.4685200513539,
+    "event": 290.6972899273278
+   },
+   "bound": "hbm",
+   "of_floor": 0.31482933400664204,
+   "note": ""
+  }
+ ]
+}

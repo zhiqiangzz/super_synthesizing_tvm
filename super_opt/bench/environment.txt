@@ -1,0 +1,111 @@
+# The environment of super_opt/bench, written by 'reproduce.sh env' on 2026-11-05 09:28:47 PST.
+
+## repository (HEAD when this was written; tvm and tvm_tirx are built from it)
+d2b0653238e35d4698fdb2af27200e2f66270852 [FEAT][TE] Validate fusion accuracy with MPFR and Hypothesis
+ 336af73223991bd5586efe528bd59f888c0efc46 3rdparty/tvm-tirx (336af732)
+
+## GPU
+NVIDIA H800, 580.167.08, 81559 MiB, 1980 MHz
+
+## toolchain
+Python 3.12.14
+Cuda compilation tools, release 13.0, V13.0.88
+Build cuda_13.0.r13.0/compiler.36424714_0
+
+## python distributions importable from this python (name==version [source])
+apache-tvm==0.27.dev456 [built locally]
+apache-tvm-ffi==0.1.15.post1
+apache-tvm-tirx==0.1.0a4 [built locally]
+apache-tvm_ffi_orcjit==0.1.3
+cloudpickle==3.1.2
+coverage==7.15.4
+cuda-bindings==13.3.1
+cuda-pathfinder==1.7.0
+cuda-toolkit==13.0.3.0
+cut-cross-entropy==25.1.1
+cvc5==1.4.2
+einops==0.8.2
+execnet==2.1.2
+filelock==3.32.4
+flash-sinkhorn==0.4.1 [https://github.com/ot-triton-lab/flash-sinkhorn@bb2bf5aeaf2eacbbf291b767e14d97a6702dc9e1]
+flash_attn==2.8.3.post1 [built locally]
+flash_attn_3==3.0.0b1 [built locally]
+flatbuffers==25.12.19
+fsspec==2026.7.0
+geomloss==0.3.1
+gmpy2==2.3.2
+hypothesis==6.170.14
+inf-cl==1.2.1
+iniconfig==2.3.0
+Jinja2==3.1.6
+keopscore==2.3
+liger_kernel==0.8.5
+markdown-it-py==4.2.0
+MarkupSafe==3.0.3
+mdurl==0.1.2
+ml_dtypes==0.6.0
+mlc-z3-static==4.16.0
+mpmath==1.3.0
+networkx==3.6.1
+ninja==1.13.0
+numpy==2.2.6
+nvidia-cublas==13.1.1.3
+nvidia-cuda-cupti==13.0.85
+nvidia-cuda-nvrtc==13.0.88
+nvidia-cuda-runtime==13.0.96
+nvidia-cudnn-cu13==9.20.0.48
+nvidia-cudnn-frontend==1.32.0
+nvidia-cufft==12.0.0.61
+nvidia-cufile==1.15.1.6
+nvidia-curand==10.4.0.35
+nvidia-cusolver==12.0.4.66
+nvidia-cusparse==12.6.3.3
+nvidia-cusparselt-cu13==0.8.1
+nvidia-cutlass-dsl==4.8.1
+nvidia-cutlass-dsl-libs-base==4.8.1
+nvidia-cutlass-dsl-libs-core==4.8.1
+nvidia-cutlass-dsl-libs-cu12==4.8.1
+nvidia-cutlass-dsl-libs-cu13==4.8.1
+nvidia-nccl-cu13==2.29.7
+nvidia-nvjitlink==13.3.33
+nvidia-nvshmem-cu13==3.4.5
+nvidia-nvtx==13.0.85
+onnx==1.22.0
+onnxruntime==1.29.0
+packaging==26.3
+pathspec==1.1.1
+pluggy==1.6.0
+POT==0.9.7.post1
+protobuf==7.36.0
+psutil==7.2.2
+py-cpuinfo2==10.1.1
+pybind11==3.1.0
+Pygments==2.21.0
+pykeops==2.3
+pyproject-metadata==0.12.1
+pytest==9.1.1
+pytest-benchmark==5.3.0
+pytest-cov==7.1.0
+pytest-mock==3.15.1
+pytest-repeat==0.9.4
+pytest-rerunfailures==16.6
+pytest-timeout==2.4.0
+pytest-xdist==3.8.0
+quack-kernels==0.6.5
+rich==15.0.0
+ruff==0.16.4
+scikit_build_core==1.0.3
+scipy==1.14.1
+setuptools==84.0.0
+setuptools-scm==10.2.1
+sortedcontainers==2.4.0
+sympy==1.14.0
+torch==2.13.0+cu130
+torch_c_dlpack_ext==0.1.5
+tornado==6.5.8
+triton==3.7.1
+typing_extensions==4.16.0
+vcs-versioning==2.3.1
+wheel==0.48.0
+xgboost==3.4.1
+z3-solver==5.3.3.0
