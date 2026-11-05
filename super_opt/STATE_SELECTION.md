@@ -416,6 +416,7 @@ Selection follows this order:
 
 ```text
 preserve source reductions (repair only a demonstrated source-domain defect)
+  -> collect B from the preserved/repaired base state definitions
   -> try the originals alone
   -> extract rebase coefficients/pieces, with their B definitions and source structure
   -> filter features with unproved domains or dependencies outside B
@@ -444,12 +445,16 @@ some nonlinear extrema constraints such as PAPR on the tested cvc5 version.
 Verification targets and candidate features are separate:
 
 ```text
-B = context-free verification coordinates, all of which must be recovered
+B = context-free reduction atoms of the base states, all of which must be recovered
 E_preferred = proved, defined rebase coefficients and additive pieces
 E_mixed = E_preferred followed by B, with duplicate expressions removed
 
 C_j = a signed sum of at most max_terms feature terminals (default: 3)
 ```
+
+Final outputs must be reconstructible from the selected tuple. This is checked
+during reducer derivation and code generation; output definitions do not expand B
+or supply extra candidate features.
 
 The finite native grammar starts with feature terminals and adds/subtracts one
 terminal per level. Repeated terminals permit integer coefficients. This is

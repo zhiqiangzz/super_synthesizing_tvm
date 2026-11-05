@@ -39,11 +39,13 @@ the manifest records such restrictions. No code imports or executes paper script
 ## Actual reference states
 
 For variance and softmax, discover the unique chain and run `_Select` once.
-Collect `atoms_in(state, R)` from its repaired base and required output definitions.
+Collect `atoms_in(state, R)` from its repaired base state definitions.
 Derive these atoms with `preserve=True`, independently build B and the selected
 maintained representation with `build_chain` and separate `Rewriter` instances.
 Save the complete tuples, merge proofs and independently checked reconstruction
 equalities. These proofs establish real semantics, not floating-point equivalence.
+Output reconstruction is checked against the resulting state tuple; it does not
+add verification coordinates to B.
 
 - Variance B: count, sum(x), sum(x*x); reconstruct ss = sum(x*x) - sum(x)^2/m,
   then the original var = ss/m. The count remains in the tuple even though final

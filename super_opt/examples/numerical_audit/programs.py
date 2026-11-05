@@ -87,7 +87,7 @@ class Program:
 
 
 def reference_programs(name):
-    """Run selection once; derive B from its repaired base and required definitions."""
+    """Run selection once; derive B from its repaired base state definitions."""
     inputs, outputs = OPERATORS[name].unfused()
     chains, skipped = discover_chains(outputs)
     if len(chains) != 1 or skipped:
@@ -102,8 +102,6 @@ def reference_programs(name):
     if isinstance(base, str):
         raise ValueError(base)
     targets = {atom for candidate in base for atom in atoms_in(candidate.state, world.R)}
-    for member in chain.required:
-        targets.update(atoms_in(world.by_pid[member.pid].state, world.R))
     required = tuple(
         subst_domain(world.by_pid[m.pid].state, {world.R: world.full}) for m in chain.required
     )

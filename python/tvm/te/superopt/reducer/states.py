@@ -533,8 +533,6 @@ class _Select:
         """
         w = self.w
         targets = {a for c in states for a in atoms_in(c.state, w.R)}
-        for m in w.chain.required:
-            targets.update(atoms_in(w.by_pid[m.pid].state, w.R))
 
         def recover(trial):
             trace: dict = {}
