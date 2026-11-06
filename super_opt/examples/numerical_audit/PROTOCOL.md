@@ -142,3 +142,38 @@ gate's Performer g3 offset family exposed this risk. The unmodified AccuracyRepo
 float fields are supplemented by `gate_source_diagnostics`, including MPFR strings.
 ULPs are diagnostics, not universal acceptance limits. Unknown or unsupported
 references are reported as reference_failed, with no invented numerical result.
+
+
+## State synthesis and execution-retry extension
+
+The additional entry point is:
+
+```bash
+python super_opt/examples/audit_state_selection.py --output-dir reports/evaluation/state_selection
+```
+
+Its default scope is the 17 showcase operators plus registry normalised_projection
+and scaled_norm, and prior stable_l2, performer_g3 and fp8_quant_gemm. Production,
+four controlled synthesis modes and retry each have one warmup and five measured
+calls; fixed-I join printing uses one baseline selection with a common committed
+prefix and gate per chain. `--modes` and `--operators` permit explicit subsets;
+legacy `--json` without an output directory remains supported.
+
+`chains.jsonl`, `attempts.jsonl`, `search.jsonl` and `runs.jsonl` retain all outcomes,
+including unknown/limits, numerical refusal, duplicates and identical emissions.
+`summary.csv` reports each run's coverage/counts/timing; `medians.json` retains the
+five-run denominator. Fixed-join numeric rows use `measurements.jsonl` and shared
+content-addressed inputs. All numerical reports use the unchanged gate threshold.
+Private experiment controls inject the strict compiler and observe exclusive
+phase times. No monkeypatch changes production behavior during collection.
+
+Run the independent 36-case Householder cancellation supplement with the numeric
+entry point's `--sections householder`, or add `householder` to the full section
+list. Lengths are 2,16,256, signs -1,+1 and powers 4,8,10,12,16,20;
+X[0]=1, X[-1]=2**(-power), E[0]=sign, other entries zero (one row, float32).
+This does not change the fixed variance/softmax scans and is not a QR benchmark.
+
+Manifests record the baseline, actual development revision and paper checkout
+revision. `paper_import_commit` remains null until the paper agent imports the
+results; observing its checkout does not establish import. Rejected programs,
+failed input families and absence of benefit remain part of the evidence.

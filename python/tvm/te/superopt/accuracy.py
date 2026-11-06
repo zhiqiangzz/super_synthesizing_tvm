@@ -951,11 +951,16 @@ def _run(lib, arrays, out_shapes, dtypes) -> list[np.ndarray]:
 class AccuracyGate:
     """Judges candidate programs against ``outputs`` over ``inputs``."""
 
-    def __init__(self, outputs, inputs, config: AccuracyConfig | None = None) -> None:
+    def __init__(
+        self, outputs, inputs, config: AccuracyConfig | None = None, *, compiler=None
+    ) -> None:
+        self.compiler = compiler or _compile
         self.config = config = config or AccuracyConfig()
         outputs = _tensors(outputs)
         self.inputs = list(inputs)
         self.dtypes = [str(o.dtype) for o in outputs]
+        self.output_names = [o.op.name for o in outputs]
+        self.last_checks = []
         # a static property is required of candidates only if the original has it
         self.required = [k for k, ops in static_issues(outputs).items() if not ops]
         self.var_values = _var_values(outputs, inputs, config)
@@ -974,7 +979,7 @@ class AccuracyGate:
         positive = positive_inputs(outputs, self.inputs, config.positive)
         rng = np.random.default_rng(config.seed)
         signs = np.random.default_rng(config.seed + 1)  # perturbations: data stays fixed
-        lib = _compile(self.inputs, outputs)
+        lib = self.compiler(self.inputs, outputs)
         families = [(name, shift, scale, False) for name, shift, scale in config.families]
         if config.magnitudes:
             info = np.finfo(self.dtypes[0])
@@ -1044,6 +1049,7 @@ class AccuracyGate:
         )
 
     def check(self, candidates) -> AccuracyReport:
+        self.last_checks = []
         candidates = _tensors(candidates)
         found = static_issues(candidates)
         bad = tuple((k, op) for k in self.required for op in found[k])
@@ -1051,7 +1057,7 @@ class AccuracyGate:
             return AccuracyReport(False, bad, ())
         if not self.cases:  # nothing to compare on: the original itself is not finite
             return AccuracyReport(False, (), (), "no input family with a finite reference")
-        lib = _compile(self.inputs, candidates)
+        lib = self.compiler(self.inputs, candidates)
         fams = []
         for (
             name,
@@ -1068,7 +1074,7 @@ class AccuracyGate:
             metrics = tuple(
                 numeric.errors(g, w, d, bits) for g, w, d in zip(got, want, self.dtypes)
             )
-            ok = all(
+            output_checks = tuple(
                 numeric.regression_check(
                     g,
                     o,
@@ -1081,6 +1087,16 @@ class AccuracyGate:
                     precision=bits,
                 )
                 for g, o, w, s, d in zip(got, orig, want, sensitivity, self.dtypes)
+            )
+            ok = all(output_checks)
+            self.last_checks.append(
+                {
+                    "family": name,
+                    "outputs": [
+                        {"output_name": out, "dtype": dtype, "ok": passed}
+                        for out, dtype, passed in zip(self.output_names, self.dtypes, output_checks)
+                    ],
+                }
             )
             fams.append(
                 FamilyError(

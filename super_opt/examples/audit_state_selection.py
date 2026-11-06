@@ -23,6 +23,7 @@ Run with the worktree's TVM PYTHONPATH:
 import argparse
 import dataclasses
 import json
+from pathlib import Path
 
 from chain_ops import showcase
 
@@ -70,7 +71,36 @@ def audit():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument(
+        "--modes",
+        nargs="+",
+        choices=[
+            "production",
+            "common",
+            "reference_only",
+            "enumeration",
+            "single_term",
+            "fixed_join",
+            "retry",
+        ],
+        default=[
+            "production",
+            "common",
+            "reference_only",
+            "enumeration",
+            "single_term",
+            "fixed_join",
+            "retry",
+        ],
+    )
+    parser.add_argument("--operators", nargs="*")
+    parser.add_argument("--pytest-log", type=Path)
     args = parser.parse_args()
+    if args.output_dir is not None:
+        from numerical_audit.selection import collect
+
+        return collect(args)
     rows = audit()
     if args.json:
         print(json.dumps(rows, indent=2, ensure_ascii=False))

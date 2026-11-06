@@ -691,7 +691,7 @@ def _factor_mean_corrections(expr, chosen):
         return expr
 
 
-def printed_merges(printer: Printer, merge) -> tuple[ir.SymExpr, ...] | None:
+def printed_merges(printer: Printer, merge, *, diagnostics=None) -> tuple[ir.SymExpr, ...] | None:
     """The merge of every chosen state as it should be evaluated, if all of them
     print and are proven equal to the canonical ``merge``.
 
@@ -702,13 +702,27 @@ def printed_merges(printer: Printer, merge) -> tuple[ir.SymExpr, ...] | None:
     """
     # A joint coordinate may have no special rebase spelling. Keep its derived
     # merge without discarding stable spellings for the other tuple slots.
-    prints = [m if (p := printer.print(c)) is None else p for c, m in zip(printer.chosen, merge)]
+    prints = []
+    for c, m in zip(printer.chosen, merge):
+        p = printer.print(c)
+        prints.append(m if p is None else p)
+        if diagnostics is not None:
+            diagnostics.append(
+                {
+                    "state": c.name,
+                    "specialized_proposed": p is not None,
+                    "proof": "not_attempted",
+                    "used": False,
+                }
+            )
     expanded = _expand(prints)
     closed = closed_merges(merge)
     if expanded is None or closed is None:
         return None
-    for p, e, m, c in zip(prints, expanded, merge, closed):
+    for k, (p, e, m, c) in enumerate(zip(prints, expanded, merge, closed)):
+        proof_method = "symbolic_sympy"
         if not (proves(p, m) if reads_merged(m) else proves(e, c)):
+            proof_method = "reachable_smt"
             # Guarded recovery is an identity on reachable states, not on
             # arbitrary independent scalar slots (q=0 implies vv=0).
             from . import smt
@@ -719,7 +733,14 @@ def printed_merges(printer: Printer, merge) -> tuple[ir.SymExpr, ...] | None:
                 for k, s in enumerate(printer.chosen)
             }
             if not smt.equal(ir.raw_subst(e, env), ir.raw_subst(c, env)):
+                if diagnostics is not None:
+                    diagnostics[k]["proof"] = "unknown"
                 return None
+        if diagnostics is not None:
+            diagnostics[k].update(proof="passed", method=proof_method)
+    if diagnostics is not None:
+        for entry in diagnostics:
+            entry["used"] = entry["specialized_proposed"]
     return tuple(_factor_mean_corrections(e, printer.chosen) for e in expanded)
 
 

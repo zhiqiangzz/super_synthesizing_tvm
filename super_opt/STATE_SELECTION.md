@@ -495,8 +495,9 @@ that preserving the original state is impossible. Missing solvers are reported.
 D remains constructed by the existing algebraic/SymPy inverse machinery and
 verified independently with symbolic/SymPy/Z3 checks. This is not unrestricted
 joint SyGuS synthesis of C and D. The numerical gate remains outside synthesis:
-a numerical rejection refuses the generated reducer, without claiming universal
-floating-point correctness or automatically resuming the search.
+a numerical rejection refuses the generated reducer. By default it stops the
+chain's fusion. The optional execution-retry extension below resumes the same
+bounded proposal stream; neither mode claims universal floating-point correctness.
 
 The `parts()` candidate source and repair-time extraction of inner reductions
 remain removed. The non-core `max_j ((x_j - mean) / sigma)^3` fusion case is still
@@ -622,3 +623,52 @@ across examples; expansive property search is not run inside each synthesis.
 This validates the tested LLVM execution. It does not certify all input lengths,
 all merge trees, or GPU lowering/fast-math behavior. Formal roundoff analysis
 with tools such as FPTaylor/Daisy is a separate extension, not implemented here.
+
+
+## Execution rejection feedback and controlled experiments
+
+`fuse(..., retry_rejected_candidates=False)` preserves the default stopping point.
+When enabled, `select` calls `accept_candidate(Solution)` after `finish` has
+proved recovery, domains and the reducer, before committing the candidate.
+This covers the original tuple, whole closure, and native SyGuS proposals.
+A refusal continues via `checkSynthNext` or the existing enumeration stream;
+it does not restart selection or change the unknown fallback policy.
+
+Each execution attempt forks the committed chain prefix, then checks static
+conditions, TE generation, small-input agreement and the numerical gate.
+Only acceptance commits the fork. One gate per `fuse` call supplies unchanged
+quantized inputs, MPFR references, source results and sensitivities to every
+candidate. Repeated emitted programs reuse their verdict; fingerprints retain
+floating-point expression order and include the entire rewritten program,
+compiler configuration, dtype and gate policy. Real algebraic equivalence is
+not used to identify floating-point programs.
+
+Filter mode retries failed acceptance; report mode accepts an algebraically
+proved, rebuilt candidate even if its numerical report fails; off mode skips
+the gate but retains reconstruction checks. The search keeps its original
+256-proposal/20-second budget including callback execution. Source and whole
+closure attempts precede that clock. An in-flight check may finish late.
+This is empirical acceptance feedback, not a new CEGIS learner or float proof.
+
+`ChainReport.attempts` retains all execution verdicts and numerical reports.
+`Selection.checks` records actual independent checker calls, recovery formulas,
+stage statuses and time; `SearchAttempt.checker_calls` must not be confused
+with proposed tuple counts. Unknown inverse/domain results do not prove that
+no valid representation exists. `Fused.fused` still means *any* chain fused;
+the experiment separately counts complete and partial fusion against frozen
+target IDs, including missing/skipped targets in the denominator.
+
+`audit_state_selection.py --output-dir ...` uses explicit private `Experiment`
+controls, not global behavioral patches. It records the production baseline,
+then four controlled mixed-grammar modes over the same repaired IR/reference:
+common (correction and B terminals), reference-only (B terminals), native
+enumeration, and single-term semantic selection. They skip the whole-closure
+shortcut and share budgets, width order and independent checker. Controlled
+semantic unknown does not silently switch to enumeration. Source-domain
+repair and its use of `pieces()` remain unchanged.
+
+The fixed-I comparison clears only `spec.merge_print`. It keeps the selected
+states, leaves, `Printer.kept` algebraic merge and epilogue printing, checks the
+changed printed domain and runs the usual acceptance stages. Both variants
+use the identical committed prefix. Retry is disabled and a refusal never
+causes a new state selection. Identical emission and worse results are kept.

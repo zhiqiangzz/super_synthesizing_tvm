@@ -39,7 +39,9 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable
 from fractions import Fraction
+from time import monotonic
 
+from ..diagnostics import candidate_record, solution_record
 from ..symbolic import ir, sympy_bridge
 from ..symbolic.canonicalize import (
     NONNEG,
@@ -85,6 +87,10 @@ class Solution:
 
     spec: ReducerSpec
     states: tuple[Candidate, ...]
+    proposal_id: str = ""
+    source: str = ""
+    checker_id: int = 0
+    printing: tuple[dict, ...] = ()
 
     @property
     def auxiliaries(self) -> tuple[Candidate, ...]:
@@ -118,6 +124,8 @@ class Selection:
     failure: str = ""
     route: str = ""
     search: tuple[SearchAttempt, ...] = ()
+    checks: tuple[dict, ...] = ()
+    diagnostics: dict = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -126,6 +134,8 @@ class SearchAttempt:
     status: str
     candidates: int = 0
     detail: str = ""
+    checker_calls: int = 0
+    seconds: float = 0.0
 
 
 def members_of(chain: Chain, count: bool | None = None) -> list[Candidate]:
@@ -458,8 +468,22 @@ class _Fault:
 
 
 class _Select:
-    def __init__(self, world: _Chain, max_states: int | None = None) -> None:
+    def __init__(
+        self,
+        world: _Chain,
+        max_states: int | None = None,
+        *,
+        accept_candidate=None,
+        experiment=None,
+        chain_id="",
+    ) -> None:
         self.w = world
+        self.accept_candidate = accept_candidate
+        self.experiment = experiment
+        self.chain_id = chain_id
+        self.checks = []
+        self.diagnostics = {}
+        self.frozen_base = None
         self.steps: list[Step] = []
         self.round: list[Step] = []  # supplements of the current round
         self.dec = _Decisions()
@@ -534,47 +558,136 @@ class _Select:
         w = self.w
         targets = {a for c in states for a in atoms_in(c.state, w.R)}
 
+        stage = "original"
+        proposal_number = 0
+        if self.experiment is not None:
+            self.diagnostics.update(
+                source=[candidate_record(c) for c in self.loops],
+                base=[candidate_record(c) for c in states],
+                reference=[str(a) for a in sorted(targets, key=_order)],
+                fixed_parameters=[
+                    str(p)
+                    for p in sorted(
+                        {n for c in states for n in walk(c.state) if isinstance(n, ir.ShapeSym)}
+                    )
+                ],
+                budget=self.budget,
+                repairs=[step.summary() for step in self.steps],
+            )
+
+        def named_extra(extra):
+            named, counts = [], {}
+            for c in extra:
+                if c.origin == "closure":
+                    k = counts.get(c.source, 0)
+                    counts[c.source] = k + 1
+                    c = dataclasses.replace(c, name=f"{c.source}.r{k}")
+                named.append(c)
+            return named
+
         def recover(trial):
+            # Normalize before execution acceptance so reports and the committed
+            # solution refer to exactly the same state names.
+            trial = [*trial[: len(states)], *named_extra(trial[len(states) :])]
             trace: dict = {}
+            record = {
+                "checker_id": len(self.checks) + 1,
+                "stage": stage,
+                "status": "unknown",
+                "phases": dict.fromkeys(
+                    ("recovery", "domain", "inverse", "uniqueness", "merge", "finish", "execution"),
+                    "not_attempted",
+                ),
+            }
+            record["proposal_id"] = str(proposal_number) if stage == "sygus" else stage
+            self.checks.append(record)
+            start = monotonic()
+            execution_seconds = 0.0
+
+            def phase(name, status="passed"):
+                record["phases"][name] = status
+
             try:
                 sts = tuple(c.state for c in trial)
                 sol = solve_atoms(sts, w.R, trace)
+                phase("recovery", "unknown")
                 if sol is None or any(atoms_in(subst(a, sol), w.R) for a in targets):
                     return None
+                phase("recovery")
+                record["inverse"] = {str(a): str(subst(a, sol)) for a in sorted(targets)}
                 signs = self._state_signs(trial)
+                phase("domain", "unknown")
                 if any(self._nonempty(c, k, trial, trace, signs) for k, c in enumerate(trial)):
                     return None
+                phase("domain")
+                phase("inverse", "unknown")
                 if psi_inverts(sts, sol, w.R, w.A) is None:
                     return None
-                # For the polynomial fragment, independently check uniqueness
-                # with two copies of B. Transcendentals use the constructive
-                # inverse proof above rather than treating opaque functions as
-                # injective by fiat.
+                phase("inverse")
                 if not any(isinstance(n, ir.Exp | ir.Log) for s in sts for n in walk(s)):
-                    if (
-                        smt.recovery_status(
-                            sts, tuple(sorted(targets)), w.R, tuple(w.state_sign(c) for c in trial)
-                        )
-                        != "unsat"
-                    ):
+                    status = smt.recovery_status(
+                        sts, tuple(sorted(targets)), w.R, tuple(w.state_sign(c) for c in trial)
+                    )
+                    phase("uniqueness", {"unsat": "passed", "sat": "failed"}.get(status, "unknown"))
+                    if status != "unsat":
+                        record["status"] = "failed" if status == "sat" else "unknown"
                         return None
+                phase("merge", "unknown")
                 if any(merge_of(c.state, sol, w.R, w.A, w.B) is None for c in trial):
                     return None
+                phase("merge")
+                phase("finish", "unknown")
                 prepared = self.finish(trial)
                 if prepared.solution is None:
+                    record["reason"] = prepared.failure
                     return None
+                phase("finish")
+                prepared.solution = dataclasses.replace(
+                    prepared.solution,
+                    proposal_id=record["proposal_id"],
+                    source=stage,
+                    checker_id=record["checker_id"],
+                )
+                record["algebra"] = "passed"
+                if self.experiment is not None:
+                    record["solution"] = solution_record(prepared.solution)
+                if self.accept_candidate is not None:
+                    before = monotonic()
+                    accepted = self.accept_candidate(prepared.solution)
+                    execution_seconds = monotonic() - before
+                    phase("execution", "passed" if accepted else "failed")
+                    if not accepted:
+                        record["status"] = "execution_rejected"
+                        return None
                 self.prepared = prepared
+                record["status"] = "passed"
                 return sol, trace
-            except Unsupported:
+            except Unsupported as err:
+                record["reason"] = str(err)
                 return None
+            finally:
+                record["seconds"] = monotonic() - start
+                record["execution_seconds"] = execution_seconds
+                record["proof_seconds"] = record["seconds"] - execution_seconds
+                if self.experiment is not None:
+                    record["states"] = [candidate_record(c) for c in trial]
 
         limit = self.budget if self.budget is not None else len(states) + MAX_SUPPLEMENTS
         remaining = limit - len(states)
         if remaining < 0:
+            self.diagnostics["synthesis_status"] = "resource_limit"
             self.search_failure = "preserving the original states exceeds the state budget"
             return states, None, {}
         got = recover(states)
-        self.search.append(SearchAttempt("original", "proved" if got else "unproved", 1))
+        self.search.append(
+            SearchAttempt(
+                "original",
+                "proved" if got else self.checks[-1]["status"],
+                1,
+                checker_calls=1,
+                seconds=self.checks[-1]["seconds"],
+            )
+        )
         if got is not None:
             self.route = "original"
             return states, *got
@@ -585,21 +698,35 @@ class _Select:
                 dataclasses.replace(c, name=f"{owner.name}.r{k}") for k, c in enumerate(coeffs)
             )
             pool.extend(w.pieces(owner))
-        have = {_scaled(c.state, _content(c.state)) for c in states}
-        pool = [c for c in _distinct(pool) if _scaled(c.state, _content(c.state)) not in have]
         from .synthesis import parameters_of, valid_feature
 
         parameters = parameters_of(tuple(c.state for c in states))
-        pool = [c for c in pool if valid_feature(c.state, targets, parameters)]
+        have = {_scaled(c.state, _content(c.state)) for c in states}
+        filtered, seen, decisions = [], set(), []
+        for c in pool:
+            key = _scaled(c.state, _content(c.state))
+            reason = (
+                "constant"
+                if isinstance(c.state, ir.Const)
+                else "duplicate"
+                if key in seen
+                else "already_in_source"
+                if key in have
+                else "not_defined_over_reference"
+                if not valid_feature(c.state, targets, parameters)
+                else "included"
+            )
+            seen.add(key)
+            if reason == "included":
+                filtered.append(c)
+            if self.experiment is not None:
+                decisions.append({**candidate_record(c), "decision": reason})
+        pool = filtered
+        self.diagnostics["candidates"] = decisions
 
         def accepted(extra, got):
-            named, counts = [], {}
-            for c in extra:
-                if c.origin == "closure":
-                    k = counts.get(c.source, 0)
-                    counts[c.source] = k + 1
-                    c = dataclasses.replace(c, name=f"{c.source}.r{k}")
-                named.append(c)
+            named = named_extra(extra)
+            for c in named:
                 self.note(
                     "supplement",
                     f"{c.name} = {w.render(c.struct)}",
@@ -610,25 +737,41 @@ class _Select:
                 self.prepared,
                 states=tuple(chosen),
                 steps=self.trace,
-                solution=Solution(self.prepared.solution.spec, tuple(chosen)),
+                solution=dataclasses.replace(self.prepared.solution, states=tuple(chosen)),
             )
             return chosen, *got
 
         # A whole rebase closure is a useful proposal when several correction
         # rates must be supplied together. It still passes every recovery proof.
         closure = [c for c in pool if c.origin == "closure"]
-        if closure and len(closure) <= remaining:
+        stage = "rebase"
+        closure_checks = len(self.checks)
+        controlled = self.experiment is not None and self.experiment.mode != "production"
+        if not controlled and closure and len(closure) <= remaining:
             got = recover([*states, *closure])
             if got is not None:
                 self.route = "rebase"
-                self.search.append(SearchAttempt("rebase", "proved", 1, detail="whole closure"))
+                self.search.append(
+                    SearchAttempt(
+                        "rebase",
+                        "proved",
+                        1,
+                        detail="whole closure",
+                        checker_calls=1,
+                        seconds=self.checks[-1]["seconds"],
+                    )
+                )
                 return accepted(closure, got)
         self.search.append(
             SearchAttempt(
                 "rebase",
-                "unproved",
+                self.checks[-1]["status"] if len(self.checks) > closure_checks else "not_attempted",
                 int(bool(closure)),
-                detail="no proved complete rebase closure within budget",
+                detail="controlled: skip whole closure"
+                if controlled
+                else "no proved complete rebase closure within budget",
+                checker_calls=len(self.checks) - closure_checks,
+                seconds=sum(c["seconds"] for c in self.checks[closure_checks:]),
             )
         )
         from .synthesis import synthesize
@@ -674,12 +817,25 @@ class _Select:
             return extra
 
         def verify_synthesis(proposal):
+            nonlocal proposal_number
+            proposal_number += 1
             extra = candidates(proposal)
             if len(_distinct([*states, *extra])) != len(states) + len(extra):
                 return None
             got = recover([*states, *extra])
             return None if got is None else (extra, got)
 
+        stage = "sygus"
+        before_checks = len(self.checks)
+        options = {}
+        if self.experiment is not None:
+            options = {
+                "mode": self.experiment.mode,
+                "observe": lambda kind, **data: self.experiment.emit(
+                    kind, chain_id=self.chain_id, **data
+                ),
+            }
+        search_start = monotonic()
         result = synthesize(
             tuple(c.state for c in states),
             tuple(sorted(targets, key=_order)),
@@ -687,6 +843,7 @@ class _Select:
             remaining,
             verify_synthesis,
             preferred=tuple(preferred),
+            **options,
         )
         self.search.append(
             SearchAttempt(
@@ -694,8 +851,19 @@ class _Select:
                 result.status,
                 result.candidates,
                 detail=f"{result.phase}: {result.detail}",
+                checker_calls=len(self.checks) - before_checks,
+                seconds=monotonic() - search_start,
             )
         )
+        self.diagnostics["synthesis_status"] = {
+            "proved": "passed",
+            "budget": "resource_limit",
+            "limit": "resource_limit",
+            "unknown": "unknown",
+            "exhausted": "unknown",
+            "unsupported": "unknown",
+            "unavailable": "not_attempted",
+        }.get(result.status, result.status)
         if result.status == "proved":
             self.route = "sygus"
             extra, got = result.payload
@@ -819,6 +987,13 @@ class _Select:
     def run(self) -> Selection:
         if not smt.available():
             return Selection(failure="state proofs require z3-solver (install the superopt extra)")
+        if self.frozen_base is not None:
+            states, sol, _ = self.supplement(list(self.frozen_base))
+            return (
+                self.prepared
+                if sol is not None
+                else Selection(tuple(states), self.trace, None, self.search_failure)
+            )
         for loop in self.loops:
             self.note("keep", loop.name, "the result of a loop of the program")
         for _ in range(MAX_ROUNDS):
@@ -837,6 +1012,21 @@ class _Select:
                 None,
             )
             if original_fault is not None:
+                if self.experiment is not None:
+                    candidate, faults = original_fault
+                    self.diagnostics.setdefault("source_domain_checks", []).append(
+                        {
+                            "state": candidate_record(candidate),
+                            "faults": [
+                                {
+                                    "kind": f.kind,
+                                    "reason": f.reason,
+                                    "contexts": [self.w.name(p) for p in sorted(f.contexts)],
+                                }
+                                for f in faults
+                            ],
+                        }
+                    )
                 failure = self.act(*original_fault, states, None)
                 if failure is not None:
                     return Selection(tuple(states), self.trace, None, failure)
@@ -866,7 +1056,12 @@ class _Select:
         if spec is None:
             why = "no reducer with its laws proven is derived from these states"
             return Selection(tuple(states), self.trace, None, why)
-        printed = printed_merges(printer, spec.merge)
+        printing = []
+        printed = (
+            printed_merges(printer, spec.merge)
+            if self.experiment is None
+            else printed_merges(printer, spec.merge, diagnostics=printing)
+        )
         if printed is not None:
             spec = dataclasses.replace(spec, merge_print=printed)
         written = _written_epilogues(w, spec, sol)
@@ -875,7 +1070,9 @@ class _Select:
         undefined = self._undefined(spec, states, required)
         if undefined is not None:
             return Selection(tuple(states), self.trace, None, undefined)
-        return Selection(tuple(states), self.trace, Solution(spec, tuple(states)))
+        return Selection(
+            tuple(states), self.trace, Solution(spec, tuple(states), printing=tuple(printing))
+        )
 
     def _undefined(self, spec: ReducerSpec, states, required) -> str | None:
         """Where the reducer is not shown to be defined on non-empty parts: a divisor,
@@ -953,13 +1150,51 @@ class _Select:
 
 
 def select(
-    chain: Chain, members: list[Candidate], signs: domain.TeSigns, max_states: int | None = None
+    chain: Chain,
+    members: list[Candidate],
+    signs: domain.TeSigns,
+    max_states: int | None = None,
+    *,
+    accept_candidate=None,
+    experiment=None,
+    chain_id="",
 ) -> Selection:
-    """The states of a single pass over ``chain`` and the reducer they give (see the
-    module docstring); ``members`` are its members on a part (:func:`members_of`)."""
-    selector = _Select(_Chain(chain, members, signs), max_states)
+    """Select a proved tuple, optionally asking the caller to accept its execution.
+
+    A false callback continues the existing proposal stream without committing
+    that tuple. The independent algebra/domain checker is unchanged.
+    """
+    frozen = None if experiment is None else experiment.frozen.get(chain_id)
+    world = _Chain(chain, members, signs) if frozen is None else frozen[0]
+    selector = _Select(
+        world,
+        max_states,
+        accept_candidate=accept_candidate,
+        experiment=experiment,
+        chain_id=chain_id,
+    )
+    if frozen is not None:
+        _, selector.frozen_base, selector.steps, selector.dec, repair_checks = frozen
+        selector.diagnostics["source_domain_checks"] = repair_checks
+        selector.steps = list(selector.steps)
     result = selector.run()
-    return dataclasses.replace(result, route=selector.route, search=tuple(selector.search))
+    if experiment is not None and frozen is None and "reference" in selector.diagnostics:
+        base = selector.base()
+        if not isinstance(base, str):
+            experiment.frozen[chain_id] = (
+                world,
+                tuple(base),
+                list(selector.steps),
+                selector.dec,
+                selector.diagnostics.get("source_domain_checks", []),
+            )
+    return dataclasses.replace(
+        result,
+        route=selector.route,
+        search=tuple(selector.search),
+        checks=tuple(selector.checks),
+        diagnostics=selector.diagnostics,
+    )
 
 
 # ---------------------------------------------------------------------------

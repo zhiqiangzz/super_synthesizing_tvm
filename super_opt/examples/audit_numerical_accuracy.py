@@ -20,7 +20,6 @@ python super_opt/examples/audit_numerical_accuracy.py --output-dir reports/numer
 """
 
 import argparse
-import contextlib
 import dataclasses
 import hashlib
 import importlib
@@ -33,9 +32,8 @@ import statistics
 import subprocess
 import sys
 import time
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
-from unittest.mock import patch
 
 import gmpy2
 import numpy as np
@@ -49,8 +47,9 @@ from numerical_audit.records import Ledger, dump, output_record
 import tvm
 import tvm_tirx
 from tvm import support
-from tvm.te.superopt import AccuracyConfig, fuse
+from tvm.te.superopt import AccuracyConfig
 from tvm.te.superopt import accuracy as acc
+from tvm.te.superopt.diagnostics import Experiment
 from tvm_tirx.codegen import llvm
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -66,7 +65,11 @@ def fingerprint(path):
 
 
 def manifest(args):
-    paths = [Path(__file__), Path(__file__).with_name("numerical_audit") / "PROTOCOL.md"]
+    paths = [
+        Path(__file__),
+        Path(__file__).with_name("audit_state_selection.py"),
+        Path(__file__).with_name("numerical_audit") / "PROTOCOL.md",
+    ]
     for folder in (
         "python/tvm/te/superopt",
         "super_opt/examples/numerical_audit",
@@ -93,7 +96,12 @@ def manifest(args):
         if "/" in line and "libtvm" in line and ".so" in line
     }
     return {
-        "schema_version": 1,
+        "schema_version": 2,
+        "baseline_commit": "440b06a2acf38b22bc4fb56da080b842702c0f29",
+        "paper_checkout_commit": subprocess.check_output(
+            ["git", "-C", str(ROOT.parent / "paper_writing"), "rev-parse", "HEAD"], text=True
+        ).strip(),
+        "paper_import_commit": None,
         "commit": git("rev-parse", "HEAD"),
         "branch": git("branch", "--show-current"),
         "worktree_status": git("status", "--porcelain=v1"),
@@ -128,46 +136,22 @@ def manifest(args):
     }
 
 
-def timed_fusion(inputs, outputs, config, max_states):
-    """Observe real fuse() calls; no changed policy and no subtraction of separate runs."""
-    phases = defaultdict(float)
-    observations = {"gates": [], "checks": []}
-
-    def timed(fn, phase, capture=None):
-        def wrapped(*args, **kwargs):
-            start = time.perf_counter()
-            try:
-                result = fn(*args, **kwargs)
-            finally:
-                phases[phase] += time.perf_counter() - start
-            if capture == "gate":
-                observations["gates"].append(args[0])
-            elif capture == "check":
-                observations["checks"].append(result)
-            return result
-
-        return wrapped
-
-    with contextlib.ExitStack() as stack:
-        stack.enter_context(patch.object(acc, "_compile", compile_strict))
-        for owner, method, phase, capture in (
-            (FUSION, "_judge", "derivation_proof", None),
-            (FUSION, "select", "derivation_proof", None),
-            (acc.AccuracyGate, "__init__", "accuracy_setup", "gate"),
-            (acc.AccuracyGate, "check", "accuracy_check", "check"),
-            (FUSION._Agreement, "__init__", "agreement", None),
-            (FUSION._Agreement, "__call__", "agreement", None),
-        ):
-            stack.enter_context(
-                patch.object(owner, method, timed(getattr(owner, method), phase, capture))
-            )
-        start = time.perf_counter()
-        try:
-            result = fuse(outputs, inputs, max_states=max_states, accuracy_config=config)
-        finally:
-            phases["total"] = time.perf_counter() - start
+def timed_fusion(inputs, outputs, config, max_states, *, retry=False, experiment=None):
+    """Instrument the production path through explicit private controls."""
+    experiment = experiment or Experiment(compiler=compile_strict, compiler_key=str(TARGET))
+    start = time.perf_counter()
+    result = FUSION._fuse(
+        outputs,
+        inputs,
+        max_states=max_states,
+        accuracy_config=config,
+        retry_rejected_candidates=retry,
+        experiment=experiment,
+    )
+    phases = dict(experiment.timings)
+    phases["total"] = time.perf_counter() - start
     phases["other"] = phases["total"] - sum(v for k, v in phases.items() if k != "total")
-    return result, dict(phases), observations
+    return result, phases, {"gates": experiment.gates, "checks": experiment.checks}
 
 
 def fusion_report(ledger, key, inputs, outputs, config, max_states=None):
@@ -460,8 +444,9 @@ not a condition-number bound. The fixed scans are independent measurements,
 not extra gate families or a change to state selection.
 
 Timings use one warmup then five full calls to fuse(), with raw times and median.
-`derivation_proof` measures _judge + select (including recovery/domain/merge
-proofs); `accuracy_setup` includes source compilation, MPFR and sensitivity;
+`derivation_proof` measures _judge + select excluding nested execution spans
+(including recovery/domain/merge proofs); `accuracy_setup` includes source
+compilation, MPFR and sensitivity;
 `accuracy_check` includes static checks, candidate compilation and execution;
 `agreement` covers the existing small-shape agreement checks; `other` includes
 discovery, static spec checks, rewriting and orchestration. These are observed
@@ -486,13 +471,43 @@ its head-group division. The A.1 case uses the published handoff's concrete u,v.
     (ledger.directory / "README.md").write_text(text)
 
 
+def householder(ledger):
+    """Separate cancellation supplement; does not alter the variance/softmax scans."""
+    programs, definitions = reference_programs("householder")
+    folder = ledger.directory / "programs" / "householder_supplement"
+    folder.mkdir(parents=True, exist_ok=True)
+    dump(folder / "states.json", definitions)
+    unavailable = compile_programs(ledger, "householder_supplement", programs)
+    for length in (2, 16, 256):
+        for sign in (-1, 1):
+            for power in (4, 8, 10, 12, 16, 20):
+                x = np.zeros((1, length), dtype=np.float32)
+                e = np.zeros_like(x)
+                x[0, 0], x[0, -1], e[0, 0] = 1, 2.0 ** (-power), sign
+                ledger.measure(
+                    f"householder_supplement/m{length}/sign{sign}/k{power}",
+                    programs["source"],
+                    programs,
+                    [x, e],
+                    {"n": 1, "m": length},
+                    {
+                        "section": "householder_supplement",
+                        "operator": "householder",
+                        "sign": sign,
+                        "power": power,
+                    },
+                    unavailable,
+                )
+    ledger.checkpoint()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument(
         "--sections",
         nargs="+",
-        choices=["representative", "registry", "hazards", "prior"],
+        choices=["representative", "registry", "hazards", "prior", "householder"],
         default=["representative", "registry", "hazards", "prior"],
     )
     parser.add_argument("--operators", nargs="*", help="optional registry/prior smoke-test filter")
@@ -519,6 +534,8 @@ def main():
                 registry(ledger, args.operators)
             elif section == "hazards":
                 hazards(ledger)
+            elif section == "householder":
+                householder(ledger)
             else:
                 prior_work(ledger, args.operators)
         info["completed"] = True

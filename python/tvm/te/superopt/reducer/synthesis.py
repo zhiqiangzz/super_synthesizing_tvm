@@ -272,6 +272,8 @@ def synthesize(
     max_candidates=256,
     timeout=20,
     max_terms=3,
+    mode="production",
+    observe=None,
 ):
     """Ask native SyGuS for coordinates; ``verify(Proposal)`` proves the reducer.
 
@@ -285,7 +287,16 @@ def synthesize(
         return Result("budget", detail="no supplementary slots or verification atoms")
     if max_terms < 1:
         return Result("budget", detail="the feature grammar needs at least one term")
+    if mode not in ("production", "common", "reference_only", "enumeration", "single_term"):
+        raise ValueError(f"unknown synthesis mode: {mode}")
+    if mode == "single_term":
+        max_terms = 1
     started = monotonic()
+
+    def emit(kind, **data):
+        if observe is not None:
+            observe(kind, **data)
+
     basis = tuple(basis)
     preferred = tuple(dict.fromkeys(preferred))
     if any(not valid_feature(e, basis, parameters_of(original)) for e in preferred):
@@ -294,6 +305,8 @@ def synthesize(
     phases = [("rebase", preferred)] if preferred else []
     if mixed != preferred:
         phases.append(("mixed", mixed))
+    if mode != "production":
+        phases = [("mixed", basis if mode == "reference_only" else mixed)]
     widths = [max_extra, *range(1, max_extra)]
     attempted = 0
     unknown = False
@@ -301,6 +314,48 @@ def synthesize(
     # Reserve time for later grammars/widths instead of starving them behind an
     # impossible preferred grammar. This is scheduling, not a minimality claim.
     slice_seconds = timeout / max(1, len(phases) * len(widths))
+    emit(
+        "grammar",
+        mode=mode,
+        max_terms=max_terms,
+        widths=widths,
+        phases=[(name, [str(e) for e in fs]) for name, fs in phases],
+        timeout=timeout,
+        max_candidates=max_candidates,
+        slice_seconds=slice_seconds,
+    )
+
+    def check(proposal, phase, width):
+        start = monotonic()
+        emit(
+            "proposal",
+            proposal_id=attempted,
+            phase=phase,
+            width=width,
+            features=[str(e) for e in proposal.features],
+            weights=[[str(c) for c in row] for row in proposal.weights],
+        )
+        if start >= started + timeout:
+            emit(
+                "proposal_result",
+                proposal_id=attempted,
+                status="resource_limit",
+                checker_called=False,
+                seconds=0.0,
+            )
+            return None
+        payload = verify(proposal)
+        end = monotonic()
+        emit(
+            "proposal_result",
+            proposal_id=attempted,
+            status="passed" if payload is not None else "not_accepted",
+            checker_called=True,
+            seconds=end - start,
+            deadline_overrun=max(0, end - started - timeout),
+        )
+        return payload
+
     try:
         for phase, features in phases:
             last_phase = phase
@@ -309,17 +364,33 @@ def synthesize(
                     return Result(
                         "limit", candidates=attempted, phase=phase, detail="SyGuS resource limit"
                     )
-                solver, functions, variables = _problem(
-                    original, basis, features, domain, width, max_terms
-                )
+                if mode != "enumeration":
+                    solver, functions, variables = _problem(
+                        original, basis, features, domain, width, max_terms
+                    )
                 end = min(started + timeout, monotonic() + slice_seconds)
                 first = True
-                fallback = False
-                while attempted < max_candidates and monotonic() < end:
-                    solver.setOption(
-                        "tlimit-per", str(max(1, min(1500, int((end - monotonic()) * 1000))))
-                    )
+                fallback = mode == "enumeration"
+                emit("width", phase=phase, width=width, seconds=max(0, end - monotonic()))
+                while mode != "enumeration" and attempted < max_candidates and monotonic() < end:
+                    query_ms = max(1, min(1500, int((end - monotonic()) * 1000)))
+                    solver.setOption("tlimit-per", str(query_ms))
+                    query_start = monotonic()
                     result = solver.checkSynth() if first else solver.checkSynthNext()
+                    emit(
+                        "solver_query",
+                        phase=phase,
+                        width=width,
+                        query="semantic",
+                        next=not first,
+                        limit_ms=query_ms,
+                        seconds=monotonic() - query_start,
+                        status="passed"
+                        if result.hasSolution()
+                        else "unknown"
+                        if result.isUnknown()
+                        else "exhausted",
+                    )
                     first = False
                     if not result.hasSolution():
                         fallback = result.isUnknown()
@@ -331,7 +402,7 @@ def synthesize(
                         solution = solver.getSynthSolution(function)
                         rows.append(_weights(solution[1], variables))
                     proposal = Proposal(features, tuple(rows))
-                    payload = verify(proposal)
+                    payload = check(proposal, phase, width)
                     if payload is not None:
                         return Result(
                             "proved",
@@ -342,25 +413,45 @@ def synthesize(
                             "cvc5 SyGuS solution passed independent inverse/domain/merge checks",
                         )
                 else:
-                    unknown = True
-                if fallback and attempted < max_candidates and monotonic() < end:
+                    unknown |= mode != "enumeration"
+                if (
+                    fallback
+                    and mode in ("production", "enumeration")
+                    and attempted < max_candidates
+                    and monotonic() < end
+                ):
                     solver, grammar, variables = _enumerator(features, width, max_terms)
                     first = True
                     while attempted < max_candidates and monotonic() < end:
-                        solver.setOption("tlimit-per", str(max(1, int((end - monotonic()) * 1000))))
+                        query_ms = max(1, int((end - monotonic()) * 1000))
+                        if mode != "production":
+                            query_ms = min(1500, query_ms)
+                        solver.setOption("tlimit-per", str(query_ms))
+                        query_start = monotonic()
                         term = (
                             solver.findSynth(cvc5.FindSynthTarget.ENUM, grammar)
                             if first
                             else solver.findSynthNext()
                         )
+                        emit(
+                            "solver_query",
+                            phase=phase,
+                            width=width,
+                            query="enumeration",
+                            next=not first,
+                            limit_ms=query_ms,
+                            seconds=monotonic() - query_start,
+                            status="unknown" if term.isNull() else "passed",
+                        )
                         first = False
                         if term.isNull():
+                            unknown = True
                             break
                         attempted += 1
                         proposal = Proposal(
                             features, tuple(_weights(t, variables) for t in list(term)[1:])
                         )
-                        payload = verify(proposal)
+                        payload = check(proposal, phase + "-enumeration", width)
                         if payload is not None:
                             return Result(
                                 "proved",
@@ -375,7 +466,11 @@ def synthesize(
     except RuntimeError as err:
         return Result("unknown", candidates=attempted, phase=last_phase, detail=f"cvc5: {err}")
     return Result(
-        "unknown" if unknown else "exhausted",
+        "limit"
+        if attempted >= max_candidates or monotonic() - started >= timeout
+        else "unknown"
+        if unknown
+        else "exhausted",
         candidates=attempted,
         phase=last_phase,
         detail="no independently verified SyGuS solution; not an impossibility proof",

@@ -57,6 +57,10 @@ to the judgement. :func:`judge` gives the judgement alone, deriving nothing.
 from __future__ import annotations
 
 import dataclasses
+import hashlib
+import json
+from contextlib import nullcontext
+from time import monotonic
 
 import numpy as np
 
@@ -74,6 +78,7 @@ from .accuracy import (
     sample_inputs,
     spec_issues,
 )
+from .diagnostics import solution_record
 from .reducer.build import Rewriter, build_chain
 from .reducer.chain import Chain, Skipped, discover_chains
 from .reducer.domain import TeSigns
@@ -95,6 +100,8 @@ class Rejected:
 
     states: tuple[str, ...]
     why: str
+    accuracy: AccuracyReport | None = None
+    stage: str = ""
 
 
 @dataclasses.dataclass
@@ -107,6 +114,8 @@ class ChainReport:
     accuracy: AccuracyReport | None = None
     rejected: list[Rejected] = dataclasses.field(default_factory=list)  # the reducer, if refused
     selection: Selection | None = None  # how its states were chosen
+    attempts: list[dict] = dataclasses.field(default_factory=list)
+    chain_id: str = ""
 
     @property
     def axis(self) -> str:
@@ -258,56 +267,222 @@ def _judge(chain: Chain) -> Judgement:
     return judge_chain(chain, members_of(chain))
 
 
+def chain_key(chain):
+    """Stable within an input workload, independent of allocated symbolic IDs."""
+    payload = (
+        chain.jname,
+        tuple((m.name, m.kind) for m in chain.members),
+        tuple(m.name for m in chain.required),
+        str(chain.extent),
+    )
+    return hashlib.sha256(repr(payload).encode()).hexdigest()[:16]
+
+
+def _span(experiment, phase):
+    return nullcontext() if experiment is None else experiment.span(phase)
+
+
 def _fuse_chain(
-    chain: Chain,
-    outputs: list[te.Tensor],
-    rewriter: Rewriter,
-    gate: AccuracyGate | None,
-    agree: _Agreement,
-    max_states: int | None,
-    accuracy: str,
-    signs: TeSigns,
-) -> tuple[ChainReport, Rewriter]:
-    report = ChainReport(chain, _judge(chain))
+    chain,
+    outputs,
+    rewriter,
+    gate,
+    agree,
+    max_states,
+    accuracy,
+    signs,
+    retry_rejected_candidates=False,
+    experiment=None,
+):
+    with _span(experiment, "derivation_proof"):
+        report = ChainReport(chain, _judge(chain), chain_id=chain_key(chain))
     if not report.theory.fusible:
         report.reason = report.theory.summary()
         return report, rewriter
-    selection = select(chain, members_of(chain), signs, max_states=max_states)
-    report.selection = selection
-    sol = selection.solution
-    if sol is None:
-        report.reason = f"no state set: {selection.failure}"
-        return report, rewriter
-    spec = sol.spec
-    names = tuple(c.name for c in sol.states)
-    if max_states is not None and len(names) > max_states:
-        report.reason = (
-            f"its states ({', '.join(names)}) are {len(names)}, more than the {max_states} allowed"
-        )
-        return report, rewriter
+    accepted_trial = None
+    cache = {}
+    verdict_cache = {}
+    key = report.chain_id
+    if experiment is not None:
+        experiment.prefixes.setdefault(key, rewriter.fork())
 
-    def refuse(why: str) -> tuple[ChainReport, Rewriter]:
-        report.rejected.append(Rejected(names, why))
-        report.reason = f"the reducer of ({', '.join(names)}) is refused: {why}"
-        return report, rewriter
+    def accept(sol):
+        with _span(experiment, "execution_overhead"):
+            return evaluate(sol)
 
-    barred = set(gate.required) if gate is not None and accuracy == "filter" else set()
-    issues = sorted(barred & spec_issues(spec))
-    if issues:
-        return refuse("; ".join(ISSUES[k] for k in issues) + " (the original does not)")
-    trial = rewriter.fork()
-    try:
-        build_chain(chain, spec, trial)
-        candidate = [trial.tensor(t) for t in outputs]
-    except (Unsupported, tvm.error.TVMError) as err:
-        return refuse(f"cannot be written as TE: {err}")
-    if not agree(candidate):
-        return refuse("the rebuilt program differs from the original on small inputs")
-    verdict = gate.check(candidate) if gate is not None else None
-    if verdict is not None and not verdict.ok and accuracy == "filter":
-        return refuse(verdict.summary())
-    report.fused, report.solution, report.accuracy = True, sol, verdict
-    return report, trial
+    def evaluate(sol):
+        nonlocal accepted_trial
+        spec = sol.spec
+        names = tuple(c.name for c in sol.states)
+        attempt = {
+            "attempt_id": len(report.attempts) + 1,
+            "proposal_id": sol.proposal_id,
+            "source": sol.source,
+            "checker_id": sol.checker_id,
+            "states": names,
+            "algebra": "passed",
+            "status": "not_attempted",
+            "timings": {},
+            "phases": dict.fromkeys(
+                ("domain", "static", "build", "agreement", "numerical"), "not_attempted"
+            ),
+        }
+        if experiment is not None:
+            experiment.solutions[key] = sol
+            attempt["solution"] = solution_record(sol)
+        report.attempts.append(attempt)
+        start = monotonic()
+
+        def refuse(why, stage, status="failed"):
+            attempt.update(status=stage + "_rejection", reason=why)
+            attempt["phases"][stage] = status
+            report.rejected.append(Rejected(names, why, report.accuracy, stage))
+            report.reason = f"the reducer of ({', '.join(names)}) is refused: {why}"
+            return False
+
+        def run(stage, fn):
+            t = monotonic()
+            try:
+                with _span(
+                    experiment,
+                    {
+                        "build": "code_generation",
+                        "numerical": "accuracy_check",
+                        "agreement": "agreement",
+                    }.get(stage, "execution_static"),
+                ):
+                    return fn()
+            finally:
+                attempt["timings"][stage] = monotonic() - t
+
+        report.accuracy = None
+        try:
+            if max_states is not None and len(names) > max_states:
+                return refuse(f"{len(names)} states exceed budget {max_states}", "domain")
+            # A fixed-I evaluation-form comparison must recheck the printed
+            # domain, keeping initialization, output formulas and state definitions.
+            if experiment is not None and key in experiment.fixed:
+                from .reducer.states import _Select
+                from .symbolic.canonicalize import subst_domain
+
+                world = experiment.frozen[key][0]
+                required = tuple(
+                    subst_domain(world.by_pid[m.pid].state, {world.R: world.full})
+                    for m in chain.required
+                )
+                why = _Select(world)._undefined(spec, sol.states, required)
+                if why:
+                    return refuse(why, "domain", "unknown")
+            attempt["phases"]["domain"] = "passed"
+            barred = set(gate.required) if gate is not None and accuracy == "filter" else set()
+            issues = run("static", lambda: sorted(barred & spec_issues(spec)))
+            if issues:
+                return refuse(
+                    "; ".join(ISSUES[k] for k in issues) + " (the original does not)", "static"
+                )
+            attempt["phases"]["static"] = "passed" if barred else "not_attempted"
+            # Every attempt starts at the same committed prefix. No failed fork
+            # can affect subsequent candidates or undo an earlier accepted chain.
+            trial = rewriter.fork()
+
+            def build():
+                build_chain(chain, spec, trial)
+                return [trial.tensor(t) for t in outputs]
+
+            try:
+                candidate = run("build", build)
+            except (Unsupported, tvm.error.TVMError) as err:
+                return refuse(f"cannot be written as TE: {err}", "build")
+            attempt["phases"]["build"] = "passed"
+            if retry_rejected_candidates or experiment is not None:
+                inputs = agree.inputs
+                code = te.create_function([*inputs, *candidate]).script()
+                compiler = "llvm/default" if experiment is None else experiment.compiler_key
+                fingerprint = hashlib.sha256(
+                    json.dumps(
+                        [
+                            code,
+                            compiler,
+                            accuracy,
+                            dataclasses.asdict(gate.config) if gate else None,
+                        ]
+                    ).encode()
+                ).hexdigest()
+                attempt["fingerprint"] = fingerprint
+                if experiment is not None:
+                    attempt["program"] = code
+                if fingerprint in cache:
+                    previous = cache[fingerprint]
+                    report.accuracy = verdict_cache.get(fingerprint)
+                    attempt.update(
+                        status="duplicate",
+                        duplicate_of=previous["attempt_id"],
+                        reused_status=previous["status"],
+                        accuracy=previous.get("accuracy"),
+                    )
+                    # Cache belongs to this chain prefix and fixed gate only.
+                    return previous["status"] == "accepted"
+                cache[fingerprint] = attempt
+            try:
+                agreed = run("agreement", lambda: agree(candidate))
+            except (Unsupported, tvm.error.TVMError, ValueError) as err:
+                return refuse(str(err), "agreement")
+            if not agreed:
+                return refuse(
+                    "the rebuilt program differs from the original on small inputs", "agreement"
+                )
+            attempt["phases"]["agreement"] = "passed"
+            try:
+                verdict = (
+                    run("numerical", lambda: gate.check(candidate)) if gate is not None else None
+                )
+            except (Unsupported, tvm.error.TVMError, ValueError) as err:
+                return refuse(str(err), "numerical")
+            report.accuracy = verdict
+            if "fingerprint" in attempt:
+                verdict_cache[attempt["fingerprint"]] = verdict
+            if gate is not None:
+                attempt["output_checks"] = getattr(gate, "last_checks", [])
+            attempt["accuracy"] = dataclasses.asdict(verdict) if verdict else None
+            attempt["numerical_executed"] = bool(verdict and verdict.families)
+            if experiment is not None and verdict is not None:
+                experiment.checks.append(verdict)
+            if verdict is not None:
+                attempt["phases"]["numerical"] = "passed" if verdict.ok else "failed"
+                if verdict.static:
+                    attempt["phases"]["numerical"] = "not_attempted"
+                if not verdict.ok and accuracy == "filter":
+                    return refuse(verdict.summary(), "static" if verdict.static else "numerical")
+            attempt["status"] = "accepted"
+            accepted_trial = trial
+            report.fused, report.solution, report.reason = True, sol, ""
+            if experiment is not None:
+                experiment.solutions[key] = sol
+            return True
+        finally:
+            attempt["seconds"] = monotonic() - start
+
+    if experiment is not None and key in experiment.fixed:
+        if retry_rejected_candidates:
+            raise ValueError("fixed-state evaluation comparisons cannot retry selection")
+        sol = experiment.fixed[key]
+        accept(sol)
+    else:
+        with _span(experiment, "derivation_proof"):
+            kwargs = {}
+            if retry_rejected_candidates:
+                kwargs["accept_candidate"] = accept
+            if experiment is not None:
+                kwargs.update(experiment=experiment, chain_id=key)
+            selection = select(chain, members_of(chain), signs, max_states=max_states, **kwargs)
+        report.selection = selection
+        if selection.solution is None:
+            prefix = "execution candidates rejected; " if report.attempts else "no state set: "
+            report.reason = prefix + selection.failure
+            return report, rewriter
+        if not retry_rejected_candidates:
+            accept(selection.solution)
+    return report, accepted_trial if report.fused else rewriter
 
 
 def fuse(
@@ -317,6 +492,7 @@ def fuse(
     max_states: int | None = None,
     accuracy: str = "filter",
     accuracy_config: AccuracyConfig | None = None,
+    retry_rejected_candidates: bool = False,
 ) -> Fused:
     """Fuse every reduction chain behind ``outputs`` into a single-pass reduction.
 
@@ -337,12 +513,38 @@ def fuse(
         comparison (the rebuilt program is still checked against the original
         using high-precision references).
 
+    retry_rejected_candidates : bool
+        Continue the existing bounded state search after execution rejects a
+        proved candidate. Defaults to False. All candidates reuse the same gate
+        inputs; report mode still accepts a failed numerical report.
+
     Returns
     -------
     Fused
         ``outputs`` rewritten (unchanged where nothing was fused) and one
         report per chain.
     """
+    return _fuse(
+        outputs,
+        inputs,
+        max_states=max_states,
+        accuracy=accuracy,
+        accuracy_config=accuracy_config,
+        retry_rejected_candidates=retry_rejected_candidates,
+    )
+
+
+def _fuse(
+    outputs,
+    inputs,
+    *,
+    max_states=None,
+    accuracy="filter",
+    accuracy_config=None,
+    retry_rejected_candidates=False,
+    experiment=None,
+):
+    """One implementation for production and explicit internal experiment controls."""
     if accuracy not in ("filter", "report", "off"):
         raise ValueError(f"accuracy must be 'filter', 'report' or 'off', not {accuracy!r}")
     outputs = [outputs] if isinstance(outputs, te.Tensor) else list(outputs)
@@ -354,22 +556,58 @@ def fuse(
 
         outputs = specialize(outputs)
         chains, skipped = discover_chains(outputs)
+    if experiment is not None:
+        if experiment.graph is None:
+            experiment.graph = (outputs, chains, skipped)
+        else:
+            outputs, chains, skipped = experiment.graph
     reports: list[ChainReport] = []
     rewriter = Rewriter()
     if chains:
         config = accuracy_config or AccuracyConfig()
         signs = TeSigns(outputs, config.positive)
         try:
-            gate = AccuracyGate(original_outputs, inputs, config) if accuracy != "off" else None
-            agree = _Agreement(original_outputs, inputs, config.positive)
+            with _span(experiment, "accuracy_setup"):
+                opts = (
+                    {}
+                    if experiment is None or experiment.compiler is None
+                    else {"compiler": experiment.compiler}
+                )
+                gate = (
+                    AccuracyGate(original_outputs, inputs, config, **opts)
+                    if accuracy != "off"
+                    else None
+                )
+                if gate is not None and experiment is not None:
+                    experiment.gates.append(gate)
+                    if experiment.gate_observer is not None:
+                        experiment.gate_observer(gate)
+            with _span(experiment, "agreement"):
+                agree = _Agreement(original_outputs, inputs, config.positive)
+                if experiment is not None:
+                    experiment.agreements.append(agree)
         except Unsupported as err:
             # nothing is rewritten that cannot be checked against the original
             why = f"the program cannot be evaluated to check a rewrite against ({err})"
-            reports = [ChainReport(chain, _judge(chain), reason=why) for chain in chains]
+            reports = [
+                ChainReport(chain, _judge(chain), reason=why, chain_id=chain_key(chain))
+                for chain in chains
+            ]
             chains = []
         for chain in chains:
             report, rewriter = _fuse_chain(
-                chain, outputs, rewriter, gate, agree, max_states, accuracy, signs
+                chain,
+                outputs,
+                experiment.prefixes[chain_key(chain)].fork()
+                if experiment is not None and chain_key(chain) in experiment.fixed
+                else rewriter,
+                gate,
+                agree,
+                max_states,
+                accuracy,
+                signs,
+                retry_rejected_candidates,
+                experiment,
             )
             reports.append(report)
     verdict = next((r.accuracy for r in reversed(reports) if r.fused), None)
