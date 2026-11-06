@@ -105,22 +105,24 @@ Flashlight~\citep{flashlight} 利用指数函数的同态性质，将注意力�
 Halide 的 \code{rfactor}~\citep{rfactor} 和 TVM~\citep{tvm,tensorir} 可以并行化满足结合律的归约，包括元组归约器，但不能将一个归约与读取其最终值的后续归约融合。
 Mirage~\citep{mirage} 搜索多层张量算子图，并在包含多线性算子、除法和每条路径至多一次指数运算的片段上，对候选进行概率验证，再用浮点测试过滤数值不稳定的候选；最大值不在该片段中。
 STENSO~\citep{stenso} 和 Prism~\citep{prism} 通过符号方法搜索等价张量程序。
-\sys 利用上下文修正分析得到的表达式，在所维护的状态元组中合成辅助状态。
-参考状态元组的构造性恢复和定义域证明决定是否接受。
+\sys 将综合限制为在固定源归约结果的基础上寻找辅助状态。
+上下文修正表达式提供文法终结项，完整参考恢复提供综合规约。
+这将表达式搜索与合并操作的构造和验证分离。
 
 \textbf{Program calculation and synthesis.}
 列表同态~\citep{bird87} 和第三同态定理~\citep{gibbons96} 刻画了列表函数何时具有分治形式；\citet{morita07} 从两个顺序程序构造这种形式，而 catamorphism 等递归模式~\citep{meijer91} 给出了此类推导背后的演算规律。
 元组化消除对同一数据结构的多次遍历~\citep{bird84,pettorossi87,hu96,hu97}。
-Farzan 和 Nicolet 通过展开循环体并收集辅助累加量来合成分治程序~\citep{farzan17,farzan19,farzan21}。
-AutoLifter 通过分解提升问题，合成辅助值和组合器~\citep{autolifter}；SuFu 则合成压缩函数和标量计算，以消除中间数据结构~\citep{sufu}。
+Farzan 和 Nicolet 通过展开循环体并收集辅助累加量来综合分治程序~\citep{farzan17,farzan19,farzan21}。
+AutoLifter 将提升问题分解为辅助值和组合器的较小综合任务~\citep{autolifter}；SuFu 则综合压缩函数和标量计算，以消除中间数据结构~\citep{sufu}。
 \citet{morihata21} 通过半环多项式并行化归约。
 Opera~\citep{opera} 从离线算法推导每次处理一个元素并更新状态的在线算法，在 51 个基准中解决了 50 个，唯一失败的是峰度。
 % src: notes/evidence/opera.txt lines 913, 934 (50 of 51; kurtosis)
-这些工作为顺序循环和递归程序发展了合成与演算方法。
+这些工作为顺序循环和递归程序发展了综合与演算方法。
 \sys 聚焦于单个张量轴上的归约，因此能够通过有限展开建立充分条件，并推导多重集上的可交换合并。
-在这一范围内，展开保留的源状态可以建立参考表示，规定辅助状态合成必须能够恢复的信息。
-搜索只构造辅助状态；经过验证的恢复关系将参考状态的合并转化为维护表示的合并，无需再合成一个合并程序。
-它利用源程序的中心化和缩放指导合并形式，并通过浮点测量决定是否接受。
+在这一范围内，上下文分离给出合并操作已知的参考表示。
+要求恢复这一表示，就能消除独立的组合器综合任务：搜索选择辅助表达式，经过验证的恢复关系则将参考状态的合并转化为维护状态的合并。
+固定源状态的定义进一步限制未知表示，上下文修正系数则为其提供候选表达式。
+这些限制保留了可用于构造局部中心化或缩放更新的量；生成实现的数值表现另行评估。
 
 \textbf{Aggregation.}
 在数据库中，如果部分结果可以直接组合，则聚合是\emph{分配型}的；如果固定元组的分配型聚合足以计算结果，则它是\emph{代数型}的~\citep{datacube}。分布式系统通过树或 gossip 协议计算此类聚合~\citep{jesus}。
@@ -132,7 +134,7 @@ Ink 允许不可交换的合并；\sys 则基于多重集语义推导可交换�
 \textbf{Floating-point accuracy.}
 经过验证的浮点编译保留数值推理所依赖的源程序语义~\citep{boldo_fp}。
 数值分析也表明，中间表示的选择会影响误差传播~\citep{higham_decomposition}；平移后的 log-sum-exp 和 softmax 公式的分析给出了具体例子~\citep{blanchard}。
-这些结果为我们利用源归约定义指导状态选择和合并形式提供了依据。
+这些结果为我们围绕源归约定义限制状态选择、并将合并表达为局部上下文修正提供了依据。
 Herbie~\citep{herbie} 搜索更准确的表达式形式，FPTaylor~\citep{fptaylor} 则计算严格的舍入误差界。
 \sys 为融合发现辅助状态，并使用 MPFR 求值和采样误差容限，以源程序为基准检查所得实现（\cref{def:gate}）。
 对生成的合并及其归约树进行舍入误差分析，可以提供超出这些测量的保证。

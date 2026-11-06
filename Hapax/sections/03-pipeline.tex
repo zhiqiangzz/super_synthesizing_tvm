@@ -1,7 +1,8 @@
 \sys takes a program expressed in TVM Tensor Expressions (TE) and the declared domain of its inputs.
 As shown in \cref{fig:pipeline}, it first extracts dependent reduction chains over a shared axis (\cref{sec:input-chains}) and then derives a single-pass replacement for each chain.
 For each extracted chain, algebraic analysis separates each reduction's context from its input-dependent terms.
-The resulting reference states join independently and determine the outputs, establishing a sufficient single-pass construction and a default limit on the maintained state count (\cref{sec:existence}).
+The resulting reference states join independently and determine the outputs.
+Their number bounds the states sufficient for this single-pass construction and supplies the default state-count limit for synthesis (\cref{sec:existence}).
 
 \reservewrapspace{26\baselineskip}
 \begin{wrapfigure}[26]{r}{0.48\textwidth}
@@ -10,22 +11,23 @@ The resulting reference states join independently and determine the outputs, est
 \caption{End-to-end derivation.}
 \label{fig:pipeline}
 \end{wrapfigure}
-Selection starts with the source reduction results as the initial maintained states.
+Selection fixes the source reduction results as the initial maintained states, leaving only their augmentation to be synthesised.
 For a source result that is undefined on a legal non-empty part, the procedure seeks a defined representation by extracting the offending context and retaining its coefficients.
 Expanding the definitions of these initial states yields their reference tuple and the expressions reconstructing them from it.
-This tuple fixes the information that auxiliary-state synthesis must retain.
+This tuple fixes the information that auxiliary-state synthesis must retain; its known join will determine the maintained join through verified recovery.
 To discover missing information, the analyser derives how each retained result changes when its local context is replaced by the context of a larger part.
-The coefficients of these corrections provide candidate auxiliary states.
+The coefficients of these corrections supply candidate expressions, restricting the grammar to quantities obtained from this analysis and the reference representation.
 The procedure first checks the initial tuple alone, then this tuple augmented with all admissible correction coefficients.
 Only if neither tuple succeeds within the state limit does syntax-guided synthesis search combinations of these candidate expressions and, subsequently, reference states.
 The search therefore concerns only auxiliary states that, together with the source states, recover the reference tuple (\cref{sec:selection,sec:synthesis}).
 
 For each proposed maintained tuple, verification constructs expressions recovering this entire reference tuple and proves their identities and definedness on legal parts.
-This recovery defines a symbolic join: recover the reference states of the two parts, combine them independently, and express the result in maintained states.
+This recovery defines the symbolic join without an independent synthesis task: recover the reference states of the two parts, combine them independently, and express the result in maintained states.
 Verification establishes that the joined tuple is the state tuple of the union; unsuccessful proofs return to state selection within the search limits.
 For execution, context-correction analysis constructs formulas on the maintained states and their local contexts, and verifies them against this symbolic join.
 These formulas reuse source centring and scaling where possible to retain its numerical structure; a component without such a formula uses the symbolic join expression (\crefrange{sec:recovery}{sec:rebase}).
 
 The backend emits a TE program that initialises a singleton state tuple for each input element, joins the tuples, and reconstructs the outputs from the maintained states using the source program's scalar dependencies.
 Static checks on the reducer and differential numerical measurements in the rebuilt program determine acceptance of this floating-point implementation (\cref{sec:accuracy,sec:impl}).
-If no verified construction is found, or emission or numerical checks fail, the source chain is retained.
+If no verified construction is found, the source chain is retained.
+Emission or numerical rejection also retains the source chain, without restarting selection.

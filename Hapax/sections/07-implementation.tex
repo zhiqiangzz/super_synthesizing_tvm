@@ -14,7 +14,8 @@ This choice applies to the whole chain.
 Candidate construction removes numerical constants, duplicate expressions and expressions already in $\stsrc$, comparing them up to non-zero rational scaling.
 It retains candidates that are defined functions of $\stref$ and the fixed parameters.
 The tuple $K$ used for the initial augmentation contains the retained correction coefficients; split additive terms enter the synthesis grammar alongside them.
-Native cvc5 SyGuS~\citep{cvc5} owns candidate enumeration and internal refinement.
+These source-derived expressions are grammar terminals, so synthesis combines quantities already exposed by analysis instead of building arbitrary arithmetic expressions from the reference components.
+Native cvc5 SyGuS~\citep{cvc5} searches only for the auxiliary expressions; recovery and the join are constructed by the independent checker.
 Within each grammar stage, the implementation first tries the largest permitted number of auxiliary states, then smaller positive numbers in increasing order.
 It allows at most 256 proposals, three occurrences of candidate expressions per auxiliary state and a 20-second synthesis deadline, shared among grammar stages and choices of state count.
 SyGuS calls with the injectivity specification have a 1500\,ms limit; an in-flight independent proof may finish after the overall deadline.
@@ -37,7 +38,7 @@ The accuracy acceptance check uses this compiled execution path, comparing its w
 A separate reconstruction check interprets both the source and rebuilt TE on three small shapes using MPFR, then converts the results to float64 for a shape and tolerance comparison.
 Numerical acceptance computes its errors directly against the MPFR arrays.
 Rejection by this check retains the source chain without restarting state synthesis.
-\sys performs no scheduling: the evaluation concerns which programs fuse, what is derived and proven, and how accurate the result is.
+\sys performs no scheduling; the current snapshot reports fusion and derivation outcomes, while the updated numerical measurements remain pending.
 
 \textbf{GPU lowering.}\par
 \label{sec:gpu}

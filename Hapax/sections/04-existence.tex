@@ -4,7 +4,8 @@
 A dependent reduction reads a context derived from earlier reductions.
 This context becomes available only after those reductions have completed, preventing straightforward loop fusion.
 A single pass exists when each reduction's contexts can be separated from its body: the result is rewritten in terms of context-independent reductions, with its contexts used only to reconstruct the result.
-The rules and algorithm below construct this representation and establish its state-count bound.
+The rules and algorithm below construct a single-pass reducer and give a sufficient upper bound on the number of states needed to fuse the chain.
+This bound also sets the default state-count limit for the subsequent synthesis of a maintained representation.
 
 \subsection{Separating Contexts from Reduction Bodies}
 \label{sec:freeing}
@@ -95,7 +96,7 @@ Otherwise the residual reductions enter $\mathcal Q$ as reference states, with o
 
 The construction gives a fixed-size state tuple whose components join independently and whose values determine the required outputs.
 All components can be accumulated in one traversal, after which scalar reconstruction reinstates the source contexts.
-The number of collected components bounds the states used by this construction and supplies the default state limit for selection.
+Thus, the number of collected components is a constructive upper bound: retaining that many states suffices for single-pass fusion, independently of the input length.
 
 \finishwrapspace
 \endgroup
@@ -128,4 +129,5 @@ When a residual reduction still depends on a context, the analysis stops without
 Further identities or stronger input relations may establish single-pass computability beyond this recognised class.
 
 For state selection, we apply these algebraic rules to the source reduction results that the fused program will retain.
-Their expanded definitions supply the reference representation used to discover auxiliary states and derive a join, as developed next.
+Their expanded definitions supply the reference representation used to constrain auxiliary-state synthesis and derive its join.
+The output-based construction above supplies the default state-count limit; the next section seeks a representation retaining the source states within that limit.

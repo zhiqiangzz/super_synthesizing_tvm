@@ -74,6 +74,7 @@ Consequently, initialising each element with the singleton tuple $(g_1(x_j),\dot
 The domain assumption ensures that its components are defined on legal non-empty parts.
 Applying the reconstruction expression to the full-input tuple produces the source outputs wherever they are defined.
 The construction uses one state per distinct reference component, hence at most $|\mathcal Q|$ states, independent of the input length.
+It therefore gives a sufficient state-count upper bound for single-pass fusion, which state selection uses as its default limit on the maintained tuple.
 
 \subsection{Containment (Theorem~\pref{thm:containment})}
 
@@ -151,15 +152,18 @@ The assumptions ensure defined states and join operations.
 The tuple has $m+k$ components, with sharing able to reduce this count.
 \end{proof}
 
-The proposition establishes a sufficient algebraic construction for retaining the initial states.
-The existence analysis supplies the default state limit from its output-based construction; this need not equal the number of reference components collected from $\stsrc$.
-A compact representation fitting that limit is sought through bounded synthesis.
+The proposition establishes a sufficient algebraic construction for retaining the initial states, with at most $m+k$ components.
+The output-based existence analysis supplies the separate default limit $|\mathcal Q|$; its reference collection need not coincide with the components collected from $\stsrc$.
+Bounded synthesis seeks a compact representation within that limit, which can be smaller than this general source-retaining construction.
 
 After domain repair, state selection collects $\stref$ from the expanded definitions of $\stsrc$, obtaining the known map $\Gsrc$.
 It checks $\stsrc$ alone, followed by $\stsrc$ augmented with all admissible correction coefficients collected from it.
 It next invokes native cvc5 SyGuS over candidate expressions from context-correction analysis and subsequently over those expressions plus the reference state components.
 Each auxiliary state combines at most three occurrences of candidate expressions by addition and subtraction.
+Fixing the source states removes them from the synthesis unknowns; the candidate grammar restricts the remaining expressions to combinations of quantities exposed by analysis.
+Its terminals can already be nonlinear functions of the reference values.
 The synthesis constraint excludes collisions between two copies of the reference state tuple under a conservative reachable-state abstraction.
+Constructive recovery and the known reference join then determine the complete maintained join.
 Native enumeration on an unknown synthesis result provides proposals for the same independent constructive verification.
 The search allows 256 proposals within a 20-second deadline, shared among grammar stages and choices of auxiliary state count, with up to 1500\,ms per synthesis call with the injectivity specification.
 It tries the maximum allowed number of auxiliary states first, followed by smaller positive numbers in increasing order.
@@ -343,6 +347,24 @@ All three versions will use the same LLVM target and serial reduction order, wit
 Their errors will be measured against the same MPFR evaluation of the source.
 Offset and scale sweeps, singleton inputs and constant rows will retain source failures and non-finite outcomes as well as finite errors.
 The worked examples in the paper demonstrate particular arithmetic effects; they are not substitutes for this compiled comparison.
+
+\paragraph{Controlled synthesis comparisons.}
+The planned comparisons will freeze each chain's repaired initial states, reference tuple and candidate definitions.
+Chains whose initial states already suffice will be reported separately; the remaining chains will skip the whole-coefficient shortcut so that each mode starts from the same synthesis task.
+The common configuration uses a single mixed grammar stage containing correction candidates and reference components, with the recovery specification guiding native SyGuS.
+Three comparisons change one choice at a time: use only reference components as terminals; replace constrained SyGuS with native grammar enumeration; or restrict each auxiliary expression to a single terminal occurrence instead of three.
+All modes retain the same state-count limit, auxiliary-width order, independent recovery and reducer checker, 256-proposal limit and 20-second search deadline.
+A semantic mode returning unknown records that outcome rather than switching proposal methods; the production search, with its existing fallback, will be measured separately.
+Coverage, actual checker calls, proof time and total derivation time will be reported for every mode, including failures and timeouts.
+These experiments test candidate discovery, semantic guidance and expression combination within the chosen source-retaining formulation.
+They do not remove the reference-recovery requirement or compare against arbitrary state-and-join synthesis.
+
+\paragraph{Fixed-state join comparison.}
+For each selected and verified tuple, a separate comparison will hold the states, initialisation and output reconstruction fixed while enabling or disabling context-correction printing of the join.
+Both versions will use the same compilation and numerical evaluation settings described above, and the emitted expressions will be retained.
+If those expressions coincide, the case will be marked as unchanged.
+The algebraic join can itself retain local-context expressions, so this comparison differs from direct execution of the reference state tuple.
+Rejection will be recorded without selecting another state tuple; this keeps the comparison specific to the join's evaluation formula.
 
 \section{The Programs of Neptune and RedFuser}
 \label{app:prior}

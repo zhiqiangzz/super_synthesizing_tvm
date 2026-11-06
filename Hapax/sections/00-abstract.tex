@@ -1,11 +1,12 @@
 \begin{abstract}
-Many tensor operators use a value derived from one reduction's completed result as the context for another.
-This dependency obstructs ordinary loop fusion, leaving experts to derive and implement single-pass algorithms.
-Fusion requires retaining enough information for a join to correct partial results as contexts change without rereading input.
-We present \sys, which adapts state synthesis and join construction from automated divide-and-conquer parallelisation to fuse dependent reductions.
-Algebraic context separation establishes a sufficient condition for a single pass.
-To retain source centring and scaling, \sys starts from the source reduction results and expresses their definitions using reference states that combine independently.
-Synthesis searches only for auxiliary states that enable recovery of this representation; verified recovery then constructs a correct join over the reals.
-Context-correction analysis supplies synthesis candidates and local-context evaluation formulas that retain the source's numerical structure where possible.
-A recorded snapshot of our TVM implementation derives single-pass reducers for \nShowFused of \nShowcase selected operators; we report coverage, discovered states and derivation cost.
+Many tensor operators use the completed result of one reduction as the context for another.
+This dependency obstructs ordinary loop fusion, leaving experts to derive single-pass algorithms.
+Fusion requires both a state representation and a join that corrects partial results when contexts change.
+We present \sys, which adapts state synthesis from automated divide-and-conquer parallelisation to dependent reduction fusion.
+Algebraic context separation constructs reference states with known joins and bounds the states sufficient for single-pass fusion, setting a default state-count limit for synthesis.
+Reference-guided synthesis fixes source reduction results as initial states and searches only for auxiliary states that enable complete reference recovery.
+Constructing and verifying recovery then determines the join, eliminating an independent join-synthesis task.
+Context-correction coefficients further restrict this search by supplying candidate expressions with a role in updating the retained results.
+The same corrections provide execution formulas that reuse source centring and scaling where possible, with the aim of retaining the source's numerical behaviour.
+A recorded TVM snapshot derives single-pass reducers for \nShowFused of \nShowcase selected operators; we report coverage, discovered states and derivation cost.
 \end{abstract}

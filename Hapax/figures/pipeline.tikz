@@ -3,13 +3,13 @@
   process/.style={stage,text width=4.5cm,font=\sffamily\small,minimum height=7mm}]
 \node[process,draw=origblue] (extract) {Extract dependent reduction\\chains (\S\ref{sec:input-chains})};
 \node[process,below=of extract] (judge) {Establish a single-pass form\\State-count upper bound (\S\ref{sec:existence})};
-\node[process,below=of judge,draw=auxpurple] (candidate) {Reference tuple from source states\\Synthesise auxiliary states\\(\S\ref{sec:selection}--\ref{sec:synthesis})};
+\node[process,below=of judge,draw=auxpurple] (candidate) {Fix reference representation\\Synthesise auxiliary states\\(\S\ref{sec:selection}--\ref{sec:synthesis})};
 \node[process,below=of candidate] (derive) {Construct join through recovery\\Verify correction formulas\\(\S\ref{sec:recovery}--\ref{sec:rebase})};
 \node[process,below=of derive] (check) {Emit and check fused program\\(\S\ref{sec:accuracy}--\ref{sec:impl})};
 \node[process,below=of check,draw=fixgreen] (output) {Accept single-pass rewrite};
 \foreach \a/\b in {extract/judge,judge/candidate,candidate/derive,derive/check,check/output}
   \draw[flow] (\a) -- (\b);
 \draw[flow,draw=auxpurple] (derive.west) -- ++(-0.35,0) |- (candidate.west);
-\node[lbl,rotate=90,anchor=south] at ([xshift=-3.5mm]derive.north west) {retry};
+\node[lbl,rotate=90,anchor=south] at ([xshift=-3.5mm]derive.north west) {proof failure};
 \node[lbl,below=2mm of output] {Unaccepted chains remain unchanged};
 \end{tikzpicture}

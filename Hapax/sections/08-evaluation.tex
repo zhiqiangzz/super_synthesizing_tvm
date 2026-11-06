@@ -1,14 +1,14 @@
 \section{Evaluation}
 \label{sec:eval}
 
-We evaluate four questions.
+We organise the evaluation around four questions.
 \textbf{RQ1}: Does \sys fuse dependent reductions that are used in practice?
 \textbf{RQ2}: Which states does it introduce?
-\textbf{RQ3}: What do derivation and proof cost?
+\textbf{RQ3}: What does derivation cost, and how do the candidate expressions and recovery specification affect synthesis?
 \textbf{RQ4}: How do the maintained states affect numerical accuracy relative to the source program and direct reference-state execution?
 
 The coverage, selected states and derivation timings below are recorded in synthesis snapshot \code{6c46fb1b02}.
-\placeholder{Rerun coverage, state selection, derivation timings and numerical acceptance on the current implementation using the updated MPFR protocol.}
+\placeholder{Rerun coverage, state selection, derivation timings and numerical acceptance on the current implementation using the updated MPFR protocol; collect the controlled synthesis comparisons described below.}
 
 
 We selected \nShowcase operators from applications that differ in how their reductions depend on each other (\cref{tab:showcase}).
@@ -60,7 +60,7 @@ Kurtosis and normalised policy loss first repair normalised source states that a
 Other derived states include coefficients of context corrections; Ledoit--Wolf covariance and scalar OLS HC0 illustrate corrections with several such coefficients.
 Table~\ref{tab:showcase} reports the showcase representations; Appendix~B includes label smoothing and the other registry operators.
 % src: data/fused_ops.json showcase chains[].states, auxiliaries, actions
-The accepted tuples fit the default state limit from \cref{thm:existence}; the existence theorem does not guarantee that every preserving tuple can do so.
+The accepted tuples fit the default state-count limit supplied by the existence construction.
 
 \subsection{Derivation Cost and Numerical Accuracy}
 \label{sec:eval-cost}
@@ -70,6 +70,13 @@ Selection, which derives the join and discharges every proof obligation, took a 
 \showInvCanonical join invariants are proved by equality after symbolic canonicalisation.
 This count describes the final invariants; selection additionally invokes recovery and domain proofs, including SMT, so it does not measure the entire verification workload.
 Complete fusion time includes reconstruction, LLVM compilation and numerical acceptance; it must therefore be measured with the MPFR checks enabled.
+
+\paragraph{Search guidance.}
+The recorded selection routes show which mechanisms supplied the final states; controlled comparisons are needed to measure their contribution to search.
+We will fix the repaired source states, reference tuple, state-count limit and independent checker, and compare a common mixed grammar against reference-only terminals, native enumeration without the synthesis constraint, and single-terminal selection.
+The comparisons will report coverage, proposals checked and derivation time under the same resource limits.
+They retain the source states and the reference-recovery requirement, isolating candidate discovery, semantic guidance and candidate combination within this formulation.
+Appendix~E specifies the common search schedule and measurements.
 
 \paragraph{Numerical results.}
 \label{sec:eval-accuracy}
@@ -82,6 +89,8 @@ To examine the role of state representation, we will additionally compare the so
 The two generated versions will retain their emitted reconstruction expressions and use the same compilation settings and reduction order.
 Offset and scale sweeps will test the cancellation and range effects that motivate retaining source centring and scaling.
 The existing worked examples illustrate these effects; they are not measurements of this compiled three-way comparison.
+Separately, we will hold the maintained states fixed and compare the printed context-correction join with the algebraic join, recording their actual emitted expressions.
+This isolates the execution formula from state selection; the algebraic join may itself retain local-context expressions.
 Appendix~E of the supplementary material specifies the numerical protocol.
 
 \textbf{Performance scope.}\par
@@ -94,5 +103,5 @@ Appendix~E of the supplementary material specifies the numerical protocol.
 \placeholder{GPU performance. If measurements exist before the deadline: time and memory traffic of the \nShowcase operators against the unfused TE program, PyTorch and the libraries of \cref{tab:showcase}. Otherwise this subsection is removed and the claims stay as they are now.}
 \fi
 \sys does not schedule or generate GPU code yet (\cref{sec:gpu}), so we report no performance numbers.
-The fused programs read each input once instead of once per reduction, but whether that becomes speed depends on the schedule.
+Each accepted reducer traverses its shared axis once; realised speed also depends on boundary producers, other chains and scheduling.
 \fi

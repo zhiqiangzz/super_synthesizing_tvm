@@ -105,22 +105,24 @@ Flashlight~\citep{flashlight} rewrites attention variants into an online form th
 Halide's \code{rfactor}~\citep{rfactor} and TVM~\citep{tvm,tensorir} parallelise associative reductions, including tuple reducers, but do not fuse a reduction with one that reads its final value.
 Mirage~\citep{mirage} searches multi-level graphs of tensor operators and verifies candidates probabilistically on a fragment of multilinear operators, division and at most one exponential per path, filtering numerically unstable ones with floating-point tests; a maximum is outside that fragment.
 STENSO~\citep{stenso} and Prism~\citep{prism} search equivalent tensor programs symbolically.
-\sys uses expressions obtained from context-correction analysis to synthesise auxiliary states in a maintained state tuple.
-Constructive recovery of the reference state tuple and domain proofs govern acceptance.
+\sys restricts synthesis to auxiliary states around fixed source reduction results.
+Context-correction expressions provide grammar terminals, and complete reference recovery supplies the synthesis specification.
+This separates expression search from the construction and verification of the join.
 
 \textbf{Program calculation and synthesis.}
 List homomorphisms~\citep{bird87} and the third homomorphism theorem~\citep{gibbons96} characterise when a function on lists has a divide-and-conquer form, \citet{morita07} construct one from two sequential programs, and recursion schemes such as catamorphisms~\citep{meijer91} give the calculational laws behind such derivations.
 Tupling eliminates multiple traversals of a data structure~\citep{bird84,pettorossi87,hu96,hu97}.
 Farzan and Nicolet synthesise divide-and-conquer programs by unfolding loop bodies and collecting auxiliary accumulators~\citep{farzan17,farzan19,farzan21}.
-AutoLifter synthesises auxiliary values and combinators by decomposing lifting problems~\citep{autolifter}, while SuFu synthesises compression functions and scalar computations to eliminate intermediate data structures~\citep{sufu}.
+AutoLifter decomposes lifting problems into smaller synthesis tasks for auxiliary values and combinators~\citep{autolifter}, while SuFu synthesises compression functions and scalar computations to eliminate intermediate data structures~\citep{sufu}.
 \citet{morihata21} parallelise reductions through semiring polynomials.
 Opera~\citep{opera} derives online algorithms, which update a state one element at a time, from offline ones, and solves 50 of its 51 benchmarks; the one it fails is kurtosis.
 % src: notes/evidence/opera.txt lines 913, 934 (50 of 51; kurtosis)
 These works develop synthesis and calculational methods for sequential loops and recursive programs.
 \sys restricts itself to reductions over one tensor axis, which lets it establish a sufficient condition by a finite expansion and derive commutative joins over bags.
-Within this setting, expanding the retained source states establishes a reference representation that specifies what auxiliary-state synthesis must recover.
-The search constructs only auxiliary states; verified recovery transfers the reference join to the maintained representation without synthesising another program for the join.
-It uses the source centring and scaling to guide join formulation, with floating-point measurements determining acceptance.
+Within this setting, context separation supplies a reference representation whose join is already known.
+Requiring recovery of that representation eliminates the independent combinator-synthesis task: the search chooses auxiliary expressions, while verified recovery transfers the reference join to the maintained states.
+Fixing the source state definitions further limits the unknown representation, and context-correction coefficients supply its candidate expressions.
+These restrictions retain quantities around which local centred or scaled updates can be formed; the numerical quality of the emitted implementation is assessed separately.
 
 \textbf{Aggregation.}
 In databases, an aggregate is \emph{distributive} if partial results combine directly and \emph{algebraic} if a fixed tuple of distributive ones suffices~\citep{datacube}; distributed systems compute such aggregates by trees and gossip~\citep{jesus}.
@@ -132,7 +134,7 @@ Ink permits non-commutative merges; \sys derives commutative joins for its bag s
 \textbf{Floating-point accuracy.}
 Verified floating-point compilation preserves the source semantics on which numerical reasoning depends~\citep{boldo_fp}.
 Numerical analysis also shows that the choice of intermediate representation can affect error propagation~\citep{higham_decomposition}; the analysis of shifted log-sum-exp and softmax formulas gives a concrete example~\citep{blanchard}.
-These results motivate our use of source reduction definitions to guide state selection and join formulation.
+These results motivate restricting state selection around source reduction definitions and formulating joins as local context corrections.
 Herbie~\citep{herbie} searches for more accurate expression forms, while FPTaylor~\citep{fptaylor} computes rigorous round-off error bounds.
 \sys discovers auxiliary states for fusion and checks the resulting implementation against the source using MPFR evaluations and a sampled error allowance (\cref{def:gate}).
 A rounding-error analysis of the generated joins and their reduction trees could provide guarantees beyond these measurements.

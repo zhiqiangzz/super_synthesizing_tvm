@@ -88,6 +88,21 @@ collected or imported. The paper claims no unmeasured coverage or cost improveme
 Do not run `build.sh --data` or the legacy collectors here during this transition:
 they have not been adapted to the new accuracy-report interface.
 
+The synthesis account distinguishes two mechanisms: reference recovery eliminates
+a separate join-synthesis task, while fixed source states and context-correction
+candidates restrict and guide auxiliary-state search. These structural properties
+do not establish faster search or better numerical results without the controlled
+comparisons in the handoff. Nonlinear reference expressions remain possible
+alternative representations; their execution formulas determine their numerical
+behaviour.
+
+The current implementation retains a source chain when the selected reducer fails
+numerical acceptance; it does not resume state synthesis. The handoff separately
+specifies an opt-in `retry_rejected_candidates=False` extension for a development
+agent, including candidate continuation, isolated rewrites, resource accounting,
+tests and a controlled comparison. Until that extension is implemented and its
+results imported, the manuscript and pipeline diagram describe the current flow.
+
 Sections 6--7 and Appendix E now describe the MPFR/Hypothesis implementation from
 `d2b0653238`. The checked-in data still records the synthesis snapshot `6c46fb1b02`.
 Its coverage/state inventory and algebraic derivation measurements are explicitly
