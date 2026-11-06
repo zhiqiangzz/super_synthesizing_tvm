@@ -181,6 +181,7 @@ def fixed_join(ledger, workload, inputs, outputs, config, baseline, targets):
     from tvm.te.superopt.fusion import Fused
 
     source = Program(inputs, outputs).compile(ledger.directory / "programs" / workload / "source")
+    rewritten_outputs = baseline.graph[0]
     for key, sol in baseline.solutions.items():
         chain = next(c for c in baseline.graph[1] if chain_key(c) == key)
         programs = {"source": source}
@@ -193,7 +194,7 @@ def fixed_join(ledger, workload, inputs, outputs, config, baseline, targets):
             start = time.perf_counter()
             report, rewritten = _fuse_chain(
                 chain,
-                outputs,
+                rewritten_outputs,
                 prefix,
                 baseline.gates[0],
                 baseline.agreements[0],
@@ -204,7 +205,7 @@ def fixed_join(ledger, workload, inputs, outputs, config, baseline, targets):
                 exp,
             )
             exp.gates = baseline.gates
-            result = Fused([rewritten.tensor(t) for t in outputs], inputs, [report], [])
+            result = Fused([rewritten.tensor(t) for t in rewritten_outputs], inputs, [report], [])
             mode = "fixed_join/" + label
             record_run(
                 ledger,

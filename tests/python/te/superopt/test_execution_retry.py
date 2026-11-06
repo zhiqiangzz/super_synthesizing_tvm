@@ -306,3 +306,27 @@ print(json.dumps(hashes))
         timeout=180,
     )
     assert json.loads(result.stdout.strip().splitlines()[-1]) == BASELINE_440
+
+
+def test_fixed_join_rewrites_the_specialized_graph(tmp_path):
+    from numerical_audit.records import Ledger
+    from numerical_audit.selection import fixed_join
+
+    inputs, outputs = OPERATORS["ledoit_wolf"].unfused()
+    assert any("two different indices" in s.reason for s in discover_chains(outputs)[1])
+    baseline = Experiment()
+    result = _fuse(outputs, inputs, experiment=baseline)
+    assert result.fused
+    ledger = Ledger(tmp_path)
+    fixed_join(
+        ledger,
+        "ledoit_wolf",
+        inputs,
+        outputs,
+        AccuracyConfig(),
+        baseline,
+        [c.chain_id for c in result.chains],
+    )
+    programs = list((tmp_path / "programs" / "ledoit_wolf").glob("*/printed/program.tir"))
+    assert programs and all("fused_" in path.read_text() for path in programs)
+    assert any(row["implementation"] == "printed" and row["executed"] for row in ledger.rows)
