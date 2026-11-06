@@ -64,6 +64,17 @@ def fingerprint(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def paper_revision():
+    """Optional provenance: collection also works without a paper checkout."""
+    path = ROOT.parent / "paper_writing"
+    if not (path / ".git").exists():
+        return None
+    result = subprocess.run(
+        ["git", "-C", str(path), "rev-parse", "HEAD"], text=True, capture_output=True
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
 def manifest(args):
     paths = [
         Path(__file__),
@@ -98,9 +109,7 @@ def manifest(args):
     return {
         "schema_version": 2,
         "baseline_commit": "440b06a2acf38b22bc4fb56da080b842702c0f29",
-        "paper_checkout_commit": subprocess.check_output(
-            ["git", "-C", str(ROOT.parent / "paper_writing"), "rev-parse", "HEAD"], text=True
-        ).strip(),
+        "paper_checkout_commit": paper_revision(),
         "paper_import_commit": None,
         "commit": git("rev-parse", "HEAD"),
         "branch": git("branch", "--show-current"),
