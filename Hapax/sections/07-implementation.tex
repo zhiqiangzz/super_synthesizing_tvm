@@ -8,14 +8,14 @@ The frontend reads chains from TE and translates reduction bodies into a symboli
 State selection collects the context-independent reduction components of the initial state definitions, after domain repair, as $\stref$.
 This tuple stays fixed during auxiliary-state search; required outputs are reconstructed later from the selected representation.
 Internally, domain cardinality has a compact node representing the constant-body sum; the existence analysis reports it through a separate flag.
-The frontend treats the full-input extent as a fixed parameter if it appears inside a reduction body other than as the divisor of the entire body; otherwise, extent reads denote the part's size.
+To fix the part semantics before analysis, the frontend treats the full-input extent as a fixed parameter if it appears inside a reduction body other than as the divisor of the entire body; otherwise, extent reads denote the part's size.
 This choice applies to the whole chain.
 
 Candidate construction removes numerical constants, duplicate expressions and expressions already in $\stsrc$, comparing them up to non-zero rational scaling.
 It retains candidates that are defined functions of $\stref$ and the fixed parameters.
 The tuple $K$ used for the initial augmentation contains the retained correction coefficients; split additive terms enter the synthesis grammar alongside them.
 These source-derived expressions are grammar terminals, so synthesis combines quantities already exposed by analysis instead of building arbitrary arithmetic expressions from the reference components.
-Native cvc5 SyGuS~\citep{cvc5} searches only for the auxiliary expressions; recovery and the join are constructed by the independent checker.
+Within the synthesis loop, native cvc5 SyGuS~\citep{cvc5} searches only for auxiliary expressions, and an independent checker constructs and verifies recovery and the resulting reducer before accepting a proposal.
 Within each grammar stage, the implementation first tries the largest permitted number of auxiliary states, then smaller positive numbers in increasing order.
 It allows at most 256 proposals, three occurrences of candidate expressions per auxiliary state and a 20-second synthesis deadline, shared among grammar stages and choices of state count.
 SyGuS calls with the injectivity specification have a 1500\,ms limit; an in-flight independent proof may finish after the overall deadline.
@@ -25,9 +25,11 @@ Symbolic rewriting, SymPy identities, finite-sum facts and domain obligations tr
 Z3 checks source domains, guarded recovery domains and, for polynomial state representations, injectivity over an abstraction of reachable tuples.
 The domain requirement covers every legal non-empty input part.
 To detect a source-domain defect, the implementation substitutes a singleton into the source definition and asks whether it is undefined for a legal element value.
-A witnessed failure authorises extracting the offending context; this witness search is limited to singleton parts, while the resulting state and reducer proofs cover all legal parts.
+A witnessed failure triggers context extraction to retain defined aggregate coefficients and defer the affected source computation to output reconstruction.
+The witness search uses singleton parts, while the resulting state and reducer proofs cover all legal parts.
 Domain repair is limited to 64 rounds, and individual Z3 queries to 1500\,ms.
 Transcendental operations use supported identities and conservative sign facts.
+The emitted-join positivity check combines a greatest fixpoint over the sign lattice $\{\text{any},\geq0,>0\}$, ordered by increasing strength, with SMT implications under branch guards.
 The frontend accepts the arithmetic language given above, one reduction axis, and sum, maximum and minimum reducers.
 Unsupported inputs, unproved obligations or exhausted search retain the source chain, with the reason recorded in its report.
 

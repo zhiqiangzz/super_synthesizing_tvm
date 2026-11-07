@@ -1,70 +1,64 @@
 \section{Introduction}\label{sec:intro}
 
 Loop fusion avoids repeated traversals and materialised intermediates~\citep{halide,tvm}.
-However, placing loops together is insufficient when a later computation needs a value produced only after an earlier loop has traversed its entire input.
-Such dependencies occur in normalisation, attention and statistical computations.
+However, when a later loop reads the final result of an earlier reduction, fusing the loops by interleaving their iterations would violate this dependency.
+Such dependencies arise in tensor operators for machine learning and scientific computing.
 
 \input{figures/dependent-loops}
-We call these computations \emph{dependent reductions}: a reduction reads an earlier reduction's final result over the same axis, directly or through intervening scalar computations.
+In a \emph{dependent reduction}, the reduction body uses a value determined by an earlier reduction's final result over the same axis.
 Such a value is its \emph{context}: it is invariant along the reduction axis, but becomes available only after the earlier computation completes.
-In \cref{fig:dependent-loops}, $I_i(j)$ denotes iteration $j$ of loop $i$; the dependency shown by the orange arrows cannot be satisfied by interleaving corresponding iterations.
+In \cref{fig:dependent-loops}, $I_i(j)$ denotes iteration $j$ of loop $i$, and the orange arrows show the dependency between the loops.
 
-Fusion therefore requires changing how the dependent reductions are computed.
-During a single traversal, the final context is not yet available: a result computed over the input seen so far uses a local context that may change when more input arrives.
-To avoid revisiting the processed input, the fused computation must retain enough information to correct that result when incorporating new data.
-We call an aggregate quantity retained for the processed input a \emph{state component}, or \emph{state}; these quantities form its \emph{state tuple}.
+Fusing these reductions into a single pass therefore requires accumulating information for the later reduction before its final context is available.
+An aggregate quantity retained for a part of the input is a \emph{state component}, or \emph{state}; the retained quantities form its \emph{state tuple}.
 
-We express this correction as a \emph{join} of state tuples for disjoint parts of the input.
-The join must produce the state tuple that the combined input would have produced, including the effect of its changed context.
-Finding the retained states and deriving this correction are therefore the two connected tasks in eliminating the dependency between the original loops.
+A \emph{join} combines the tuples of two disjoint parts into the tuple for their union.
+For results computed with local contexts, this operation must account for the change from each part's context to that of the union.
+The two connected questions are therefore which states retain enough information and how to derive a join that updates those states correctly.
 
 Developing such algorithms requires specialised expertise.
-Online normalisation, stable moment accumulation and tiled attention require identifying retained quantities, deriving updates, checking floating-point behaviour, and implementing and tuning kernels~\citep{milakov,chan,pebay,flashattention}.
-Recent fusion compilers automate corrections expressible using the original reduction results, but these results can omit information needed by more general corrections~\citep{neptune,redfuser}.
+Online normalisation, moment accumulation and tiled attention require identifying retained quantities, deriving updates, and implementing and tuning kernels~\citep{milakov,chan,pebay,flashattention}.
+Recent automatic fusion methods handle algebraic corrections such as shifting or rescaling partial results~\citep{neptune,redfuser}.
+Their correction rules do not cover dependencies that require aggregate information beyond the existing reduction results.
 
 \textbf{Our Work.}
 We present \sys,\footnote{Greek \emph{hapax}, ``once''.} which fuses dependent tensor reductions by augmenting source reduction results and deriving their joins.
 We draw on methods developed for divide-and-conquer parallelisation: Farzan and Nicolet synthesise auxiliary accumulators and joins~\citep{farzan17,farzan21}, while AutoLifter synthesises auxiliary values and combinators for divide-and-conquer computations~\citep{autolifter}.
-Their joins combine results from independently processed parts.
-We adapt this idea to fusion by introducing \emph{auxiliary states} that supply the information needed to correct source reduction results as their local contexts change.
+These methods introduce extra information so that results from independently processed parts can be combined.
+\sys adapts this idea to fusion: \emph{auxiliary states} supplement source results with information needed for their context corrections.
 
 \par\medskip
 \noindent\begin{minipage}{\linewidth}
 \begin{minipage}[t]{0.50\linewidth}
 \vspace{0pt}
-Computing a part's state tuple may still require multiple traversals.
-The derived join corrects and combines two such tuples to obtain the tuple for their union (\cref{fig:dc-fusion}).
-A {\bfseries fused loop} processes one input element per part, computing and joining the parts' state tuples sequentially in one traversal.
+Each part computes its state tuple using its own contexts; a join corrects and combines these tuples (\cref{fig:dc-fusion}).
+Although computing a larger part's tuple may take multiple traversals, a singleton tuple depends on just one input element.
+In this formulation, a {\bfseries fused loop} can be viewed as sequentially joining singleton state tuples in one traversal.
 \end{minipage}\hfill
 \input{figures/divide-conquer-fusion}
 \end{minipage}\par\medskip
 
-Our algebraic analysis separates reduction bodies from their contexts, producing \emph{reference states} that combine independently and determine the required results.
-Their reduction bodies do not read the original reductions' contexts; we call them \emph{context-independent}.
-When this construction succeeds, its state count gives a sufficient upper bound for implementing the chain in one pass, independent of the reduction length.
-We use this bound as the default limit on the state count explored during synthesis.
-Directly executing the reference construction can expand the source's centred or scaled expressions: reconstruction may subtract large, nearly equal sums or expose intermediate values to overflow~\citep{chan,blanchard}.
-The source program's evaluation structure can encode numerical properties that algebraically equivalent transformations disrupt~\citep{boldo_fp}.
+To determine what information can support such a join, \sys separates reduction bodies from their contexts algebraically.
+The resulting \emph{reference states} are reductions whose bodies do not read those contexts, hence are \emph{context-independent}.
+They combine independently and determine the required results, establishing a single-pass construction when the analysis succeeds.
+Their number gives a sufficient state-count bound independent of the reduction length.
 
-We use that source structure to restrict the search for the \emph{maintained state tuple}, the representation accumulated by the fused program.
-The source reduction results supply its initial components, and synthesis chooses only the auxiliary states needed to complete it.
-Fixing the source components removes their definitions from the synthesis unknowns and retains the quantities around which centred or scaled updates can be formed.
-For this selection problem, the algebraic rules express the retained source states through a fixed reference tuple.
-We require the maintained tuple to recover every component of that reference tuple.
-This gives auxiliary-state synthesis a concrete information requirement: distinguish reference values that the source states alone cannot distinguish.
+The reference construction provides a valid single-pass representation, but executing its expanded arithmetic may undo source centring or scaling and introduce cancellation or overflow~\citep{chan,blanchard,boldo_fp}.
+These numerical concerns motivate starting the \emph{maintained state tuple}---the quantities accumulated by the fused program---from source reduction results computed in local contexts.
+Retaining these results keeps the source's centred or scaled quantities available for context corrections.
+When the source results do not contain enough information for these corrections, auxiliary states supply the missing information.
 
-Recovery makes a separate search for join expressions unnecessary.
-Given a proposed tuple, \sys constructs and verifies expressions recovering its reference states.
-It then derives the join by recovering the two reference tuples, combining them componentwise, and evaluating the maintained-state definitions on the combined tuple.
-This construction updates every maintained component, including the auxiliary states.
-The reference representation thus reduces the synthesis problem to choosing auxiliary expressions, with recovery and join correctness checked by dedicated procedures.
+\sys synthesises auxiliary states that, together with the source reduction results, form a maintained tuple convertible to and from the reference tuple.
+For each candidate tuple, the synthesis procedure constructs and verifies the conversion expressions.
+These conversions yield a correct join by recovering the reference tuples of the input parts, applying their known join, and reconstructing the maintained tuple of the union.
+Thus, synthesis searches for auxiliary states satisfying this conversion requirement, without separately searching for join expressions.
 
-Context-correction analysis further guides that choice.
-It derives how retained results change when their local contexts are shifted or scaled, exposing aggregate coefficients needed by the corrections.
-These coefficients provide candidate expressions with a role in updating the retained results, avoiding a search from arbitrary arithmetic expressions.
-Syntax-guided synthesis combines these candidates to complete the maintained representation.
-Their source reduction forms also guide execution formulas that correct retained results while reusing source centring and scaling where possible.
-\sys verifies these formulas against the join obtained through recovery, connecting the restricted state search to an implementation based on the source's numerical structure.
+To constrain the auxiliary-state search space, we construct candidate expressions from how the source reduction results respond to context changes.
+Symbolically shifting or scaling a local context exposes aggregate coefficients needed to correct its result.
+These coefficients provide candidate expressions for syntax-guided synthesis, restricting the search to quantities with a role in the update.
+Together, fixed source components and these candidates limit what the synthesiser must invent.
+The same corrections provide execution formulas that adjust local results while reusing source centring and scaling where possible.
+Verifying these formulas against the join obtained through recovery connects the numerical formulation to the algebraic correctness argument.
 
 Over the reals, the resulting join computes the maintained state tuple of the combined input.
 Because the join also applies to arbitrary disjoint non-empty parts, the derived reducer admits independent computations on parts followed by a reduction tree.
@@ -77,12 +71,12 @@ GPU scheduling and performance evaluation remain subsequent work.
 
 \noindent This paper makes the following contributions:
 \begin{itemize}
-\item \textbf{A sufficient condition and state-count bound for fusion.}
-Algebraic context separation constructs a single-pass reducer and bounds the number of states sufficient for this construction, providing a default state-count limit for synthesis.
-\item \textbf{Reference-guided auxiliary-state synthesis.}
-A reference representation with a known join reduces state selection to auxiliary expressions enabling complete recovery; verified recovery constructs the maintained join without a separate join-synthesis task.
-\item \textbf{Source-guided search-space restriction.}
-Fixing source reduction states and deriving candidates from their context corrections limits the expressions to be synthesised, while supplying local-context execution formulas based on the source's numerical structure.
+\item \textbf{Fusion of dependent-reduction patterns.}
+Context separation identifies a class of dependent chains with a single-pass construction, including consumer bodies outside the stated algebraic conditions of recent automatic fusion methods, and bounds the states sufficient for this construction.
+\item \textbf{Reference-guided state synthesis and join derivation.}
+Complete recovery of a reference representation reduces synthesis to state augmentation and makes a separate search for join expressions unnecessary.
+\item \textbf{Source-guided search and numerical formulation.}
+Source results and their context corrections restrict auxiliary-state search while providing execution formulas that reuse source centring and scaling where possible.
 \item \textbf{Implementation and evaluation.}
 A TVM implementation and recorded results on coverage, discovered states and derivation cost for \nShowcase operators.
 \end{itemize}

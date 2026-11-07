@@ -36,6 +36,7 @@ A chain is \emph{dependent} if some reduction reads a context.
 In the running variance example, the final sum reads the mean as a context.
 \sys extracts chains from TE programs by treating reductions over the shared axis as chain members and inlining elementwise tensors read along $j$ into their bodies.
 A reduction over another axis, such as $QK^\top$ in attention, stays outside the chain and supplies values $x_j$.
+A single pass here concerns the reductions in this chain; external producers and downstream elementwise computations belong to the enclosing program.
 
 To speak about a part of the axis, we evaluate the chain on that part alone.
 
@@ -46,6 +47,9 @@ The interpretation of extent reads is fixed for each chain before analysis: read
 Both interpretations agree on the full input.
 The program computes $m(\Ax)$.
 \end{definition}
+
+The frontend fixes the extent interpretation from its uses in the chain before constructing any partial result (\cref{sec:impl}).
+For variance, $N$ denotes the part's size, so the local mean divides by $|S|$; the known full-input extent cannot supply this changing count.
 
 The declared input domain constrains the element values.
 A legal part is any non-empty part of an input satisfying these constraints.

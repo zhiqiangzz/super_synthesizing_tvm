@@ -1,20 +1,20 @@
 \section{Evaluation}
 \label{sec:eval}
 
-我们围绕四个问题组织评估。
+已记录的评估回答三个问题。
 \textbf{RQ1}：\sys 能否融合实际使用的依赖归约？
 \textbf{RQ2}：它引入了哪些状态？
-\textbf{RQ3}：推导的开销是多少，候选表达式与恢复规约如何影响综合？
-\textbf{RQ4}：相对于源程序和直接执行参考状态的程序，维护状态如何影响数值精度？
+\textbf{RQ3}：归约器推导的开销是多少？
 
 下文的覆盖范围、所选状态和推导耗时记录于综合版本 \code{6c46fb1b02}。
+搜索指导与数值精度的受控比较在后文单独说明；它们在更新后协议下的测量仍待完成。
 \placeholder{使用更新后的 MPFR 检验协议，在当前实现上重新评估覆盖范围、状态选择、推导耗时及数值验收结果，并收集下述受控综合比较的结果。}
 
 
 我们从应用中选取了 \nShowcase 个算子，其归约之间具有不同的依赖方式（\cref{tab:showcase}）。
 应用包括语言模型（注意力、交叉熵、LayerNorm 及其反向计算）、强化学习与多模态预训练、最优传输、统计计算、无线通信、数值线性代数和统计物理。
-多数算子已有库中的手工单遍实现；表格列出已记录的实现，条目缺失不表示不存在相应实现。
-每个算子均按其定义写为 TE，并提供手写单遍实现用于比较。
+多数算子已有库中的手工实现，将其依赖归约合并为单遍计算；表格列出已记录的实现。
+每个算子均按其定义写为 TE，并提供手写归约器用于比较。
 它们来自包含 \nRegistry 个算子的注册表，其中许多是这些算子的变体；补充材料附录 B 报告注册表中已融合的算子，附录 C 列出其他融合结果及失败原因。
 
 
@@ -24,7 +24,7 @@
 % src: data/fused_ops.json meta (cpu, extent, seed, offset); data/proofs_timing.json meta.repeats
 
 \begin{table}[t]
-\caption{Recorded coverage and state discovery. ``Hand-fused in'' lists identified library implementations; a dash means none is recorded. Passes count traversals of the fused axes. Derived components are absent from the source reduction results, including replacements after domain repair. Selection route reports the initial tuple alone, augmentation with all correction coefficients, or synthesis (including independently verified enumeration).}
+\caption{Recorded coverage and state discovery. ``Hand-fused in'' lists identified library implementations; a dash means none is recorded. Passes count reduction traversals, excluding elementwise output reconstruction and producers outside the chain. Derived components and selection routes are explained in the text.}
 \label{tab:showcase}
 \footnotesize
 \setlength{\tabcolsep}{3pt}
@@ -41,17 +41,20 @@
 \label{sec:eval-coverage}
 
 在所记录的版本中，\sys 融合了 \nShowcase 个算子中的 \nShowFused 个。
-这些算子的 \showChains 条链在融合前共遍历各自归约轴 \showPassesBefore 次，融合后为 \showPassesAfter 次，每条链一次；对比损失和 Sinkhorn 迭代均有两条链，分别沿行和列归约。
-手写单遍实现具有相同的遍历次数。
+这些算子的 \showChains 条链在融合前需要 \showPassesBefore 次归约遍历，融合后需要 \showPassesAfter 次，即每条链一次；对比损失和 Sinkhorn 迭代各包含两条链，分别沿行和列。
+这些数量统计被融合的归约；输出的逐元素计算和归约链之外的生产者仍单独执行。
+手写归约器使用相同的归约遍历次数。
 推导出的归约器包括在线 softmax、FlashAttention 的归一化归约器，以及 LayerNorm 和 Pearson 相关系数中的成对中心矩合并~\citep{chan}。
-热容通过加权多项式读取均值，超出了已有融合编译器所述条件（\cref{thm:containment}）。
+热容量归约计算相对均值的加权平方偏差，其归约体不满足 \cref{thm:containment} 所比较的前人条件。
 
 
 \paragraph{Derived representation.}
 \label{sec:eval-states}
 
-这 \showChains 个归约器共有 \showStates 个状态，其中 \showDerived 个是原程序未计算的量，分布于 \showDerivedOps 个算子中（\cref{tab:showcase}）。
+\showChains 个归约器共有 \showStates 个状态，其中包含分布在 \showDerivedOps 个算子中的 \showDerived 个推导分量（\cref{tab:showcase}）。
+这些分量不存在于源归约结果中，也包括定义域修复引入的替代分量。
 \showOriginalOps 个算子仅凭初始元组即可通过验证，\showRebaseOps 个补充全部修正系数，\showSygusOps 个使用原生综合。
+这些就是表中的状态选择路径；其中综合路径也包括经过独立验证的枚举。
 对于 PAPR，源程序保留总和、中心化峰值和平方偏差和。
 综合增加计数和输入最大值与最小值之和，而不是分别存储两个极值。
 该提案来自带量词综合返回未知之后的原生枚举，并通过独立的恢复和合并检查。
@@ -62,7 +65,7 @@ Householder-type norm 通过使用单射性规约的 SyGuS，从上下文修正�
 % src: data/fused_ops.json showcase chains[].states, auxiliaries, actions
 被接受的元组均满足存在性构造给出的默认状态数限制。
 
-\subsection{Derivation Cost and Numerical Accuracy}
+\subsection{Derivation Cost and Planned Comparisons}
 \label{sec:eval-cost}
 
 在所记录的版本中，每个算子的参考状态构造耗时至多为 \showJudgeMaxMs{}\,ms。
@@ -71,14 +74,14 @@ Householder-type norm 通过使用单射性规约的 SyGuS，从上下文修正�
 这一数量描述最终不变量；状态选择还调用恢复和定义域证明，包括 SMT，因此不反映全部验证工作。
 完整融合耗时包括重建、LLVM 编译和数值验收，因此需要在启用 MPFR 检查的条件下测量。
 
-\paragraph{Search guidance.}
+\paragraph{Planned search comparisons.}
 已记录的选择路径说明最终状态由哪些机制产生；要衡量这些机制对搜索的贡献，还需要受控比较。
 我们将固定修复后的源状态、参考元组、状态数限制和独立检查器，将共同的混合文法分别与仅使用参考分量作为终结项、不使用综合约束的原生枚举，以及单终结项选择进行比较。
 在相同资源限制下，各项比较将报告覆盖范围、检查过的提案数和推导耗时。
 它们保留源状态与参考恢复要求，从而分别考察这一问题形式下的候选发现、语义指导和候选组合。
 附录 E 给出了共同的搜索调度与测量方法。
 
-\paragraph{Numerical results.}
+\paragraph{Planned numerical comparisons.}
 \label{sec:eval-accuracy}
 
 更新后的数值评估将在相同的量化输入上，将源程序、手写程序和综合程序与同一 MPFR 结果比较。

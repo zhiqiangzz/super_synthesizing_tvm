@@ -1,11 +1,9 @@
 \section{A Sufficient Condition for a Single Pass}
 \label{sec:existence}
 
-A dependent reduction reads a context derived from earlier reductions.
-This context becomes available only after those reductions have completed, preventing straightforward loop fusion.
-A single pass exists when each reduction's contexts can be separated from its body: the result is rewritten in terms of context-independent reductions, with its contexts used only to reconstruct the result.
-The rules and algorithm below construct a single-pass reducer and give a sufficient upper bound on the number of states needed to fuse the chain.
-This bound also sets the default state-count limit for the subsequent synthesis of a maintained representation.
+The reducer contract leaves open which dependent chains admit a fixed-size state tuple with a join.
+Separating contexts from reduction bodies gives one sufficient construction: accumulate context-independent reductions, then use their results to reconstruct the original contexts and outputs.
+The rules and algorithm below construct this representation and bound the number of states it needs, independently of the reduction length.
 
 \subsection{Separating Contexts from Reduction Bodies}
 \label{sec:freeing}
@@ -94,9 +92,8 @@ It replaces each context by a symbol constant along the axis and rewrites the bo
 If a residual reduction still reads a context, the algorithm returns \textsc{Stuck}: these rules could not separate that context.
 Otherwise the residual reductions enter $\mathcal Q$ as reference states, with one tuple component per distinct reduction.
 
-The construction gives a fixed-size state tuple whose components join independently and whose values determine the required outputs.
-All components can be accumulated in one traversal, after which scalar reconstruction reinstates the source contexts.
-Thus, the number of collected components is a constructive upper bound: retaining that many states suffices for single-pass fusion, independently of the input length.
+The collected components can be accumulated together because none waits for another reduction's final context.
+Scalar reconstruction then recovers the required outputs, giving the single-pass construction formalised below.
 
 \finishwrapspace
 \endgroup

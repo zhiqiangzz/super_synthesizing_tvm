@@ -1,20 +1,20 @@
 \section{Evaluation}
 \label{sec:eval}
 
-We organise the evaluation around four questions.
+The recorded evaluation addresses three questions.
 \textbf{RQ1}: Does \sys fuse dependent reductions that are used in practice?
 \textbf{RQ2}: Which states does it introduce?
-\textbf{RQ3}: What does derivation cost, and how do the candidate expressions and recovery specification affect synthesis?
-\textbf{RQ4}: How do the maintained states affect numerical accuracy relative to the source program and direct reference-state execution?
+\textbf{RQ3}: What does reducer derivation cost?
 
 The coverage, selected states and derivation timings below are recorded in synthesis snapshot \code{6c46fb1b02}.
+Controlled comparisons of search guidance and numerical accuracy are described separately below; their measurements under the updated protocol remain pending.
 \placeholder{Rerun coverage, state selection, derivation timings and numerical acceptance on the current implementation using the updated MPFR protocol; collect the controlled synthesis comparisons described below.}
 
 
 We selected \nShowcase operators from applications that differ in how their reductions depend on each other (\cref{tab:showcase}).
 Their applications include language models (attention, cross-entropy, LayerNorm and its backward pass), reinforcement learning and multimodal pretraining, optimal transport, statistics, wireless communication, numerical linear algebra and statistical physics.
-For most of them, libraries implement a single pass by hand today; the table identifies those implementations where recorded, without treating the absence of an entry as evidence that none exists.
-Each operator is written as its definition in TE, together with a hand-written single pass for comparison.
+For most of them, libraries already implement the dependent reductions in one pass by hand; the table identifies recorded implementations.
+Each operator is written as its definition in TE, together with a hand-written reducer for comparison.
 They come from a registry of \nRegistry operators, many of which are variants of these; Appendix~B of the supplementary material reports the fused registry operators, and Appendix~C additional fusion outcomes and reasons for failures.
 
 
@@ -24,7 +24,7 @@ The reported derivation times are medians of five runs after a warm-up, on an In
 % src: data/fused_ops.json meta (cpu, extent, seed, offset); data/proofs_timing.json meta.repeats
 
 \begin{table}[t]
-\caption{Recorded coverage and state discovery. ``Hand-fused in'' lists identified library implementations; a dash means none is recorded. Passes count traversals of the fused axes. Derived components are absent from the source reduction results, including replacements after domain repair. Selection route reports the initial tuple alone, augmentation with all correction coefficients, or synthesis (including independently verified enumeration).}
+\caption{Recorded coverage and state discovery. ``Hand-fused in'' lists identified library implementations; a dash means none is recorded. Passes count reduction traversals, excluding elementwise output reconstruction and producers outside the chain. Derived components and selection routes are explained in the text.}
 \label{tab:showcase}
 \footnotesize
 \setlength{\tabcolsep}{3pt}
@@ -41,17 +41,20 @@ The reported derivation times are medians of five runs after a warm-up, on an In
 \label{sec:eval-coverage}
 
 In the recorded snapshot, \sys fused \nShowFused of the \nShowcase operators.
-These operators' \showChains chains walked their axes \showPassesBefore times before fusion and \showPassesAfter times after it, once per chain; the contrastive loss and the Sinkhorn iteration each have two chains, along the rows and along the columns.
-The hand-written single passes use the same number of passes.
+Their \showChains chains require \showPassesBefore reduction traversals before fusion and \showPassesAfter afterwards, once per chain; the contrastive loss and the Sinkhorn iteration each have two chains, along the rows and along the columns.
+The counts concern the reductions being fused; output elementwise computations and producers outside those chains remain separate.
+The hand-written reducers use the same number of reduction traversals.
 The derived reducers include the online softmax, FlashAttention's normalised reducer, and pairwise centred-moment joins inside LayerNorm and the Pearson correlation~\citep{chan}.
-The heat capacity reads the mean through a weighted polynomial, placing it outside the stated conditions of prior fusion compilers (\cref{thm:containment}).
+The heat-capacity reduction uses a weighted squared deviation from the mean, whose body falls outside the stated conditions compared in \cref{thm:containment}.
 
 
 \paragraph{Derived representation.}
 \label{sec:eval-states}
 
-The \showChains reducers have \showStates states, \showDerived of which the programs do not compute, in \showDerivedOps operators (\cref{tab:showcase}).
+The \showChains reducers have \showStates states, including \showDerived derived components in \showDerivedOps operators (\cref{tab:showcase}).
+These components are absent from the source reduction results and include replacements introduced by domain repair.
 The initial tuple alone suffices for \showOriginalOps operators, augmentation with all correction coefficients for \showRebaseOps, and native synthesis for \showSygusOps.
+These are the selection routes reported in the table; the synthesis route includes independently verified enumeration.
 For PAPR, the source retains a total, a centred peak and a squared-deviation sum.
 Synthesis adds a count and the sum of the input maximum and minimum, instead of storing the two extrema separately.
 This proposal comes from native enumeration after an unknown quantified-synthesis result and passes the independent recovery and join checks.
@@ -62,7 +65,7 @@ Table~\ref{tab:showcase} reports the showcase representations; Appendix~B includ
 % src: data/fused_ops.json showcase chains[].states, auxiliaries, actions
 The accepted tuples fit the default state-count limit supplied by the existence construction.
 
-\subsection{Derivation Cost and Numerical Accuracy}
+\subsection{Derivation Cost and Planned Comparisons}
 \label{sec:eval-cost}
 
 In the recorded snapshot, reference-state construction took at most \showJudgeMaxMs{}\,ms per operator.
@@ -71,14 +74,14 @@ Selection, which derives the join and discharges every proof obligation, took a 
 This count describes the final invariants; selection additionally invokes recovery and domain proofs, including SMT, so it does not measure the entire verification workload.
 Complete fusion time includes reconstruction, LLVM compilation and numerical acceptance; it must therefore be measured with the MPFR checks enabled.
 
-\paragraph{Search guidance.}
+\paragraph{Planned search comparisons.}
 The recorded selection routes show which mechanisms supplied the final states; controlled comparisons are needed to measure their contribution to search.
 We will fix the repaired source states, reference tuple, state-count limit and independent checker, and compare a common mixed grammar against reference-only terminals, native enumeration without the synthesis constraint, and single-terminal selection.
 The comparisons will report coverage, proposals checked and derivation time under the same resource limits.
 They retain the source states and the reference-recovery requirement, isolating candidate discovery, semantic guidance and candidate combination within this formulation.
 Appendix~E specifies the common search schedule and measurements.
 
-\paragraph{Numerical results.}
+\paragraph{Planned numerical comparisons.}
 \label{sec:eval-accuracy}
 
 The updated numerical evaluation will compare source, hand-written and synthesised programs against the same MPFR result on identical quantised inputs.

@@ -8,13 +8,14 @@ Two recent compilers fuse dependent reductions automatically, and they are the c
 \emph{Neptune}~\citep{neptune} fuses the reductions as if the dependency did not exist and then solves symbolically for a repair function $h(t,r,r')$, which turns a partial result $t$ computed with a stale value $r$ of the earlier reduction into the result for its new value $r'$.
 The fusion is applied by rolling-update and split-K schedules that a user names in a schedule template, and the result is compiled through Triton~\citep{triton}; according to Neptune's conclusion, its follow-up Nautilus~\citep{nautilus} automates the scheduling.
 \emph{RedFuser}~\citep{redfuser} tests whether each reduction body factors as $G(x)\otimes H(d)$ into a function of the data and a function of the earlier results, with $\otimes$ fixed by the reduction, derives fused and incremental forms that rescale by $H$, and generates TileLang~\citep{tilelang} kernels.
-Both keep one state component per reduction of the program, and both evaluate GPU performance, which \sys does not yet do.
+Their stated analyses derive corrections from existing reduction results and changing producer values, without synthesising additional aggregate definitions.
+Both systems also evaluate GPU performance, which \sys does not yet do.
 
 \textbf{Their conditions.}
-We compare the conditions under which each fuses one reduction, with reduction operator $\oplus\in\{\Sigma,\max\}$ ($\min$ is dual), body $g(r,c)$, contexts $r$ and context-independent values $c$.
+We compare their algebraic conditions on a consumer reduction, with reduction operator $\oplus\in\{\Sigma,\max\}$ ($\min$ is dual), body $g(r,c)$, contexts $r$ and context-independent values $c$.
 \begin{itemize}
 \item[$\Cls{N}$:] Neptune's condition~\citep[Eq.~3--4]{neptune}: some $h$ satisfies $h(g(r,c),r,r')=g(r',c)$ and $h(t\oplus t',r,r')=h(t,r,r')\oplus h(t',r,r')$ for all $r,r',c,t,t'$.
-\item[$\Cls{R}$:] RedFuser's condition~\citep[Eq.~4, Tab.~1]{redfuser}: $g(r,c)=G(c)\cdot H(r)$ when $\oplus=\Sigma$, and $g(r,c)=G(c)+H(r)$ when $\oplus=\max$.
+\item[$\Cls{R}$:] RedFuser's decomposition condition~\citep[Eq.~4, Tab.~1]{redfuser}: $g(r,c)=G(c)\cdot H(r)$ when $\oplus=\Sigma$, and $g(r,c)=G(c)+H(r)$ when $\oplus=\max$.
 \item[$\Cls{H}$:] the condition of \cref{lem:regroup}, with finitely many context-independent $G_k$:
 \[
 g(r,c)=\sum_{k=1}^{K}a_k(r)\,G_k(c)\ \text{ when }\oplus=\Sigma,\qquad
@@ -22,6 +23,8 @@ g(r,c)=\max_{k=1}^{K}\psi_k(r,G_k(c))\ \text{ when }\oplus=\max,
 \]
 where every $\psi_k(r,\cdot)$ is non-decreasing.
 \end{itemize}
+RedFuser's join derivation additionally requires the old context factor to be invertible under its correction operation~\citep[\S3.2.2]{redfuser}.
+The class $\Cls{R}$ below concerns the body decomposition, with this execution condition considered separately.
 
 \begin{theorem}[Containment]
 \label{thm:containment}
@@ -41,12 +44,13 @@ Neither body has the single-factor or additive separation required by $\Cls{R}$.
 Appendix~A of the supplementary material gives the full proof.
 \end{proof}
 
-Both prior conditions allow the program's partial result to be corrected for a changed context without retaining additional aggregate information.
-A polynomial consumer such as a central moment, and an extreme of an absolute deviation, fall outside both, because their join needs auxiliary states that the program does not compute.
-Neptune reports this failure for Welford's variance~\citep[\S4.2]{neptune}.
-RedFuser reports speedups for the variance and the moment of inertia~\citep[App.~A.6]{redfuser} but does not show how $\sum_l (x_l-m)^2$ satisfies its condition, which it does not.
-The theorem compares the conditions as the papers state them; the implementations recognise sub-languages of them, Neptune's and RedFuser's through SymPy and \sys's through the rewrites of \cref{tab:rules}.
-The continuity assumption excludes only non-measurable repairs, which no closed form expresses.
+The theorem compares conditions that treat a consumer's context and input values as independent arguments.
+Its excluded bodies need more information than that consumer's partial result alone provides; an enclosing program may already retain some of that information or establish additional relations among its results.
+Neptune reports that its solver fails to derive Welford's variance because it does not exploit relations among the means, variance and incoming sample~\citep[\S4.2]{neptune}.
+RedFuser reports variance and moment-of-inertia benchmarks~\citep[App.~A.6]{redfuser}, but does not explain how their centred-square bodies are reconciled with its stated decomposition test.
+Thus the containment result concerns the stated algebraic conditions, while the program comparison below concerns reported workloads.
+Recognition also depends on the symbolic procedures: Neptune and RedFuser use SymPy, and \sys uses the rewrites of \cref{tab:rules}.
+The continuity assumption excludes pathological non-measurable additive repairs.
 
 \textbf{Their programs.}
 To compare the implementations, we wrote the \nPriorPrograms programs that the two papers fuse in TE and ran them through \sys in snapshot \code{6c46fb1b02} (Appendix~F of the supplementary material).
@@ -57,18 +61,19 @@ Two further programs fail state selection: the sum-of-sums example has an unreso
 Neptune keeps the scale in its L2 norm and divides by the running maximum, which is zero after an all-zero prefix; the paper does not discuss that case.
 
 \textbf{Contexts without an inverse.}
-RedFuser rescales a stale partial result by $H(d_{\mathrm{old}})^{-1}\otimes H(d_{\mathrm{new}})$ and, when $H(d_{\mathrm{old}})$ has no inverse, substitutes the identity element~\citep[App.~A.1]{redfuser}.
+RedFuser's derivation rescales a partial result by $H(d_{\mathrm{old}})^{-1}\otimes H(d_{\mathrm{new}})$.
+Appendix A.1 defines $H'$ by replacing noninvertible values of $H$ with the identity and uses $H'$ for both the old and new factors~\citep[Eq.~27--28]{redfuser}.
 
 \label{ex:a1}
-When a zero factor has already erased a contribution, substituting an identity for the inverse cannot recover that information.
+When a local zero factor has already erased a contribution, this substitution cannot recover it from the local result.
 A valid join must retain enough information to reconstruct the erased contribution, for example through an auxiliary state.
 Under \sys's preservation policy this auxiliary state must fit alongside the defined original results; if the resulting tuple exceeds the size limit, the chain remains unfused.
-Appendix~D of the supplementary material gives a concrete counterexample and evaluates the incremental form.
+Appendix~D of the supplementary material gives a mathematical counterexample to that corrected join.
 
 \Cref{tab:capabilities} summarises the comparison, including where the prior systems are ahead.
 
 \begin{table}[t]
-\caption{Capabilities as stated and shown in each paper. \cmark: supported. \xmark: excluded by the paper's own condition, or not done. \pmark: partly. \nr: not reported, which does not mean the system cannot do it. Page numbers refer to the papers.}
+\caption{Comparison of stated analyses and reported capabilities. Algebraic rows refer to the stated body conditions; workload rows refer to reported programs. \cmark: supported. \xmark: excluded by that condition, or not done. \pmark: partly. \nr: not reported. Page numbers refer to the papers.}
 \label{tab:capabilities}
 \footnotesize
 \setlength{\tabcolsep}{3pt}
@@ -79,13 +84,13 @@ Appendix~D of the supplementary material gives a concrete counterexample and eva
 \midrule
 Sum with one multiplicative context (softmax, $P\cdot V$) & \cmark{} Eq.~3--5, p.~7 & \cmark{} Eq.~4, Tab.~1 & \cmark{}\\
 Max with an additive or a positive-scale context & \cmark{} p.~13 & \pmark{} additive only, Tab.~1 & \cmark{}\\
-Context in several terms (moments, centred extrema) & \xmark{} p.~10--11; \cref{thm:containment} & \xmark{} \cref{thm:containment} & \pmark{} subject to tuple size limit\\
-Auxiliary states absent from the source program & \xmark{} & \xmark{} & \cmark{}\\
+Bodies $(c-r)^2$ and $|c-r|$ under the stated conditions & \xmark{} p.~10--11; \cref{thm:containment} & \xmark{} \cref{thm:containment} & \pmark{} subject to tuple size limit\\
+Synthesis of new aggregate definitions & \xmark{} & \xmark{} & \cmark{}\\
 Join proven equal to the program over $\R$ & \cmark{} Thm.~4.1, 4.4 & \pmark{} derivation & \cmark{} \cref{thm:correct}\\
-Context that is zero on a part & \nr & \xmark{} App.~D & \pmark{} verified guards\\
+Noninvertible multiplicative context factor & \nr & \xmark{} App.~D & \pmark{} verified guards\\
 Accuracy relative to the original decides fusion & \xmark{} measured after, App.~F & \nr & \cmark{} \cref{def:gate}\\
 Masked, ALiBi, soft-cap, GQA attention as written & \cmark{} Tab.~1, p.~16 & \pmark{} MHA, MLA & \xmark{} frontend\\
-Reducers other than sum, max, min & \cmark{} any associative & \cmark{} top-k, prod & \xmark{}\\
+Reducers other than sum, max, min & \cmark{} associative formulation & \cmark{} top-k; transformed product & \xmark{}\\
 Scheduling, GPU code generation, performance & \cmark{} Triton & \cmark{} TileLang & \xmark{} \cref{sec:gpu}\\
 \bottomrule
 \end{tabular}

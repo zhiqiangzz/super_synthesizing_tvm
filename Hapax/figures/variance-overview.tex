@@ -9,7 +9,7 @@
 \node[summary] (source) at (0,0) {
   $\displaystyle t=\sum_j x_j,\quad \mu=t/N$\\[3pt]
   $\displaystyle ss=\sum_j(x_j-\mu)^2$\\[5pt]
-  Shifted float32: $\orig{\exTwoPassFloat}$.\\[3pt]
+  Shifted float32 $ss$: $\orig{\exTwoPassFloat}$.\\[3pt]
   Source reduction: $\oplus=+$\\[2pt]
   $ss_\pa\oplus ss_\pb=\stale{\exNaive}$
 };
@@ -22,14 +22,14 @@
   \end{aligned}$\\[3pt]
   Componentwise join\\[2pt]
   $ss=q-t^2/n$\\[3pt]
-  Shifted float32: $\stale{\exTextbookFloat}$
+  Shifted float32 $ss$: $\stale{\exTextbookFloat}$
 };
 \node[summary] (maintained) at (9.1,0) {
   Maintained state tuple: $(t,ss,\aux{n})$\\[3pt]
   $\mu=t/n,\quad \mu_p=t_p/n_p$\\[3pt]
   $ss=ss_\pa+ss_\pb+\Delta$\\[2pt]
   $\displaystyle\Delta=\sum_{p\in\{\pa,\pb\}}n_p(\mu-\mu_p)^2$\\[4pt]
-  Shifted float32: $\fix{\exMergedFloat}$
+  Shifted float32 $ss$: $\fix{\exMergedFloat}$
 };
 \node[heading,text=origblue] at ([yshift=3pt]source.north) {(a) Two-pass source};
 \node[heading] at ([yshift=3pt]reference.north) {(b) Reference states};

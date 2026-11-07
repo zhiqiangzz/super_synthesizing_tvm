@@ -92,7 +92,7 @@ If $\oplus=\max$, Eq.~4 states $\phi(\max(t,t'))=\max(\phi(t),\phi(t'))$.
 For $t\le t'$ this gives $\phi(t')=\max(\phi(t),\phi(t'))\ge\phi(t)$, so $\phi$ does not decrease.
 Eq.~3 with $r_0$ gives $g(r',c)=\psi(r',G(c))$ with $G(c)=g(r_0,c)$ and $\psi(r',\cdot)=h(\cdot,r_0,r')$ non-decreasing; take $K=1$.
 Neptune's change of variables, $g(r,c)=g_0(r,g_c(c))$ with a repair for $g_0$, is covered by the same argument with $G(c)=g_0(r_0,g_c(c))$, and several producers make $r$ a tuple without changing it.
-The continuity assumption is needed only for $\oplus=\Sigma$; without it Eq.~4 admits additive functions that are not linear, which no closed-form repair computes.
+The continuity assumption is needed only for $\oplus=\Sigma$; without it Eq.~4 admits non-measurable additive functions that are not linear.
 
 \emph{(c) Strictness.}
 $(c-r)^2=1\cdot c^2+(-2r)\cdot c+r^2\cdot1$ is in $\Cls{H}$ with $K=3$, and $|c-r|=\max(c-r,\,(-c)+r)$ is in $\Cls{H}$ with $\psi_1(r,u)=u-r$, $G_1(c)=c$, $\psi_2(r,u)=u+r$, $G_2(c)=-c$.
@@ -235,24 +235,23 @@ Reasons reproduce shortened tool diagnostics and may retain implementation termi
 \label{app:a1}
 
 Consider $s=\sum_j u_j$ and $y=\sum_j v_j s$.
-RedFuser's incremental form (its Eq.~16) updates $\hat y[L]=\hat y[L-1]\cdot H(\hat s[L-1])^{-1}\cdot H(\hat s[L])+v[L]\cdot H(\hat s[L])$ where $\hat s[L]$ is the prefix sum of $u$ and $H(s)=s$.
-Run on the whole input $u=(1,-1,3,0)$, $v=(1,1,1,0)$ in one part, starting from the additive identity $\hat s[0]=0$:
-\begin{center}\small
-\begin{tabular}{@{}lcccc@{}}
-\toprule
-$L$ & 1 & 2 & 3 & 4\\
-\midrule
-$\hat s[L]$ & 1 & 0 & 3 & 3\\
-$H(\hat s[L-1])^{-1}$ & missing & 1 & missing & $1/3$\\
-$\hat y[L]$ with the A.1 substitution & 1 & 0 & 3 & \exAOneRepaired\\
-true $y$ of the prefix & 1 & 0 & 9 & \exAOneTruth\\
-\bottomrule
-\end{tabular}
-% src: data/illus.json redfuser_a1_incremental (exact fractions)
-\end{center}
-The inverse is missing at the very first step, where the prefix context is the additive identity 0, and again at step 3, after the prefix $(1,-1)$ sums to zero.
-Substituting the multiplicative identity 1 for the missing inverse keeps the first step correct, because $\hat y[0]=0$, but at step 3 the stale result $\hat y[2]=0$ has already lost $\sum_{j\le2}v_j=2$, and the result is \exAOneRepaired instead of \exAOneTruth.
-A variant that also kept $\sum G$ would join partial results correctly, but would still divide by $H$ of the final context, which is zero whenever the final $s$ is.
+Here $H(s)=s$, so RedFuser's Appendix A.1 defines $H'(s)=s$ for $s\ne0$ and $H'(0)=1$.
+For two parts $S,T$ and their union $U$, its corrected fusion expression (Eq.~28) gives
+\[
+y_U^{\mathrm{repair}}
+=\sum_{P\in\{S,T\}} y_P\,H'(s_P)^{-1}H'(s_U).
+\]
+Take the input $u=(1,-1,3,0)$, $v=(1,1,1,0)$ and let $S$ contain its first two positions and $T$ its last two.
+Direct source evaluation on the parts gives $(s_S,y_S)=(0,0)$ and $(s_T,y_T)=(3,3)$.
+The union has $s_U=3$ and $\sum_{j\in U}v_j=3$, so its source result is $y_U=9$.
+The corrected expression instead gives
+\[
+y_U^{\mathrm{repair}}=0\cdot1^{-1}\cdot3+3\cdot3^{-1}\cdot3=3\ne9.
+\]
+% src: exact algebra on the input recorded in data/illus.json redfuser_a1_incremental;
+%      the calculation here applies RedFuser Eq. 28 to two source-evaluated parts.
+This is a mathematical counterexample to the published expression, not a measurement of RedFuser's implementation.
+Replacing the zero factor by an invertible value cannot recover the contribution erased from $y_S$: its local context was zero even though $\sum_{j\in S}v_j=2$.
 Keeping $(s,\sum v)$ would give a valid context-independent reducer.
 The current policy must also preserve the defined result $y$, so the default two-state limit is insufficient for the verified tuple retaining the defined source results; \sys leaves this program unfused.
 

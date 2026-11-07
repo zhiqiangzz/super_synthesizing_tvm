@@ -11,15 +11,16 @@ Their number bounds the states sufficient for this single-pass construction and 
 \caption{End-to-end derivation.}
 \label{fig:pipeline}
 \end{wrapfigure}
-Selection fixes the source reduction results as the initial maintained states, leaving only their augmentation to be synthesised.
-For a source result that is undefined on a legal non-empty part, the procedure seeks a defined representation by extracting the offending context and retaining its coefficients.
+Selection starts from the source reduction results so that subsequent updates can use their original definitions.
 Expanding the definitions of these initial states yields their reference tuple and the expressions reconstructing them from it.
-This tuple fixes the information that auxiliary-state synthesis must retain; its known join will determine the maintained join through verified recovery.
+This tuple specifies the information that auxiliary states must supply alongside the retained results; verified recovery will transfer its known join to the maintained tuple.
 To discover missing information, the analyser derives how each retained result changes when its local context is replaced by the context of a larger part.
 The coefficients of these corrections supply candidate expressions, restricting the grammar to quantities obtained from this analysis and the reference representation.
 The procedure first checks the initial tuple alone, then this tuple augmented with all admissible correction coefficients.
 Only if neither tuple succeeds within the state limit does syntax-guided synthesis search combinations of these candidate expressions and, subsequently, reference states.
 The search therefore concerns only auxiliary states that, together with the source states, recover the reference tuple (\cref{sec:selection,sec:synthesis}).
+The initial states must also be defined on every legal non-empty part.
+A demonstrated source-domain failure triggers replacement by defined aggregate quantities from which the affected result can be reconstructed; the reference tuple and candidate search then use those prepared definitions.
 
 For each proposed maintained tuple, verification constructs expressions recovering this entire reference tuple and proves their identities and definedness on legal parts.
 This recovery defines the symbolic join without an independent synthesis task: recover the reference states of the two parts, combine them independently, and express the result in maintained states.

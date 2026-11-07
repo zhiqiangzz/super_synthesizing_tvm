@@ -1,11 +1,12 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-Dependent reductions resist ordinary loop fusion because a later reduction reads a value that exists only after the whole axis has been read.
-\sys fuses them by deriving a single-pass reducer from the program.
-Algebraic context separation establishes a sufficient state-count bound for this construction and supplies reference representations with known joins.
-Using a reference representation to specify auxiliary-state synthesis removes an independent search for join expressions: verified recovery determines the maintained join.
-Fixing source state definitions and deriving candidates from context corrections further restrict the expressions to be synthesised.
-The same corrections supply execution formulas based on source numerical structure, verified against the derived join and checked numerically after code generation.
-The recorded derivations cover \nShowFused of \nShowcase operators, reproducing reducers that were derived by hand for softmax, attention and variance.
-Turning the derived reducers into scheduled GPU kernels through TIRx, and replacing the sampled part of the accuracy check by a rigorous bound, are the next steps.
+\sys turns dependent reduction fusion into a constrained search for auxiliary states.
+A reference representation with a known join specifies the information that the maintained states must retain, so verified recovery determines their join without a separate join-synthesis task.
+Source reduction definitions and context corrections guide this search and keep the source quantities available for centred or scaled execution formulas.
+The resulting join satisfies the union invariant over the reals; numerical acceptance assesses its emitted floating-point implementation separately.
+
+The recorded TVM derivations cover \nShowFused of \nShowcase operators and reproduce reducers previously derived by hand for softmax, attention and variance.
+They demonstrate automatic state augmentation and join derivation for these reduction chains.
+Controlled search comparisons and updated numerical measurements will assess the practical effects of the representation choices.
+Further work includes scheduling the derived reducers as GPU kernels through TIRx and establishing rigorous floating-point error bounds.

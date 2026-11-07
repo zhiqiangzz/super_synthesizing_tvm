@@ -1,19 +1,19 @@
 \section{Checking Floating-Point Accuracy}
 \label{sec:accuracy}
 
-The maintained states provide a numerical representation as well as the information needed for fusion.
-Retaining centred quantities allows a join to correct local results without reconstructing them by subtracting raw moments; retaining scaled quantities allows it to adjust local scales without materialising unscaled values.
-These choices follow established methods for central moments and online normalisation~\citep{chan,pebay,milakov,blanchard}.
-Their benefit depends on the emitted arithmetic: even a centred update can have different rounding behaviour from a two-pass computation~\citep{chan}.
+The join proof establishes equality over the reals, while the emitted program evaluates different expressions and reduction orders in floating point.
+Local centring and scaling follow established methods for central moments and online normalisation~\citep{chan,pebay,milakov,blanchard}, but their numerical benefit depends on the emitted arithmetic: even a centred update can have different rounding behaviour from a two-pass computation~\citep{chan}.
 We therefore assess the generated program through static expression checks, a sampled accuracy acceptance check, and separate tests of generated inputs and join trees.
 
 \subsection{Static Checks on the Emitted Join}
 \label{sec:hazards}
 \label{sec:static}
 
-A join can introduce an unbounded exponential or divide by a context that vanishes on a proper part.
-\sys checks the following properties of its emitted expressions under real arithmetic.
+A changed evaluation formula can expose large exponential arguments or use a divisor that vanishes on a proper part.
+The static checks rule out these hazards by proving upper bounds for exponential arguments and positivity for divisors and logarithm arguments under real arithmetic.
 Each property is required of a candidate when the original program satisfies the corresponding check.
+For exponentials, the analyser uses dominating maxima to bound differences before exponentiation: $a\le m$ gives $a-m\le0$.
+Its acceptance threshold of 8 is an implementation choice below the exponential overflow range of both float16 and float32.
 
 \begin{proposition}[Bounded exponents]
 \label{prop:exp}
@@ -23,9 +23,9 @@ If the bounded-exponent check succeeds, every argument of $\exp$ in the join is 
 \begin{proposition}[Positive divisors]
 \label{prop:div}
 If the positivity check succeeds, every executed divisor and logarithm argument checked by this condition is positive along the serial fold initialised from its first element.
-The analysis combines a greatest fixpoint over the sign lattice $\{\text{any},\geq0,>0\}$, ordered by increasing strength, with SMT implications under branch guards.
 \end{proposition}
 
+The positivity analysis propagates sign facts through the emitted arithmetic and combines them with the conditions of executed branches.
 These checks also apply after domain repair changes a source-state definition.
 They constrain exponent ranges and the domains of executed operations; rounding and underflow are assessed through the numerical measurements.
 

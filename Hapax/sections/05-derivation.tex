@@ -1,11 +1,10 @@
 \section{Synthesising States and Deriving the Reducer}
 \label{sec:derivation}
 
-A fused reducer needs both a maintained state representation and an operation for joining its partial results.
-Searching for both leaves the synthesiser to discover the retained information and how to update it.
-\sys separates these tasks using reference states whose join is already known: auxiliary-state synthesis must preserve enough information to recover those states, after which the maintained join follows by construction.
-Source reduction definitions fix part of the maintained representation, and context-correction analysis supplies the expressions from which its auxiliaries are built.
-These choices restrict what synthesis must invent.
+The reference construction already provides a state tuple with a known join.
+The next task is to retain the source reduction results while supplying the information needed to join them.
+Synthesis therefore seeks auxiliary states that enable verified recovery of the reference tuple; this recovery determines the join of the augmented states.
+Source reduction definitions fix the retained components, while context-correction analysis supplies candidate expressions for their augmentation.
 We develop this formulation through a Householder-type norm that requires auxiliary-state synthesis in the recorded implementation.
 
 \subsection{Reference-Guided Synthesis Formulation}
@@ -13,16 +12,19 @@ We develop this formulation through a Householder-type norm that requires auxili
 
 Let $\stsrc(S)$ denote the source-derived initial state tuple on a legal non-empty part $S$.
 Retaining these definitions fixes part of the desired representation and keeps source results available for subsequent context corrections.
-When a source definition is undefined on a legal part, context extraction can supply defined aggregate coefficients in its place; for instance, an undefined normalisation can be deferred while its unnormalised aggregate is retained.
-After a source-domain defect has been demonstrated, these coefficients replace the affected reduction in $\stsrc$, and the source result is reconstructed for the outputs.
-We expand the resulting definitions using the context-separation rules, substitute the definitions of their contexts, and collect the distinct context-independent reductions.
+To express the information carried by these states, we expand their definitions using the context-separation rules, substitute the definitions of their contexts, and collect the distinct context-independent reductions.
 Their values form the reference tuple $\stref(S)$; the expanded expressions give a known map $\Gsrc$:
 \begin{equation}
 \label{eq:source-reference}
 \stsrc(S)=\Gsrc(\stref(S)).
 \end{equation}
-The reference components join independently and remain fixed throughout auxiliary-state search.
+The reference components join independently.
 The existence analysis collects what is needed for the required outputs; here the collection must express the source states being retained.
+
+Preparing $\stsrc$ also ensures that its components are defined on every legal part.
+A source normalisation can be undefined on a part even when the full-input result is defined.
+After proving such a failure, the procedure retains defined unnormalised aggregate coefficients and defers reconstruction of the source result to the outputs.
+Reference collection uses these prepared definitions and remains fixed throughout auxiliary-state search.
 
 Let $C=(c_1,\ldots,c_w)$ be the auxiliary expressions to synthesise.
 For a reference value $\xi$, the definitions of the maintained tuple are
@@ -30,7 +32,7 @@ For a reference value $\xi$, the definitions of the maintained tuple are
 G(\xi)=(\Gsrc(\xi),C(\xi)),\qquad
 \st(S)=G(\stref(S)).
 \]
-Only $C$ is unknown: $\Gsrc$ fixes the source components, and the reference reduction operations are already known.
+The representation search chooses only the auxiliary expressions $C$: $\Gsrc$ fixes the source components, and the reference reduction operations are already known.
 We require the maintained tuple to determine the entire reference tuple.
 To express this requirement before constructing a recovery map, let $\mathcal R$ conservatively contain all reachable reference tuples, constrained by properties of finite sums, including non-negativity and zero-sum implications, and proved definedness conditions for $\Gsrc$ and the candidates.
 For fixed program parameters, synthesis requires
@@ -41,7 +43,7 @@ For fixed program parameters, synthesis requires
 \ \Longrightarrow\ \xi=\eta.
 \end{equation}
 Thus auxiliaries must distinguish reference tuples that the initial states cannot distinguish.
-For each proposal, a separate procedure constructs and verifies an executable recovery map $H$.
+For each proposal, the synthesis procedure constructs and verifies an executable recovery map $H$ before accepting the maintained tuple.
 The resulting identity $H\circ G=\mathrm{id}$ allows us to recover two reference tuples, apply their known join, and evaluate $G$ on the result.
 This supplies a join for the entire maintained tuple, including its auxiliaries, without adding join expressions to the synthesis unknowns.
 
@@ -90,7 +92,7 @@ In the Householder example, writing $v_S(k)=\sum_{j\in S}(x_j+ke_j)^2$ gives
 v_S(k_S+\delta)
  =v_S+2\delta(p_S+k_Su_S)+\delta^2u_S.
 \]
-Besides the retained $v_S$, this correction exposes $p_S+k_Su_S$ and $u_S$.
+After excluding the retained $v_S$ and removing numerical factors, the correction supplies $K=(u_S,p_S+k_Su_S)$ and $\mathcal T_{\mathrm{pre}}=\{u_S,p_S+k_Su_S\}$.
 Adding both gives four maintained states, while the existence construction supplies a three-state reference reducer.
 We use the existence bound $|\mathcal Q|$ as the default maintained-state limit $b_{\max}$, making it a concrete compactness target for auxiliary-state search.
 The bound guarantees a reference reducer; finding a representation that also retains the source states within that count is a search objective.
@@ -137,11 +139,12 @@ Propose $C\in\mathcal E_d^{\,w}$\;
 With the default $d=3$, expressions combine at most three occurrences of candidate terms.
 Each term may itself be nonlinear in the reference values.
 The first grammar uses $\mathcal T_{\mathrm{pre}}$; a second uses $\mathcal T_{\mathrm{mix}}$, which also includes reference components.
+For Householder, $\mathcal T_{\mathrm{mix}}=\{u_S,p_S+k_Su_S,q_S,p_S\}$.
 This ordering prioritises quantities exposed by context corrections before broadening the search.
 The auxiliary width satisfies $1\le w\le b_{\max}-|\stsrc|$.
 
 \Cref{alg:select} first tests $\stsrc$ alone, then its augmentation with the tuple $K$ of admissible correction coefficients.
-It invokes synthesis if these choices do not yield a verified reducer within the state limit.
+It searches the candidate grammars if these choices do not yield a verified reducer within the state limit.
 For each proposal, \textsc{Verify} constructs recovery expressions, proves their identities and domains, and derives and verifies the complete reducer.
 Search scheduling and solver limits are described with the implementation.
 
@@ -162,7 +165,7 @@ The numerical behaviour of a selected representation also depends on its executi
 \label{sec:recovery}
 
 For a proposed maintained tuple, the selected definitions give the known map $G$.
-Recovery constructs an executable map $H$ from the equations defining that tuple, with
+As part of candidate verification within synthesis, the recovery procedure constructs an executable map $H$ from the equations defining that tuple, with
 \begin{equation}
 \label{eq:recovery}
 H(G(\stref(S)))=\stref(S).
@@ -172,7 +175,6 @@ A bounded fallback handles supported scalar-maximum systems by opening their bra
 When a divisor can vanish, a lazy zero branch is introduced only if the solver proves that this forces the recovered component to be zero and verifies the complete guarded expression.
 Symbolic normalisation and SymPy establish identities, while Z3 proves domains and branch conditions.
 Every reference component must have a verified, defined recovery expression in the maintained states and fixed parameters.
-This construction of $H$ is separate from the synthesis of $C$.
 
 For Householder, $q$ and $u$ are retained directly.
 Solving the definition of $v$ gives the remaining component and hence recovery:

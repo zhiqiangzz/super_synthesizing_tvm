@@ -1,12 +1,11 @@
 \begin{abstract}
-Many tensor operators use the completed result of one reduction as the context for another.
-This dependency obstructs ordinary loop fusion, leaving experts to derive single-pass algorithms.
-Fusion requires both a state representation and a join that corrects partial results when contexts change.
-We present \sys, which adapts state synthesis from automated divide-and-conquer parallelisation to dependent reduction fusion.
-Algebraic context separation constructs reference states with known joins and bounds the states sufficient for single-pass fusion, setting a default state-count limit for synthesis.
-Reference-guided synthesis fixes source reduction results as initial states and searches only for auxiliary states that enable complete reference recovery.
-Constructing and verifying recovery then determines the join, eliminating an independent join-synthesis task.
-Context-correction coefficients further restrict this search by supplying candidate expressions with a role in updating the retained results.
-The same corrections provide execution formulas that reuse source centring and scaling where possible, with the aim of retaining the source's numerical behaviour.
-A recorded TVM snapshot derives single-pass reducers for \nShowFused of \nShowcase selected operators; we report coverage, discovered states and derivation cost.
+Many tensor operators contain reductions that depend on the completed results of earlier reductions.
+These dependencies prevent ordinary loop fusion, which interleaves iterations, so single-pass algorithms often require expert derivation.
+Automating this derivation requires states that retain information about processed input and a join that incorporates new input.
+We present \sys, which adapts state synthesis from divide-and-conquer parallelisation to fuse dependent reductions.
+To identify information sufficient for such a join, \sys algebraically separates contexts from reduction bodies, constructing reference states that combine independently and give a sufficient state-count bound for single-pass fusion.
+Direct evaluation of their expanded expressions can lose source centring and scaling, so synthesis starts from source reduction results and adds auxiliary states until the augmented tuple supports recovery of the reference information.
+Verified recovery transfers the known reference joins to this maintained representation, reducing synthesis to state augmentation without a separate join-synthesis task.
+Context corrections supply candidate auxiliary expressions to restrict this search and execution formulas that reuse the source's numerical structure where possible.
+A recorded TVM evaluation derives single-pass reducers for \nShowFused of \nShowcase selected tensor operators from machine learning and scientific computing.
 \end{abstract}

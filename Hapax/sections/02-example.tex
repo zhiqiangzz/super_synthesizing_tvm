@@ -86,8 +86,8 @@ return $\;ss/n$
 \end{lstlisting}
 \end{wrapfigure}
 The context correction above directly gives the operation $\Mrg$ in \cref{fig:variance}(c): add totals and counts, and correct each local centred sum to the combined mean before adding them.
-Recovery provides a second way to specify this join: recover each part's reference tuple, add the reference components, and reconstruct the maintained tuple of the union.
-\sys verifies the centred formula against this construction, connecting the selected states to a correct join while evaluating the correction directly.
+The verified recovery determines the algebraic join for the selected representation: recover each part's reference tuple, add the reference components, and reconstruct the maintained tuple of the union.
+This construction supplies the specification against which \sys verifies the centred formula; execution can then apply the correction directly while satisfying the same join invariant.
 For the two illustrated parts of the shifted input, this corrected join matches the two-pass result.
 
 To turn this join into fusion, choose each part to contain exactly one element.

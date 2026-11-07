@@ -8,13 +8,14 @@
 \emph{Neptune}~\citep{neptune} 先按不存在依赖的方式融合归约，再通过符号求解得到修复函数 $h(t,r,r')$，将使用较早归约的过时值 $r$ 计算出的部分结果 $t$，转换为对应新值 $r'$ 的结果。
 融合通过用户在调度模板中指定的滚动更新和 split-K 调度实现，并由 Triton 编译~\citep{triton}；根据 Neptune 的结论，其后续工作 Nautilus~\citep{nautilus} 将调度自动化。
 \emph{RedFuser}~\citep{redfuser} 检查每个归约体能否分解为 $G(x)\otimes H(d)$，即数据的函数与较早结果的函数的组合，其中 $\otimes$ 由归约类型决定；随后推导通过 $H$ 重新缩放的融合形式与增量形式，并生成 TileLang 内核~\citep{tilelang}。
-两者都为原程序的每个归约保留一个状态分量，也都评估 GPU 性能；\sys 目前尚未进行此类性能评估。
+两者所述分析都根据已有归约结果和变化的生产者值推导修正，不综合新的聚合定义。
+两个系统也都评估 GPU 性能；\sys 目前尚未进行此类性能评估。
 
 \textbf{Their conditions.}
-我们比较两者融合单个归约的条件：归约运算为 $\oplus\in\{\Sigma,\max\}$（$\min$ 为其对偶），归约体为 $g(r,c)$，上下文为 $r$，不依赖上下文的值为 $c$。
+我们比较两者对消费者归约的代数条件：归约运算为 $\oplus\in\{\Sigma,\max\}$（$\min$ 为其对偶），归约体为 $g(r,c)$，上下文为 $r$，不依赖上下文的值为 $c$。
 \begin{itemize}
 \item[$\Cls{N}$:] Neptune 的条件~\citep[Eq.~3--4]{neptune}：存在某个 $h$，使得对所有 $r,r',c,t,t'$，有 $h(g(r,c),r,r')=g(r',c)$ 和 $h(t\oplus t',r,r')=h(t,r,r')\oplus h(t',r,r')$。
-\item[$\Cls{R}$:] RedFuser 的条件~\citep[Eq.~4, Tab.~1]{redfuser}：当 $\oplus=\Sigma$ 时，$g(r,c)=G(c)\cdot H(r)$；当 $\oplus=\max$ 时，$g(r,c)=G(c)+H(r)$。
+\item[$\Cls{R}$:] RedFuser 的分解条件~\citep[Eq.~4, Tab.~1]{redfuser}：当 $\oplus=\Sigma$ 时，$g(r,c)=G(c)\cdot H(r)$；当 $\oplus=\max$ 时，$g(r,c)=G(c)+H(r)$。
 \item[$\Cls{H}$:] \cref{lem:regroup} 的条件，其中包含有限个不依赖上下文的 $G_k$：
 \[
 g(r,c)=\sum_{k=1}^{K}a_k(r)\,G_k(c)\ \text{ when }\oplus=\Sigma,\qquad
@@ -22,6 +23,8 @@ g(r,c)=\max_{k=1}^{K}\psi_k(r,G_k(c))\ \text{ when }\oplus=\max,
 \]
 其中每个 $\psi_k(r,\cdot)$ 都单调不减。
 \end{itemize}
+RedFuser 的合并推导还要求旧上下文因子在其修正运算下可逆~\citep[\S3.2.2]{redfuser}。
+下文的类别 $\Cls{R}$ 描述归约体的分解，这一执行条件另行讨论。
 
 \begin{theorem}[Containment]
 \label{thm:containment}
@@ -41,12 +44,13 @@ g(r,c)=\max_{k=1}^{K}\psi_k(r,G_k(c))\ \text{ when }\oplus=\max,
 补充材料附录 A 给出完整证明。
 \end{proof}
 
-前人的两个条件都允许在上下文变化时修正程序的部分结果，而无需保留额外的聚合信息。
-中心矩等多项式形式的后续计算，以及绝对偏差的极值，都不满足这两个条件，因为它们的合并需要原程序未计算的辅助状态。
-Neptune 报告了 Welford 方差的这一失败情况~\citep[\S4.2]{neptune}。
-RedFuser 报告了方差和转动惯量的加速结果~\citep[App.~A.6]{redfuser}，但没有说明 $\sum_l (x_l-m)^2$ 如何满足其条件；事实上，该表达式并不满足。
-定理比较的是论文中陈述的条件；各实现只识别其中的子语言，Neptune 和 RedFuser 通过 SymPy，\sys 则通过 \cref{tab:rules} 中的重写规则进行识别。
-连续性假设只排除了无法用闭式表达的不可测修复函数。
+定理所比较的条件将消费者的上下文与输入值视为独立参数。
+被这些条件排除的归约体需要消费者部分结果之外的信息；但所在的完整程序可能已经保留了部分此类信息，或能建立结果之间的额外关系。
+Neptune 报告其求解器无法推导 Welford 方差，是因为未利用均值、方差和新输入样本之间的关系~\citep[\S4.2]{neptune}。
+RedFuser 报告了方差和转动惯量基准~\citep[App.~A.6]{redfuser}，但未解释其中心化平方归约体如何与所述分解检查相容。
+因此，包含关系针对陈述的代数条件，而下文的程序比较针对论文报告的工作负载。
+识别能力还取决于符号过程：Neptune 和 RedFuser 使用 SymPy，\sys 使用 \cref{tab:rules} 中的重写规则。
+连续性假设排除了病态的不可测可加修复函数。
 
 \textbf{Their programs.}
 为比较实现，我们将两篇论文融合的 \nPriorPrograms 个程序改写为 TE，并交给快照 \code{6c46fb1b02} 中的 \sys 处理（补充材料附录 F）。
@@ -57,18 +61,19 @@ RedFuser 报告了方差和转动惯量的加速结果~\citep[App.~A.6]{redfuser
 Neptune 在 L2 范数中保留缩放，并除以运行中的最大值；在全零前缀之后，该值为零，而论文未讨论这种情况。
 
 \textbf{Contexts without an inverse.}
-RedFuser 使用 $H(d_{\mathrm{old}})^{-1}\otimes H(d_{\mathrm{new}})$ 重新缩放过时的部分结果；当 $H(d_{\mathrm{old}})$ 没有逆元时，以单位元代替~\citep[App.~A.1]{redfuser}。
+RedFuser 的推导使用 $H(d_{\mathrm{old}})^{-1}\otimes H(d_{\mathrm{new}})$ 重新缩放部分结果。
+附录 A.1 将 $H$ 的不可逆取值替换为单位元，得到 $H'$，并在新旧两个因子中均使用 $H'$~\citep[Eq.~27--28]{redfuser}。
 
 \label{ex:a1}
-当零因子已经抹去某项贡献时，用单位元替代逆元无法恢复这部分信息。
+当局部的零因子已经抹去某项贡献时，这种替换无法从局部结果中恢复该贡献。
 有效的合并必须保留足以重构被抹去贡献的信息，例如增加一个辅助状态。
 在 \sys 的保留策略下，该辅助状态必须与有定义的原始结果共同保留；如果所得元组超出大小限制，该链保持未融合。
-补充材料附录 D 给出具体反例，并评估增量形式。
+补充材料附录 D 给出针对这一修正后合并公式的数学反例。
 
 \Cref{tab:capabilities} 汇总了比较结果，也包括前人系统领先的方面。
 
 \begin{table}[t]
-\caption{Capabilities as stated and shown in each paper. \cmark: supported. \xmark: excluded by the paper's own condition, or not done. \pmark: partly. \nr: not reported, which does not mean the system cannot do it. Page numbers refer to the papers.}
+\caption{Comparison of stated analyses and reported capabilities. Algebraic rows refer to the stated body conditions; workload rows refer to reported programs. \cmark: supported. \xmark: excluded by that condition, or not done. \pmark: partly. \nr: not reported. Page numbers refer to the papers.}
 \label{tab:capabilities}
 \footnotesize
 \setlength{\tabcolsep}{3pt}
@@ -79,13 +84,13 @@ RedFuser 使用 $H(d_{\mathrm{old}})^{-1}\otimes H(d_{\mathrm{new}})$ 重新缩�
 \midrule
 Sum with one multiplicative context (softmax, $P\cdot V$) & \cmark{} Eq.~3--5, p.~7 & \cmark{} Eq.~4, Tab.~1 & \cmark{}\\
 Max with an additive or a positive-scale context & \cmark{} p.~13 & \pmark{} additive only, Tab.~1 & \cmark{}\\
-Context in several terms (moments, centred extrema) & \xmark{} p.~10--11; \cref{thm:containment} & \xmark{} \cref{thm:containment} & \pmark{} subject to tuple size limit\\
-Auxiliary states absent from the source program & \xmark{} & \xmark{} & \cmark{}\\
+Bodies $(c-r)^2$ and $|c-r|$ under the stated conditions & \xmark{} p.~10--11; \cref{thm:containment} & \xmark{} \cref{thm:containment} & \pmark{} subject to tuple size limit\\
+Synthesis of new aggregate definitions & \xmark{} & \xmark{} & \cmark{}\\
 Join proven equal to the program over $\R$ & \cmark{} Thm.~4.1, 4.4 & \pmark{} derivation & \cmark{} \cref{thm:correct}\\
-Context that is zero on a part & \nr & \xmark{} App.~D & \pmark{} verified guards\\
+Noninvertible multiplicative context factor & \nr & \xmark{} App.~D & \pmark{} verified guards\\
 Accuracy relative to the original decides fusion & \xmark{} measured after, App.~F & \nr & \cmark{} \cref{def:gate}\\
 Masked, ALiBi, soft-cap, GQA attention as written & \cmark{} Tab.~1, p.~16 & \pmark{} MHA, MLA & \xmark{} frontend\\
-Reducers other than sum, max, min & \cmark{} any associative & \cmark{} top-k, prod & \xmark{}\\
+Reducers other than sum, max, min & \cmark{} associative formulation & \cmark{} top-k; transformed product & \xmark{}\\
 Scheduling, GPU code generation, performance & \cmark{} Triton & \cmark{} TileLang & \xmark{} \cref{sec:gpu}\\
 \bottomrule
 \end{tabular}
